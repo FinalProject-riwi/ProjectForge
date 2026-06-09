@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>ProjectForge.Web</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!--
+      En .NET 10, Microsoft.AspNetCore.Authentication.Cookies
+      ya viene incluido en el framework (no se referencia por separado).
+      AspNet.Security.OAuth.GitHub >= 9.x soporta net9/net10.
+    -->
+    <PackageReference Include="AspNet.Security.OAuth.GitHub" Version="9.*" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.*">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.*" />
+    <ProjectReference Include="..\ProjectForge.Application\ProjectForge.Application.csproj" />
+    <ProjectReference Include="..\ProjectForge.Infrastructure\ProjectForge.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>

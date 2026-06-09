@@ -1,0 +1,250 @@
+@using ProjectForge.Core.Entities
+@using ProjectForge.Core.Enums
+@model Project
+@{
+    ViewData["Title"] = $"Proyecto: {Model.Name}";
+    Layout = "_Layout";
+}
+
+<div class="project-detail">
+    <!-- Header -->
+    <div class="detail-header">
+        <div>
+            <div class="breadcrumb">
+                <a asp-controller="Dashboard" asp-action="Index">Dashboard</a> / @Model.Name
+            </div>
+            <h1>@Model.Name</h1>
+            <span class="project-status status-@Model.Status.ToString().ToLower()">@Model.Status</span>
+        </div>
+        <div class="detail-actions">
+            @if (!string.IsNullOrEmpty(Model.RepositoryUrl))
+            {
+                <a href="@Model.RepositoryUrl" target="_blank" class="btn btn-outline">
+                    🔗 Ver en GitHub
+                </a>
+            }
+            @if (Model.WizardConfig?.DeploymentTarget != DeploymentTarget.Local
+                 && Model.WizardConfig?.VpsCredentials?.Any() == true)
+            {
+                <button class="btn btn-primary" onclick="deployToVps(@Model.Id)">
+                    🚀 Deploy VPS
+                </button>
+            }
+        </div>
+    </div>
+
+    <!-- Detail Grid -->
+    <div class="detail-grid">
+        <div class="detail-main">
+            <!-- Tabs -->
+            <div class="tabs">
+                <button class="tab active" onclick="showTab('readme', this)">📄 README</button>
+                <button class="tab" onclick="showTab('logs', this)">📋 Logs</button>
+                <button class="tab" onclick="showTab('config', this)">⚙ Config</button>
+            </div>
+
+            <!-- README Tab -->
+            <div id="tab-readme" class="tab-content active">
+                @if (!string.IsNullOrEmpty(Model.GeneratedReadme))
+                {
+                    <div class="readme-container">
+                        <div id="readme-rendered"></div>
+                    </div>
+                    <script>
+                        const readme = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.GeneratedReadme));
+                        document.getElementById('readme-rendered').innerHTML =
+                            typeof marked !== 'undefined' ? marked.parse(readme) : readme.replace(/\n/g,'<br>');
+                    </script>
+                }
+                else
+                {
+                    <div class="empty-tab">
+                        <p>El README se generará cuando el proyecto sea procesado.</p>
+                    </div>
+                }
+            </div>
+
+            <!-- Logs Tab -->
+            <div id="tab-logs" class="tab-content" style="display:none">
+                <div class="logs-container terminal-body" style="height:500px">
+                    @foreach (var log in Model.Logs.OrderBy(l => l.CreatedAt))
+                    {
+                        <p class="terminal-line @(log.IsError ? "error" : "success")">
+                            <span class="ts">@log.CreatedAt.ToString("HH:mm:ss")</span>
+                            <span class="log-step">[@log.Step]</span>
+                            @log.Message
+                            @if (!string.IsNullOrEmpty(log.CommandExecuted))
+                            {
+                                <code class="log-cmd">$ @log.CommandExecuted</code>
+                            }
+                        </p>
+                    }
+                </div>
+            </div>
+
+            <!-- Config Tab -->
+            <div id="tab-config" class="tab-content" style="display:none">
+                @if (Model.WizardConfig != null)
+                {
+                    var cfg = Model.WizardConfig;
+                    var patterns = System.Text.Json.JsonSerializer.Deserialize<List<string>>(cfg.DesignPatternsJson) ?? new();
+                    var libs     = System.Text.Json.JsonSerializer.Deserialize<List<string>>(cfg.LibrariesJson)     ?? new();
+
+                    <div class="config-grid">
+                        <div class="config-item"><label>Arquitectura</label><div class="value">@cfg.Architecture</div></div>
+                        <div class="config-item"><label>Framework</label><div class="value">@cfg.Framework @cfg.FrameworkVersion</div></div>
+                        <div class="config-item"><label>Base de datos</label><div class="value">@cfg.Database</div></div>
+                        <div class="config-item"><label>Infraestructura</label><div class="value">@cfg.Infrastructure</div></div>
+                        <div class="config-item"><label>Deploy Target</label><div class="value">@cfg.DeploymentTarget</div></div>
+                        <div class="config-item config-full">
+                            <label>Patrones de diseño</label>
+                            <div class="tags-row">
+                                @foreach (var p in patterns) { <span class="tag tag-purple">@p</span> }
+                            </div>
+                        </div>
+                        <div class="config-item config-full">
+                            <label>Librerías</label>
+                            <div class="tags-row">
+                                @foreach (var l in libs) { <span class="tag tag-blue">@l</span> }
+                            </div>
+                        </div>
+                    </div>
+
+                    @if (cfg.VpsCredentials?.Any() == true)
+                    {
+                        <div class="vps-table-section mt-4">
+                            <h3>Servidores VPS</h3>
+                            <table class="data-table">
+                                <thead><tr><th>Label</th><th>Host</th><th>Puerto</th><th>Usuario</th><th>Rol</th></tr></thead>
+                                <tbody>
+                                    @foreach (var vps in cfg.VpsCredentials)
+                                    {
+                                        <tr>
+                                            <td>@vps.Label</td>
+                                            <td><code>@vps.Host</code></td>
+                                            <td>@vps.Port</td>
+                                            <td>@vps.Username</td>
+                                            <td><span class="tag @(vps.Role == "master" ? "tag-orange" : "tag-blue")">@vps.Role</span></td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <aside class="detail-sidebar">
+            <div class="sidebar-card">
+                <h4>Información</h4>
+                <dl>
+                    <dt>Creado</dt><dd>@Model.CreatedAt.ToString("dd/MM/yyyy HH:mm")</dd>
+                    <dt>Estado</dt><dd>@Model.Status</dd>
+                    @if (!string.IsNullOrEmpty(Model.LocalPath))
+                    {
+                        <dt>Ruta local</dt><dd><code class="small-code">@Model.LocalPath</code></dd>
+                    }
+                    @if (!string.IsNullOrEmpty(Model.RepositoryUrl))
+                    {
+                        <dt>Repositorio</dt>
+                        <dd><a href="@Model.RepositoryUrl" target="_blank">@Model.Name</a></dd>
+                    }
+                </dl>
+            </div>
+
+            <div class="sidebar-card danger-card">
+                <h4>Zona peligrosa</h4>
+                <button class="btn btn-ghost btn-sm" style="color:var(--danger);border-color:var(--danger)"
+                        onclick="deleteProject(@Model.Id)">
+                    🗑 Eliminar proyecto
+                </button>
+            </div>
+        </aside>
+    </div>
+</div>
+
+<!-- Deploy modal -->
+<div id="deploy-modal" style="display:none" class="modal-overlay">
+    <div class="modal-box">
+        <h3>Desplegando en VPS...</h3>
+        <div id="deploy-logs" class="terminal-body" style="height:300px;margin-top:1rem"></div>
+        <button class="btn btn-ghost mt-4" onclick="document.getElementById('deploy-modal').style.display='none'">Cerrar</button>
+    </div>
+</div>
+
+@section Scripts {
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script>
+function showTab(name, btn) {
+    document.querySelectorAll('.tab-content').forEach(t => t.style.display = 'none');
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.getElementById('tab-' + name).style.display = 'block';
+    btn.classList.add('active');
+}
+
+async function deployToVps(id) {
+    document.getElementById('deploy-modal').style.display = 'flex';
+    const logsEl = document.getElementById('deploy-logs');
+    logsEl.innerHTML = '<p class="terminal-line info">Iniciando despliegue...</p>';
+    const resp = await fetch(`/projects/${id}/deploy`, { method: 'POST' });
+    const data = await resp.json();
+    logsEl.innerHTML = '';
+    (data.logs || []).forEach(log => {
+        const p = document.createElement('p');
+        p.className = 'terminal-line ' + (log.startsWith('ERROR') ? 'error' : 'success');
+        p.textContent = log;
+        logsEl.appendChild(p);
+    });
+}
+
+async function deleteProject(id) {
+    if (!confirm('¿Seguro que deseas eliminar este proyecto? Esta acción no se puede deshacer.')) return;
+    await fetch(`/projects/${id}`, { method: 'DELETE' });
+    window.location.href = '/dashboard';
+}
+</script>
+}
+
+<style>
+.project-detail { max-width: 1100px; margin: 0 auto; }
+.detail-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 2rem; }
+.breadcrumb { font-size: .8rem; color: var(--text-muted); margin-bottom: .5rem; }
+.detail-actions { display: flex; gap: .75rem; }
+.detail-grid { display: grid; grid-template-columns: 1fr 280px; gap: 1.5rem; }
+.detail-main { min-width: 0; }
+.tabs { display: flex; gap: .25rem; border-bottom: 1px solid var(--border); margin-bottom: 1.5rem; }
+.tab { padding: .5rem 1.25rem; background: transparent; border: none; border-bottom: 2px solid transparent; color: var(--text-muted); cursor: pointer; font-size: .9rem; }
+.tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+.tab-content { animation: fadeIn .2s ease; }
+.readme-container { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.5rem; }
+.readme-container h1, .readme-container h2 { border-bottom: 1px solid var(--border); padding-bottom: .5rem; margin: 1.5rem 0 .75rem; }
+.readme-container code { background: var(--bg-elevated); padding: .1rem .35rem; border-radius: 4px; font-family: var(--font-mono); font-size: .85em; }
+.readme-container pre { background: var(--bg-elevated); padding: 1rem; border-radius: var(--radius); overflow-x: auto; margin: 1rem 0; }
+.logs-container { background: #0d0f1a; border-radius: var(--radius); padding: 1rem; overflow-y: auto; }
+.log-step { color: #7c3aed; margin: 0 .4rem; }
+.log-cmd { display: block; margin-top: .2rem; color: #94a3b8; font-size: .8rem; }
+.config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.config-item { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; }
+.config-item.config-full { grid-column: 1/-1; }
+.config-item label { font-size: .75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em; display: block; margin-bottom: .3rem; }
+.config-item .value { font-weight: 600; }
+.tags-row { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .4rem; }
+.tag { padding: .2rem .6rem; border-radius: 999px; font-size: .75rem; font-weight: 500; }
+.tag-purple { background: rgba(139,92,246,.15); color: #a78bfa; }
+.tag-blue { background: rgba(59,130,246,.15); color: #60a5fa; }
+.tag-orange { background: rgba(245,158,11,.15); color: #fbbf24; }
+.data-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+.data-table th, .data-table td { padding: .6rem 1rem; border: 1px solid var(--border); text-align: left; }
+.data-table th { background: var(--bg-elevated); color: var(--text-muted); font-weight: 500; }
+.small-code { font-size: .75rem; word-break: break-all; }
+.sidebar-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; margin-bottom: 1rem; }
+.sidebar-card h4 { font-size: .9rem; margin-bottom: .75rem; color: var(--text-dim); }
+.sidebar-card dl { display: grid; grid-template-columns: auto 1fr; gap: .3rem .75rem; font-size: .85rem; }
+.sidebar-card dt { color: var(--text-muted); }
+.danger-card { border-color: rgba(239,68,68,.2); }
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.7); display: flex; align-items: center; justify-content: center; z-index: 999; }
+.modal-box { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 2rem; width: 640px; max-width: 95vw; }
+.empty-tab { padding: 3rem; text-align: center; color: var(--text-muted); }
+</style>

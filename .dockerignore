@@ -1,0 +1,20 @@
+# Carpetas de build locales — la causa del error
+**/bin/
+**/obj/
+
+# Archivos de IDEs
+.vs/
+.idea/
+*.user
+*.suo
+
+# Variables de entorno
+.env
+
+# Git
+.git/
+.gitignore
+
+# Documentación
+README.md
+scripts/

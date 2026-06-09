@@ -1,0 +1,58 @@
+## Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+## Visual Studio / Rider
+.vs/
+.idea/
+*.user
+*.suo
+*.sln.docstates
+
+## NuGet
+*.nupkg
+**/packages/
+!**/packages/build/
+
+## Environment files (NEVER commit these)
+.env
+.env.*
+!.env.example
+
+## Secrets
+appsettings.Development.json
+**/secrets.json
+
+## ProjectForge.Web
+src/ProjectForge.Web/.idea
+src/ProjectForge.Web/bin
+src/ProjectForge.Web/obj
+src/ProjectForge.Web/appsettings.json
+
+## ProjectForge.Infrastructure
+src/ProjectForge.Infrastructure/.idea
+src/ProjectForge.Infrastructure/bin
+src/ProjectForge.Infrastructure/obj
+
+## ProjectForge.Core
+src/ProjectForge.Core/.idea
+src/ProjectForge.Core/bin
+src/ProjectForge.Core/obj
+
+## ProjectForge.Application
+src/ProjectForge.Application/.idea
+src/ProjectForge.Application/bin
+src/ProjectForge.Application/obj
+
+## Workspaces generados
+/tmp/projectforge-workspaces/
+/workspaces/
+
+## OS
+.DS_Store
+Thumbs.db
