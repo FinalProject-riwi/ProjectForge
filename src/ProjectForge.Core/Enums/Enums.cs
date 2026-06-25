@@ -5,7 +5,7 @@ public enum ArchitectureType
     DotNet,
     Java,
     Python,
-    Laravel,
+    Php,
     JavaScript,
     TypeScript
 }

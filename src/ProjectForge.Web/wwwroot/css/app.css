@@ -154,6 +154,7 @@ a { color: var(--primary); text-decoration: none; }
 }
 .checklist label:hover { border-color: var(--primary); }
 .checklist label.suggested { border-color: var(--accent); background: rgba(139,92,246,.08); }
+.checklist label.selected { border-color: var(--primary); background: rgba(59,130,246,.10); }
 .checklist label input { accent-color: var(--primary); }
 
 /* ── Summary Card ───────────────────────────────────────────────────────── */

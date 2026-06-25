@@ -180,9 +180,16 @@ public class ProjectGeneratorService : IProjectGeneratorService
                  $"cd {path} && unzip -q project.zip && rm project.zip", (string?)null),
             },
 
-            ArchitectureType.Laravel => new[]
+            ArchitectureType.Php => cfg.Framework switch
             {
-                ($"composer create-project laravel/laravel {path}", (string?)null),
+                FrameworkType.Symfony => new[]
+                {
+                    ($"composer create-project symfony/skeleton {path}", (string?)null),
+                },
+                _ => new[]
+                {
+                    ($"composer create-project laravel/laravel {path}", (string?)null),
+                }
             },
 
             _ => Array.Empty<(string, string?)>()
@@ -280,7 +287,7 @@ public class ProjectGeneratorService : IProjectGeneratorService
             ArchitectureType.DotNet                                     => libs.Select(l => $"dotnet add package {l}"),
             ArchitectureType.Python                                     => new[] { $"pip install {string.Join(" ", libs)}" },
             ArchitectureType.JavaScript or ArchitectureType.TypeScript  => new[] { $"npm install {string.Join(" ", libs)}" },
-            ArchitectureType.Laravel                                    => new[] { $"composer require {string.Join(" ", libs)}" },
+            ArchitectureType.Php                                        => new[] { $"composer require {string.Join(" ", libs)}" },
             _                                                           => Enumerable.Empty<string>()
         };
 

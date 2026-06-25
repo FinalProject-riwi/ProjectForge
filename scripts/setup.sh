@@ -65,7 +65,9 @@ echo -e "  ${GREEN}✓ Paquetes restaurados${NC}"
 
 # ── 4. Iniciar SQL Server ─────────────────────────────────────────────────────
 echo -e "\n${YELLOW}[4/5] Iniciando SQL Server con Docker...${NC}"
+set -a
 source .env 2>/dev/null || true
+set +a
 docker-compose up -d sqlserver
 echo -n "  Esperando que SQL Server esté listo"
 for i in $(seq 1 30); do

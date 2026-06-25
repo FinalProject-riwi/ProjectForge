@@ -203,15 +203,28 @@ async function loadStep4Data() {
 
 function renderPatterns(suggested) {
   const all = ['Repository', 'CQRS', 'Clean Architecture', 'Mediator', 'DDD', 'Hexagonal Architecture', 'Microservices', 'Event Sourcing', 'Saga'];
+  const selected = suggested[0] ?? null;
   document.getElementById('patterns-list').innerHTML = all.map(p => {
     const ok = suggested.includes(p);
-    return `<label class="${ok ? 'suggested' : ''}">
-      <input type="checkbox" value="${p}" ${ok ? 'checked' : ''}
-             onchange="toggleSel('patterns','${p}',this.checked)" />
+    const isSelected = selected === p;
+    return `<label class="${[ok ? 'suggested' : '', isSelected ? 'selected' : ''].filter(Boolean).join(' ')}">
+      <input type="radio" name="pattern-choice" value="${p}" ${isSelected ? 'checked' : ''} />
       ${p} ${ok ? '<span style="font-size:.7rem;color:#8b5cf6">✦ IA</span>' : ''}
     </label>`;
   }).join('');
-  state.patterns = [...suggested];
+
+  state.patterns = selected ? [selected] : [];
+
+  document.querySelectorAll('input[name="pattern-choice"]').forEach(input => {
+    input.addEventListener('change', () => {
+      if (!input.checked) return;
+      state.patterns = [input.value];
+      document.querySelectorAll('#patterns-list label').forEach(label => {
+        const radio = label.querySelector('input[name="pattern-choice"]');
+        label.classList.toggle('selected', !!radio?.checked);
+      });
+    });
+  });
 }
 
 function renderLibraries(suggested) {
@@ -236,7 +249,7 @@ function buildSummary() {
   const el = document.getElementById('config-summary');
   if (!el) return;
   el.innerHTML = [
-    ['Arquitectura', state.architecture],
+    ['Arquitectura', formatArchitecture(state.architecture)],
     ['Framework',    state.framework + (state.frameworkVersion ? ' ' + state.frameworkVersion : '')],
     ['Base de Datos', state.database],
     ['Infraestructura', state.infrastructure],
@@ -247,6 +260,17 @@ function buildSummary() {
       <label>${label}</label>
       <div class="value">${value ?? '—'}</div>
     </div>`).join('');
+}
+
+function formatArchitecture(value) {
+  return ({
+    DotNet: 'C# / .NET',
+    Java: 'Java',
+    Python: 'Python',
+    Php: 'PHP',
+    JavaScript: 'JavaScript',
+    TypeScript: 'TypeScript',
+  })[value] || value || '—';
 }
 
 // ── Form Submit ───────────────────────────────────────────────────────────────

@@ -77,12 +77,14 @@ public class WizardController : Controller
         }
 
         // Parsear enums con fallback seguro
-        var architecture     = Enum.TryParse<ArchitectureType>(arch, out var a)        ? a : ArchitectureType.DotNet;
+        var architecture     = TryParseArchitecture(arch, out var a)                   ? a : ArchitectureType.DotNet;
         var framework        = Enum.TryParse<FrameworkType>(fw, out var f)              ? f : FrameworkType.AspNetCoreWebApi;
         var database         = Enum.TryParse<DatabaseType>(db, out var d)               ? d : DatabaseType.PostgreSQL;
         var infrastructure   = Enum.TryParse<InfrastructureType>(infra, out var i)      ? i : InfrastructureType.None;
 
-        var patterns = TryParseJson<List<string>>(patternsJson) ?? new List<string>();
+        var patterns = (TryParseJson<List<string>>(patternsJson) ?? new List<string>())
+            .Take(1)
+            .ToList();
         var libs     = TryParseJson<List<string>>(libsJson)     ?? new List<string>();
 
         var config = new WizardConfig
@@ -145,7 +147,7 @@ public class WizardController : Controller
     [HttpGet("api/frameworks/{architecture}")]
     public IActionResult GetFrameworks(string architecture)
     {
-        if (!Enum.TryParse<ArchitectureType>(architecture, out var arch))
+        if (!TryParseArchitecture(architecture, out var arch))
             return Ok(Array.Empty<object>());
 
         return Ok(GetFrameworkOptions(arch));
@@ -154,7 +156,7 @@ public class WizardController : Controller
     [HttpPost("api/suggest")]
     public async Task<IActionResult> GetSuggestions([FromBody] WizardSuggestionRequestDto req)
     {
-        if (!Enum.TryParse<ArchitectureType>(req.Architecture, out var arch))
+        if (!TryParseArchitecture(req.Architecture, out var arch))
             arch = ArchitectureType.DotNet;
         if (!Enum.TryParse<FrameworkType>(req.Framework, out var fw))
             fw = FrameworkType.AspNetCoreWebApi;
@@ -198,6 +200,11 @@ public class WizardController : Controller
             new() { Value = "Django",  Label = "Django",  AvailableVersions = ["5.0", "4.2"] },
             new() { Value = "Flask",   Label = "Flask",   AvailableVersions = ["3.0", "2.3"] },
         },
+        ArchitectureType.Php => new()
+        {
+            new() { Value = "Laravel",  Label = "Laravel",  AvailableVersions = ["11.x", "10.x"] },
+            new() { Value = "Symfony",  Label = "Symfony",  AvailableVersions = ["latest"] },
+        },
         ArchitectureType.JavaScript => new()
         {
             new() { Value = "ExpressJs", Label = "Express.js", AvailableVersions = ["4.x", "5.x"] },
@@ -214,12 +221,24 @@ public class WizardController : Controller
             new() { Value = "SpringBoot", Label = "Spring Boot", AvailableVersions = ["3.3", "3.2", "2.7"] },
             new() { Value = "Quarkus",    Label = "Quarkus",     AvailableVersions = ["3.x"] },
         },
-        ArchitectureType.Laravel => new()
-        {
-            new() { Value = "Laravel", Label = "Laravel", AvailableVersions = ["11.x", "10.x"] },
-        },
         _ => new()
     };
+
+    private static bool TryParseArchitecture(string? value, out ArchitectureType architecture)
+    {
+        if (Enum.TryParse(value, ignoreCase: true, out architecture))
+            return true;
+
+        if (string.Equals(value, "Laravel", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(value, "PHP", StringComparison.OrdinalIgnoreCase))
+        {
+            architecture = ArchitectureType.Php;
+            return true;
+        }
+
+        architecture = ArchitectureType.DotNet;
+        return false;
+    }
 }
 
 // DTO para el endpoint de sugerencias (recibe strings del JS)
