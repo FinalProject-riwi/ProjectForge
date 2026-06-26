@@ -19,6 +19,10 @@ services:
       - Anthropic__ApiKey=${ANTHROPIC_API_KEY:-PLACEHOLDER}
       - OpenAI__ApiKey=${OPENAI_API_KEY:-PLACEHOLDER}
       - Gemini__ApiKey=${GEMINI_API_KEY:-PLACEHOLDER}
+<<<<<<< HEAD
+=======
+      - Gemini__Model=${GEMINI_MODEL:-gemini-flash-latest}
+>>>>>>> 0dc2a35 (complete java,python,typescript)
       - Encryption__Key=${ENCRYPTION_KEY:-DefaultKeyChangeThisInProduction32}
       - Generation__WorkspacePath=/workspaces
       - ASPNETCORE_DataProtection__KeysPath=/dataprotection-keys

@@ -94,14 +94,111 @@ public class MultiProviderAiSuggestionService : IAiSuggestionService
         return await CallWithFallbackAsync(prompt);
     }
 
+<<<<<<< HEAD
+=======
+    // ─── Chat multi-turno con fallback (Anthropic → OpenAI → Gemini) ─────────
+    public async Task<string> ChatAsync(string systemPrompt, IEnumerable<(string Role, string Content)> messages)
+    {
+        var msgs = messages.ToList();
+
+        var providers = new List<(string Name, Func<Task<string>> Call)>
+        {
+            ("OpenAI",    () => CallOpenAiChatAsync(systemPrompt, msgs)),
+            ("Anthropic", () => CallAnthropicChatAsync(systemPrompt, msgs)),
+            ("Gemini",    () => CallGeminiAsync(systemPrompt + "\n\n" +
+                                  string.Join("\n", msgs.Select(m => $"{m.Role}: {m.Content}")))),
+        };
+
+        Exception? lastException = null;
+        foreach (var (name, call) in providers)
+        {
+            try
+            {
+                var result = await call();
+                if (!string.IsNullOrWhiteSpace(result)) return result;
+            }
+            catch (Exception ex)
+            {
+                lastException = ex;
+                Console.WriteLine($"[AI-Chat] Proveedor {name} falló: {ex.Message}. Intentando siguiente...");
+            }
+        }
+
+        throw new InvalidOperationException(
+            "Todos los proveedores de IA fallaron. Último error: " + lastException?.Message, lastException);
+    }
+
+    private async Task<string> CallAnthropicChatAsync(string systemPrompt, List<(string Role, string Content)> msgs)
+    {
+        var apiKey = _config["Anthropic:ApiKey"];
+        if (string.IsNullOrWhiteSpace(apiKey) || apiKey == "PLACEHOLDER")
+            throw new InvalidOperationException("Anthropic API key no configurada.");
+
+        var http = _httpClientFactory.CreateClient("Anthropic");
+        var body = new
+        {
+            model      = "claude-haiku-4-5-20251001",
+            max_tokens = 512,
+            system     = systemPrompt,
+            messages   = msgs.Select(m => new { role = m.Role, content = m.Content }).ToArray()
+        };
+
+        var request = new HttpRequestMessage(HttpMethod.Post, "https://api.anthropic.com/v1/messages");
+        request.Headers.Add("x-api-key", apiKey);
+        request.Headers.Add("anthropic-version", "2023-06-01");
+        request.Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
+
+        var response = await http.SendAsync(request);
+        var json = await response.Content.ReadAsStringAsync();
+        if (!response.IsSuccessStatusCode)
+            throw new InvalidOperationException(
+                $"Anthropic devolvió {(int)response.StatusCode}: {Truncate(json, 300)}");
+        using var doc = JsonDocument.Parse(json);
+        return doc.RootElement.GetProperty("content")[0].GetProperty("text").GetString() ?? string.Empty;
+    }
+
+    private async Task<string> CallOpenAiChatAsync(string systemPrompt, List<(string Role, string Content)> msgs)
+    {
+        var apiKey = _config["OpenAI:ApiKey"];
+        if (string.IsNullOrWhiteSpace(apiKey) || apiKey == "PLACEHOLDER")
+            throw new InvalidOperationException("OpenAI API key no configurada.");
+
+        var http = _httpClientFactory.CreateClient("OpenAI");
+        var openAiMessages = new List<object> { new { role = "system", content = systemPrompt } };
+        openAiMessages.AddRange(msgs.Select(m => (object)new { role = m.Role, content = m.Content }));
+
+        var body = new { model = "gpt-4o-mini", max_tokens = 512, messages = openAiMessages };
+
+        var request = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/chat/completions");
+        request.Headers.Add("Authorization", $"Bearer {apiKey}");
+        request.Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
+
+        var response = await http.SendAsync(request);
+        var json = await response.Content.ReadAsStringAsync();
+        if (!response.IsSuccessStatusCode)
+            throw new InvalidOperationException(
+                $"OpenAI devolvió {(int)response.StatusCode}: {Truncate(json, 300)}");
+        using var doc = JsonDocument.Parse(json);
+        return doc.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString() ?? string.Empty;
+    }
+
+    private static string Truncate(string s, int max) =>
+        string.IsNullOrEmpty(s) ? s : (s.Length <= max ? s : s[..max] + "…");
+
+>>>>>>> 0dc2a35 (complete java,python,typescript)
     // ─── Fallback Chain ───────────────────────────────────────────────────────
 
     private async Task<string> CallWithFallbackAsync(string prompt)
     {
         var providers = new List<(string Name, Func<string, Task<string>> Call)>
         {
+<<<<<<< HEAD
             ("Anthropic", CallAnthropicAsync),
             ("OpenAI",    CallOpenAiAsync),
+=======
+            ("OpenAI",    CallOpenAiAsync),
+            ("Anthropic", CallAnthropicAsync),
+>>>>>>> 0dc2a35 (complete java,python,typescript)
             ("Gemini",    CallGeminiAsync),
         };
 
@@ -146,9 +243,17 @@ public class MultiProviderAiSuggestionService : IAiSuggestionService
         request.Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
 
         var response = await http.SendAsync(request);
+<<<<<<< HEAD
         response.EnsureSuccessStatusCode();
 
         var json = await response.Content.ReadAsStringAsync();
+=======
+        var json = await response.Content.ReadAsStringAsync();
+        if (!response.IsSuccessStatusCode)
+            throw new InvalidOperationException(
+                $"Anthropic devolvió {(int)response.StatusCode}: {Truncate(json, 300)}");
+
+>>>>>>> 0dc2a35 (complete java,python,typescript)
         using var doc = JsonDocument.Parse(json);
         return doc.RootElement.GetProperty("content")[0].GetProperty("text").GetString() ?? string.Empty;
     }
@@ -174,9 +279,17 @@ public class MultiProviderAiSuggestionService : IAiSuggestionService
         request.Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
 
         var response = await http.SendAsync(request);
+<<<<<<< HEAD
         response.EnsureSuccessStatusCode();
 
         var json = await response.Content.ReadAsStringAsync();
+=======
+        var json = await response.Content.ReadAsStringAsync();
+        if (!response.IsSuccessStatusCode)
+            throw new InvalidOperationException(
+                $"OpenAI devolvió {(int)response.StatusCode}: {Truncate(json, 300)}");
+
+>>>>>>> 0dc2a35 (complete java,python,typescript)
         using var doc = JsonDocument.Parse(json);
         return doc.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString() ?? string.Empty;
     }
@@ -189,12 +302,29 @@ public class MultiProviderAiSuggestionService : IAiSuggestionService
         if (string.IsNullOrWhiteSpace(apiKey) || apiKey == "PLACEHOLDER")
             throw new InvalidOperationException("Gemini API key no configurada.");
 
+<<<<<<< HEAD
+=======
+        // Permite sobreescribir el modelo por config. Lista de modelos a probar en orden
+        // (el primero que exista responde). Las API keys nuevas (formato "AQ.A...") usan
+        // el endpoint estándar generateContent con header x-goog-api-key.
+        var configuredModel = _config["Gemini:Model"];
+        var models = new List<string>();
+        if (!string.IsNullOrWhiteSpace(configuredModel)) models.Add(configuredModel.Trim());
+        models.AddRange(new[]
+        {
+            "gemini-flash-latest",   // alias siempre apuntando al flash GA más reciente
+            "gemini-2.5-flash",
+            "gemini-2.0-flash",
+        });
+
+>>>>>>> 0dc2a35 (complete java,python,typescript)
         var http = _httpClientFactory.CreateClient("Gemini");
         var body = new
         {
             contents = new[] { new { parts = new[] { new { text = userPrompt } } } },
             generationConfig = new { maxOutputTokens = 1024, temperature = 0.7 }
         };
+<<<<<<< HEAD
 
         var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={apiKey}";
         var request = new HttpRequestMessage(HttpMethod.Post, url);
@@ -206,6 +336,61 @@ public class MultiProviderAiSuggestionService : IAiSuggestionService
         var json = await response.Content.ReadAsStringAsync();
         using var doc = JsonDocument.Parse(json);
         return doc.RootElement.GetProperty("candidates")[0].GetProperty("content").GetProperty("parts")[0].GetProperty("text").GetString() ?? string.Empty;
+=======
+        var payload = JsonSerializer.Serialize(body);
+
+        Exception? lastError = null;
+        foreach (var model in models.Distinct())
+        {
+            try
+            {
+                // IMPORTANTE: header x-goog-api-key (recomendado por Google y requerido
+                // por las auth keys "AQ.A..."), NO ?key= en la URL.
+                var url = $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent";
+                using var request = new HttpRequestMessage(HttpMethod.Post, url);
+                request.Headers.Add("x-goog-api-key", apiKey);
+                request.Content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+                var response = await http.SendAsync(request);
+                var json = await response.Content.ReadAsStringAsync();
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    // 404 = modelo no disponible para esta key → probar el siguiente modelo.
+                    if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+                    {
+                        lastError = new InvalidOperationException($"Gemini: modelo '{model}' no encontrado (404).");
+                        continue;
+                    }
+                    throw new InvalidOperationException(
+                        $"Gemini devolvió {(int)response.StatusCode}: {json}");
+                }
+
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+
+                if (root.TryGetProperty("candidates", out var candidates) && candidates.GetArrayLength() > 0)
+                {
+                    var parts = candidates[0].GetProperty("content").GetProperty("parts");
+                    if (parts.GetArrayLength() > 0 &&
+                        parts[0].TryGetProperty("text", out var textEl))
+                    {
+                        return textEl.GetString() ?? string.Empty;
+                    }
+                }
+
+                throw new InvalidOperationException($"Gemini: respuesta sin texto. Cuerpo: {json}");
+            }
+            catch (Exception ex)
+            {
+                lastError = ex;
+                // si fue un error distinto a 404 cortamos: no tiene sentido reintentar otros modelos.
+                if (!ex.Message.Contains("404")) break;
+            }
+        }
+
+        throw lastError ?? new InvalidOperationException("Gemini: no se pudo obtener respuesta.");
+>>>>>>> 0dc2a35 (complete java,python,typescript)
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────────────

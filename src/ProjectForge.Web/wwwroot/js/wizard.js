@@ -76,7 +76,10 @@ document.querySelectorAll('.arch-card').forEach(card => {
     card.classList.add('selected');
     card.querySelector('input').checked = true;
     state.architecture = card.dataset.value;
+<<<<<<< HEAD
     // Cargar frameworks para el step 2 en anticipación
+=======
+>>>>>>> 0dc2a35 (complete java,python,typescript)
     loadFrameworks(state.architecture);
   });
 });
@@ -99,7 +102,10 @@ function renderFrameworkOptions(options) {
   const container = document.getElementById('framework-options');
   if (!container) return;
 
+<<<<<<< HEAD
   // Limpiar selección previa
+=======
+>>>>>>> 0dc2a35 (complete java,python,typescript)
   state.framework = null;
   state.frameworkVersion = null;
 
@@ -109,7 +115,10 @@ function renderFrameworkOptions(options) {
     </div>
   `).join('');
 
+<<<<<<< HEAD
   // Registrar listeners en los elementos recién creados
+=======
+>>>>>>> 0dc2a35 (complete java,python,typescript)
   container.querySelectorAll('.framework-option').forEach(card => {
     card.addEventListener('click', () => {
       container.querySelectorAll('.framework-option').forEach(c => c.classList.remove('selected'));
@@ -130,10 +139,16 @@ document.getElementById('framework-version-select')?.addEventListener('change', 
 
 // ── Step 2: Database ──────────────────────────────────────────────────────────
 
+<<<<<<< HEAD
 // Delegación de eventos en el contenedor padre — funciona aunque el DOM cambie
 document.querySelector('.db-grid')?.addEventListener('click', e => {
   const card = e.target.closest('.db-card');
   if (!card || card.closest('#framework-options')) return; // ignorar clicks en frameworks
+=======
+document.querySelector('.db-grid')?.addEventListener('click', e => {
+  const card = e.target.closest('.db-card');
+  if (!card || card.closest('#framework-options')) return;
+>>>>>>> 0dc2a35 (complete java,python,typescript)
   document.querySelectorAll('.db-grid .db-card').forEach(c => c.classList.remove('selected'));
   card.classList.add('selected');
   state.database = card.dataset.value;
@@ -171,7 +186,11 @@ function addVpsRow() {
   document.getElementById('vps-list').appendChild(row);
 }
 
+<<<<<<< HEAD
 // ── Step 4: AI Suggestions ────────────────────────────────────────────────────
+=======
+// ── Step 4: AI Suggestions + fallback BD ─────────────────────────────────────
+>>>>>>> 0dc2a35 (complete java,python,typescript)
 
 async function loadStep4Data() {
   if (!state.architecture || !state.framework) return;
@@ -190,6 +209,7 @@ async function loadStep4Data() {
         alreadySelectedPatterns: []
       })
     });
+<<<<<<< HEAD
     const data = await resp.json();
     if (banner) banner.textContent = data.rationale || '';
     renderPatterns(data.suggestedPatterns || []);
@@ -197,10 +217,111 @@ async function loadStep4Data() {
   } catch {
     if (banner) banner.textContent = 'No se pudieron cargar sugerencias de IA. Selecciona manualmente.';
     renderPatterns([]);
+=======
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const data = await resp.json();
+
+    // Si la IA falló (ok=false), mostramos el motivo real y caemos a la BD.
+    if (data.ok === false) {
+      if (banner) banner.textContent = data.rationale || ('Sugerencias IA no disponibles. Mostrando opciones para ' + state.architecture + '.');
+      await loadPatternsFromDb();
+      await loadLibrariesFromDb();
+      return;
+    }
+
+    if (banner) banner.textContent = data.rationale || '';
+    await renderPatternsFromAI(data.suggestedPatterns || []);
+    renderLibraries(data.suggestedLibraries || []);
+  } catch {
+    if (banner) banner.textContent = 'Sugerencias IA no disponibles. Mostrando opciones para ' + state.architecture + '.';
+    await loadPatternsFromDb();
+    await loadLibrariesFromDb();
+  }
+}
+
+async function loadPatternsFromDb() {
+  try {
+    const resp = await fetch(`/wizard/api/patterns/${state.architecture}`);
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const patterns = await resp.json();
+    renderPatternsFromDb(patterns);
+  } catch {
+    renderPatternsFromDb([]);
+  }
+}
+
+function renderPatternsFromDb(patterns) {
+  const container = document.getElementById('patterns-list');
+  if (!patterns.length) {
+    container.innerHTML = '<p style="color:var(--text-muted);font-size:.85rem">Sin patrones disponibles para esta arquitectura.</p>';
+    state.patterns = [];
+    return;
+  }
+  container.innerHTML = patterns.map(p => `<label title="${p.description || ''}">
+    <input type="radio" name="design-pattern" value="${p.name}"
+           onchange="selectSingle('patterns','${p.name.replace(/'/g, "\\'")}')" />
+    ${p.name}
+  </label>`).join('');
+  state.patterns = [];
+}
+
+async function renderPatternsFromAI(suggested) {
+  // Load architecture-specific patterns from DB, then mark AI-suggested ones
+  try {
+    const resp = await fetch(`/wizard/api/patterns/${state.architecture}`);
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const dbPatterns = await resp.json();
+    const dbNames = dbPatterns.map(p => p.name);
+
+    // Merge: DB patterns + any AI-suggested ones not in DB
+    const allNames = [...new Set([...dbNames, ...suggested])];
+    // Selección única: solo marcamos el PRIMER patrón sugerido por la IA.
+    const firstSuggested = suggested.length ? suggested[0] : null;
+
+    document.getElementById('patterns-list').innerHTML = allNames.map(name => {
+      const isAi = suggested.includes(name);
+      const checked = name === firstSuggested;
+      return `<label class="${isAi ? 'suggested' : ''}">
+        <input type="radio" name="design-pattern" value="${name}" ${checked ? 'checked' : ''}
+               onchange="selectSingle('patterns','${name.replace(/'/g, "\\'")}')" />
+        ${name} ${isAi ? '<span style="font-size:.7rem;color:#8b5cf6">✦ IA</span>' : ''}
+      </label>`;
+    }).join('');
+    state.patterns = firstSuggested ? [firstSuggested] : [];
+  } catch {
+    // Fallback: show only AI suggestions
+    renderPatternsLegacy(suggested);
+  }
+}
+
+function renderPatternsLegacy(suggested) {
+  const all = ['Repository', 'CQRS', 'Clean Architecture', 'Mediator', 'DDD', 'Hexagonal Architecture', 'Microservices', 'Event Sourcing', 'Saga'];
+  const firstSuggested = suggested.length ? suggested[0] : null;
+  document.getElementById('patterns-list').innerHTML = all.map(p => {
+    const isAi = suggested.includes(p);
+    const checked = p === firstSuggested;
+    return `<label class="${isAi ? 'suggested' : ''}">
+      <input type="radio" name="design-pattern" value="${p}" ${checked ? 'checked' : ''}
+             onchange="selectSingle('patterns','${p}')" />
+      ${p} ${isAi ? '<span style="font-size:.7rem;color:#8b5cf6">✦ IA</span>' : ''}
+    </label>`;
+  }).join('');
+  state.patterns = firstSuggested ? [firstSuggested] : [];
+}
+
+async function loadLibrariesFromDb() {
+  try {
+    const resp = await fetch(`/wizard/api/libraries/${state.architecture}`);
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const libs = await resp.json();
+    renderLibrariesFromDb(libs);
+  } catch {
+>>>>>>> 0dc2a35 (complete java,python,typescript)
     renderLibraries([]);
   }
 }
 
+<<<<<<< HEAD
 function renderPatterns(suggested) {
   const all = ['Repository', 'CQRS', 'Clean Architecture', 'Mediator', 'DDD', 'Hexagonal Architecture', 'Microservices', 'Event Sourcing', 'Saga'];
   document.getElementById('patterns-list').innerHTML = all.map(p => {
@@ -212,6 +333,18 @@ function renderPatterns(suggested) {
     </label>`;
   }).join('');
   state.patterns = [...suggested];
+=======
+function renderLibrariesFromDb(libs) {
+  const container = document.getElementById('libraries-list');
+  container.innerHTML = libs.length
+    ? libs.map(l => `<label title="${l.description || ''}">
+        <input type="checkbox" value="${l.packageName}"
+               onchange="toggleSel('libraries','${l.packageName}',this.checked)" />
+        ${l.name} <span style="font-size:.7rem;color:var(--text-muted)">${l.category}</span>
+      </label>`).join('')
+    : '<p style="color:var(--text-muted);font-size:.85rem">Sin librerías disponibles para esta arquitectura.</p>';
+  state.libraries = [];
+>>>>>>> 0dc2a35 (complete java,python,typescript)
 }
 
 function renderLibraries(suggested) {
@@ -230,18 +363,35 @@ function toggleSel(key, value, checked) {
   else { state[key] = state[key].filter(v => v !== value); }
 }
 
+<<<<<<< HEAD
+=======
+// Selección ÚNICA para patrones de diseño: solo un patrón a la vez.
+function selectSingle(key, value) {
+  state[key] = [value];
+}
+
+>>>>>>> 0dc2a35 (complete java,python,typescript)
 // ── Step 5: Summary ───────────────────────────────────────────────────────────
 
 function buildSummary() {
   const el = document.getElementById('config-summary');
   if (!el) return;
   el.innerHTML = [
+<<<<<<< HEAD
     ['Arquitectura', state.architecture],
     ['Framework',    state.framework + (state.frameworkVersion ? ' ' + state.frameworkVersion : '')],
     ['Base de Datos', state.database],
     ['Infraestructura', state.infrastructure],
     ['Patrones', state.patterns.join(', ') || 'Ninguno'],
     ['Librerías', state.libraries.slice(0, 5).join(', ') + (state.libraries.length > 5 ? '…' : '') || 'Ninguna'],
+=======
+    ['Arquitectura',   state.architecture],
+    ['Framework',      state.framework + (state.frameworkVersion ? ' ' + state.frameworkVersion : '')],
+    ['Base de Datos',  state.database],
+    ['Infraestructura',state.infrastructure],
+    ['Patrones',       state.patterns.join(', ') || 'Ninguno'],
+    ['Librerías',      state.libraries.slice(0, 5).join(', ') + (state.libraries.length > 5 ? '…' : '') || 'Ninguna'],
+>>>>>>> 0dc2a35 (complete java,python,typescript)
   ].map(([label, value]) => `
     <div class="summary-item">
       <label>${label}</label>
@@ -260,11 +410,14 @@ document.getElementById('wizard-form').addEventListener('submit', function(e) {
   btn.disabled = true;
   btn.textContent = 'Creando proyecto...';
 
+<<<<<<< HEAD
   // Inyectamos los campos del estado del wizard como hidden inputs y hacemos
   // un submit nativo del form. Esto garantiza que:
   //   1. El antiforgery token ya está en el form (puesto por @Html.AntiForgeryToken())
   //   2. El browser maneja los redirects correctamente (no fetch)
   //   3. No hay problemas con SameSite cookies ni CORS
+=======
+>>>>>>> 0dc2a35 (complete java,python,typescript)
   const form = e.target;
   form.method = 'POST';
   form.action = '/wizard/step5';
@@ -309,4 +462,8 @@ function collectVpsData() {
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
+<<<<<<< HEAD
 renderStep();
+=======
+renderStep();
+>>>>>>> 0dc2a35 (complete java,python,typescript)

@@ -164,6 +164,99 @@ namespace ProjectForge.Infrastructure.Migrations
                             Description = "Arquitectura de microservicios para aplicaciones Node.js.",
                             Name = "Microservices",
                             Pattern = "Microservices"
+<<<<<<< HEAD
+=======
+                        },
+                        new
+                        {
+                            Id = 7,
+                            Architecture = "Java",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Patrón de repositorio con Spring Data JPA para Java.",
+                            Name = "Repository Pattern",
+                            Pattern = "Repository"
+                        },
+                        new
+                        {
+                            Id = 8,
+                            Architecture = "Java",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Separación de comandos y consultas en aplicaciones Spring Boot.",
+                            Name = "CQRS",
+                            Pattern = "CQRS"
+                        },
+                        new
+                        {
+                            Id = 9,
+                            Architecture = "Java",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Ports & Adapters: aísla el dominio de la infraestructura. Muy usado en Java empresarial.",
+                            Name = "Hexagonal Architecture",
+                            Pattern = "HexagonalArchitecture"
+                        },
+                        new
+                        {
+                            Id = 10,
+                            Architecture = "Java",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Arquitectura de microservicios con Spring Boot y Spring Cloud.",
+                            Name = "Microservices",
+                            Pattern = "Microservices"
+                        },
+                        new
+                        {
+                            Id = 11,
+                            Architecture = "Python",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Capas bien definidas (domain, application, infrastructure) para proyectos Python.",
+                            Name = "Clean Architecture",
+                            Pattern = "CleanArchitecture"
+                        },
+                        new
+                        {
+                            Id = 12,
+                            Architecture = "TypeScript",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Aísla el dominio de la infraestructura con puertos y adaptadores. Ideal para NestJS.",
+                            Name = "Hexagonal Architecture (Ports & Adapters)",
+                            Pattern = "HexagonalArchitecture"
+                        },
+                        new
+                        {
+                            Id = 13,
+                            Architecture = "TypeScript",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Organización basada en componentes reutilizables, clave en Next.js y NestJS.",
+                            Name = "Component-Based Architecture",
+                            Pattern = "Repository"
+                        },
+                        new
+                        {
+                            Id = 14,
+                            Architecture = "TypeScript",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Comunicación reactiva entre componentes desacoplados usando observadores.",
+                            Name = "Observer Pattern",
+                            Pattern = "MVVM"
+                        },
+                        new
+                        {
+                            Id = 15,
+                            Architecture = "TypeScript",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Centraliza la comunicación entre módulos TypeScript evitando dependencias directas.",
+                            Name = "Mediator Pattern",
+                            Pattern = "Mediator"
+                        },
+                        new
+                        {
+                            Id = 16,
+                            Architecture = "TypeScript",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Aplicación de los 5 principios SOLID al diseño de módulos TypeScript/NestJS.",
+                            Name = "SOLID Principles Integration",
+                            Pattern = "CleanArchitecture"
+>>>>>>> 0dc2a35 (complete java,python,typescript)
                         });
                 });
 
@@ -340,6 +433,216 @@ namespace ProjectForge.Infrastructure.Migrations
                             Name = "Alembic",
                             PackageName = "alembic",
                             PopularityScore = 90
+<<<<<<< HEAD
+=======
+                        },
+                        new
+                        {
+                            Id = 11,
+                            Architecture = "Python",
+                            Category = "Testing",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Framework de testing para Python",
+                            InstallCommand = "pip install pytest",
+                            Name = "pytest",
+                            PackageName = "pytest",
+                            PopularityScore = 98
+                        },
+                        new
+                        {
+                            Id = 12,
+                            Architecture = "Python",
+                            Category = "HTTP Client",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Cliente HTTP async para tests e integraciones",
+                            InstallCommand = "pip install httpx",
+                            Name = "httpx",
+                            PackageName = "httpx",
+                            PopularityScore = 88
+                        },
+                        new
+                        {
+                            Id = 13,
+                            Architecture = "Python",
+                            Category = "Config",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Carga variables de entorno desde .env",
+                            InstallCommand = "pip install python-dotenv",
+                            Name = "python-dotenv",
+                            PackageName = "python-dotenv",
+                            PopularityScore = 95
+                        },
+                        new
+                        {
+                            Id = 14,
+                            Architecture = "Java",
+                            Category = "ORM",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Repositorios JPA con Spring Data",
+                            Framework = "SpringBoot",
+                            InstallCommand = "mvn dependency:get -Dartifact=org.springframework.boot:spring-boot-starter-data-jpa",
+                            Name = "Spring Data JPA",
+                            PackageName = "org.springframework.boot:spring-boot-starter-data-jpa",
+                            PopularityScore = 99
+                        },
+                        new
+                        {
+                            Id = 15,
+                            Architecture = "Java",
+                            Category = "Security",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Autenticación y autorización para Spring Boot",
+                            Framework = "SpringBoot",
+                            InstallCommand = "mvn dependency:get -Dartifact=org.springframework.boot:spring-boot-starter-security",
+                            Name = "Spring Security",
+                            PackageName = "org.springframework.boot:spring-boot-starter-security",
+                            PopularityScore = 97
+                        },
+                        new
+                        {
+                            Id = 16,
+                            Architecture = "Java",
+                            Category = "Mapping",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Mapeo entre objetos Java en tiempo de compilación",
+                            InstallCommand = "mvn dependency:get -Dartifact=org.mapstruct:mapstruct:1.5.5.Final",
+                            Name = "MapStruct",
+                            PackageName = "org.mapstruct:mapstruct",
+                            PopularityScore = 91
+                        },
+                        new
+                        {
+                            Id = 17,
+                            Architecture = "Java",
+                            Category = "Boilerplate",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Reduce boilerplate con anotaciones (@Getter, @Builder...)",
+                            InstallCommand = "mvn dependency:get -Dartifact=org.projectlombok:lombok:1.18.32",
+                            Name = "Lombok",
+                            PackageName = "org.projectlombok:lombok",
+                            PopularityScore = 98
+                        },
+                        new
+                        {
+                            Id = 18,
+                            Architecture = "Java",
+                            Category = "Documentation",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Swagger UI / OpenAPI 3 para Spring Boot 3",
+                            Framework = "SpringBoot",
+                            InstallCommand = "mvn dependency:get -Dartifact=org.springdoc:springdoc-openapi-starter-webmvc-ui:2.5.0",
+                            Name = "springdoc-openapi",
+                            PackageName = "org.springdoc:springdoc-openapi-starter-webmvc-ui",
+                            PopularityScore = 93
+                        },
+                        new
+                        {
+                            Id = 19,
+                            Architecture = "Java",
+                            Category = "Testing",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Framework de testing unitario para Java",
+                            InstallCommand = "mvn dependency:get -Dartifact=org.junit.jupiter:junit-jupiter:5.10.0",
+                            Name = "JUnit 5",
+                            PackageName = "org.junit.jupiter:junit-jupiter",
+                            PopularityScore = 99
+                        },
+                        new
+                        {
+                            Id = 20,
+                            Architecture = "Java",
+                            Category = "Migrations",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Migraciones de base de datos para Java",
+                            InstallCommand = "mvn dependency:get -Dartifact=org.flywaydb:flyway-core:10.0.0",
+                            Name = "Flyway",
+                            PackageName = "org.flywaydb:flyway-core",
+                            PopularityScore = 92
+                        },
+                        new
+                        {
+                            Id = 21,
+                            Architecture = "TypeScript",
+                            Category = "Validation",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Validación de esquemas con inferencia de tipos TypeScript",
+                            InstallCommand = "npm install zod",
+                            Name = "Zod",
+                            PackageName = "zod",
+                            PopularityScore = 97
+                        },
+                        new
+                        {
+                            Id = 22,
+                            Architecture = "TypeScript",
+                            Category = "ORM",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "ORM moderno con tipado automático para TypeScript/Node.js",
+                            InstallCommand = "npm install prisma @prisma/client",
+                            Name = "Prisma",
+                            PackageName = "prisma",
+                            PopularityScore = 96
+                        },
+                        new
+                        {
+                            Id = 23,
+                            Architecture = "TypeScript",
+                            Category = "ORM",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "ORM basado en decoradores, nativo para TypeScript y NestJS",
+                            InstallCommand = "npm install typeorm reflect-metadata",
+                            Name = "TypeORM",
+                            PackageName = "typeorm",
+                            PopularityScore = 91
+                        },
+                        new
+                        {
+                            Id = 24,
+                            Architecture = "TypeScript",
+                            Category = "Testing",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Framework de testing rápido con soporte nativo para TypeScript",
+                            InstallCommand = "npm install --save-dev jest ts-jest @types/jest",
+                            Name = "Jest",
+                            PackageName = "jest",
+                            PopularityScore = 98
+                        },
+                        new
+                        {
+                            Id = 25,
+                            Architecture = "TypeScript",
+                            Category = "Reactive",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Librería para programación reactiva y manejo de streams",
+                            InstallCommand = "npm install rxjs",
+                            Name = "RxJS",
+                            PackageName = "rxjs",
+                            PopularityScore = 94
+                        },
+                        new
+                        {
+                            Id = 26,
+                            Architecture = "TypeScript",
+                            Category = "Validation",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Decoradores de validación para clases TypeScript (ideal NestJS)",
+                            InstallCommand = "npm install class-validator class-transformer",
+                            Name = "class-validator",
+                            PackageName = "class-validator",
+                            PopularityScore = 93
+                        },
+                        new
+                        {
+                            Id = 27,
+                            Architecture = "TypeScript",
+                            Category = "Config",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Carga variables de entorno desde .env en Node.js/TypeScript",
+                            InstallCommand = "npm install dotenv",
+                            Name = "dotenv",
+                            PackageName = "dotenv",
+                            PopularityScore = 99
+>>>>>>> 0dc2a35 (complete java,python,typescript)
                         });
                 });
 
@@ -573,6 +876,137 @@ namespace ProjectForge.Infrastructure.Migrations
                             Name = "CI .NET GitHub Actions",
                             TemplateType = "ci",
                             Version = 1
+<<<<<<< HEAD
+=======
+                        },
+                        new
+                        {
+                            Id = 7,
+                            Architecture = "Java",
+                            Content = "FROM eclipse-temurin:21-jdk-alpine AS build\nWORKDIR /app\nCOPY . .\nRUN ./mvnw -q package -DskipTests\n\nFROM eclipse-temurin:21-jre-alpine AS final\nWORKDIR /app\nCOPY --from=build /app/target/*.jar app.jar\nEXPOSE 8080\nENTRYPOINT [\"java\",\"-jar\",\"app.jar\"]",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Multi-stage Dockerfile para Spring Boot con Maven",
+                            IsActive = true,
+                            Name = "Dockerfile Java Spring Boot",
+                            TemplateType = "dockerfile",
+                            Version = 1
+                        },
+                        new
+                        {
+                            Id = 8,
+                            Architecture = "Java",
+                            Content = "version: '3.9'\nservices:\n  app:\n    build: .\n    ports:\n      - \"{{APP_PORT}}:8080\"\n    environment:\n      - SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/{{DB_NAME}}\n      - SPRING_DATASOURCE_USERNAME=postgres\n      - SPRING_DATASOURCE_PASSWORD=secret\n      - SPRING_JPA_HIBERNATE_DDL_AUTO=update\n    depends_on:\n      db:\n        condition: service_healthy\n\n  db:\n    image: postgres:16-alpine\n    environment:\n      POSTGRES_DB: {{DB_NAME}}\n      POSTGRES_PASSWORD: secret\n    ports:\n      - \"{{DB_PORT}}:5432\"\n    volumes:\n      - pgdata:/var/lib/postgresql/data\n    healthcheck:\n      test: [\"CMD\",\"pg_isready\",\"-U\",\"postgres\"]\n      interval: 10s\n      timeout: 5s\n      retries: 5\n\nvolumes:\n  pgdata:",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Database = "PostgreSQL",
+                            Description = "Docker Compose para Spring Boot + PostgreSQL",
+                            Infrastructure = "DockerCompose",
+                            IsActive = true,
+                            Name = "Compose Java + PostgreSQL",
+                            TemplateType = "compose",
+                            Version = 1
+                        },
+                        new
+                        {
+                            Id = 9,
+                            Architecture = "Java",
+                            Content = "version: '3.9'\nservices:\n  app:\n    build: .\n    ports:\n      - \"{{APP_PORT}}:8080\"\n    environment:\n      - SPRING_DATASOURCE_URL=jdbc:mysql://db:3306/{{DB_NAME}}\n      - SPRING_DATASOURCE_USERNAME=root\n      - SPRING_DATASOURCE_PASSWORD=secret\n      - SPRING_JPA_HIBERNATE_DDL_AUTO=update\n    depends_on:\n      db:\n        condition: service_healthy\n\n  db:\n    image: mysql:8.0\n    environment:\n      MYSQL_ROOT_PASSWORD: secret\n      MYSQL_DATABASE: {{DB_NAME}}\n    ports:\n      - \"{{DB_PORT}}:3306\"\n    volumes:\n      - mysqldata:/var/lib/mysql\n    healthcheck:\n      test: [\"CMD\",\"mysqladmin\",\"ping\",\"-h\",\"localhost\"]\n      interval: 10s\n      timeout: 5s\n      retries: 5\n\nvolumes:\n  mysqldata:",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Database = "MySQL",
+                            Description = "Docker Compose para Spring Boot + MySQL",
+                            Infrastructure = "DockerCompose",
+                            IsActive = true,
+                            Name = "Compose Java + MySQL",
+                            TemplateType = "compose",
+                            Version = 1
+                        },
+                        new
+                        {
+                            Id = 10,
+                            Architecture = "Java",
+                            Content = "target/\n*.class\n*.jar\n*.war\n*.ear\n.mvn/\n!.mvn/wrapper/\n.idea/\n*.iml\n.vscode/\n.env\n.env.*\n*.log\nspring-shell.log\nmvnw\n!mvnw\nmvnw.cmd\n!mvnw.cmd",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Gitignore para proyectos Java/Maven/Spring Boot",
+                            IsActive = true,
+                            Name = ".gitignore Java",
+                            TemplateType = "gitignore",
+                            Version = 1
+                        },
+                        new
+                        {
+                            Id = 11,
+                            Architecture = "Java",
+                            Content = "name: CI/CD\non:\n  push:\n    branches: [main]\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n    - uses: actions/checkout@v4\n    - uses: actions/setup-java@v4\n      with:\n        java-version: '21'\n        distribution: 'temurin'\n        cache: maven\n    - run: ./mvnw -q verify\n    - name: Build Docker image\n      run: docker build -t {{APP_NAME}}:latest .",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Pipeline CI/CD para Java + Maven con GitHub Actions",
+                            IsActive = true,
+                            Name = "CI Java GitHub Actions",
+                            TemplateType = "ci",
+                            Version = 1
+                        },
+                        new
+                        {
+                            Id = 12,
+                            Architecture = "Python",
+                            Content = "FROM python:3.12-slim AS base\nWORKDIR /app\n\nCOPY requirements.txt .\nRUN pip install --no-cache-dir -r requirements.txt\n\nCOPY . .\nEXPOSE 8080\n\nCMD [\"uvicorn\", \"main:app\", \"--host\", \"0.0.0.0\", \"--port\", \"8080\"]",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Dockerfile para FastAPI/Flask con Python 3.12",
+                            IsActive = true,
+                            Name = "Dockerfile Python FastAPI",
+                            TemplateType = "dockerfile",
+                            Version = 1
+                        },
+                        new
+                        {
+                            Id = 13,
+                            Architecture = "Python",
+                            Content = "version: '3.9'\nservices:\n  app:\n    build: .\n    ports:\n      - \"{{APP_PORT}}:8080\"\n    environment:\n      - DATABASE_URL=postgresql://postgres:secret@db:5432/{{DB_NAME}}\n      - DEBUG=False\n    depends_on:\n      db:\n        condition: service_healthy\n    volumes:\n      - .:/app\n\n  db:\n    image: postgres:16-alpine\n    environment:\n      POSTGRES_DB: {{DB_NAME}}\n      POSTGRES_PASSWORD: secret\n    ports:\n      - \"{{DB_PORT}}:5432\"\n    volumes:\n      - pgdata:/var/lib/postgresql/data\n    healthcheck:\n      test: [\"CMD\",\"pg_isready\",\"-U\",\"postgres\"]\n      interval: 10s\n      timeout: 5s\n      retries: 5\n\nvolumes:\n  pgdata:",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Database = "PostgreSQL",
+                            Description = "Docker Compose para FastAPI/Django + PostgreSQL",
+                            Infrastructure = "DockerCompose",
+                            IsActive = true,
+                            Name = "Compose Python + PostgreSQL",
+                            TemplateType = "compose",
+                            Version = 1
+                        },
+                        new
+                        {
+                            Id = 14,
+                            Architecture = "Python",
+                            Content = "version: '3.9'\nservices:\n  app:\n    build: .\n    ports:\n      - \"{{APP_PORT}}:8080\"\n    environment:\n      - DATABASE_URL=mysql+pymysql://root:secret@db:3306/{{DB_NAME}}\n    depends_on:\n      db:\n        condition: service_healthy\n    volumes:\n      - .:/app\n\n  db:\n    image: mysql:8.0\n    environment:\n      MYSQL_ROOT_PASSWORD: secret\n      MYSQL_DATABASE: {{DB_NAME}}\n    ports:\n      - \"{{DB_PORT}}:3306\"\n    volumes:\n      - mysqldata:/var/lib/mysql\n    healthcheck:\n      test: [\"CMD\",\"mysqladmin\",\"ping\",\"-h\",\"localhost\"]\n      interval: 10s\n      timeout: 5s\n      retries: 5\n\nvolumes:\n  mysqldata:",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Database = "MySQL",
+                            Description = "Docker Compose para FastAPI/Django + MySQL",
+                            Infrastructure = "DockerCompose",
+                            IsActive = true,
+                            Name = "Compose Python + MySQL",
+                            TemplateType = "compose",
+                            Version = 1
+                        },
+                        new
+                        {
+                            Id = 15,
+                            Architecture = "Python",
+                            Content = "__pycache__/\n*.py[cod]\n*.pyo\n.env\n.env.*\nvenv/\n.venv/\n*.egg-info/\ndist/\nbuild/\n.pytest_cache/\n.mypy_cache/\n.coverage\nhtmlcov/\n*.sqlite3\n.vscode/\n.idea/",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Gitignore para proyectos Python",
+                            IsActive = true,
+                            Name = ".gitignore Python",
+                            TemplateType = "gitignore",
+                            Version = 1
+                        },
+                        new
+                        {
+                            Id = 16,
+                            Architecture = "Python",
+                            Content = "name: CI/CD\non:\n  push:\n    branches: [main]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n    - uses: actions/checkout@v4\n    - uses: actions/setup-python@v5\n      with:\n        python-version: '3.12'\n        cache: pip\n    - run: pip install -r requirements.txt\n    - run: python -m pytest tests/ -v\n    - name: Build Docker image\n      run: docker build -t {{APP_NAME}}:latest .",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Pipeline CI/CD para Python con GitHub Actions",
+                            IsActive = true,
+                            Name = "CI Python GitHub Actions",
+                            TemplateType = "ci",
+                            Version = 1
+>>>>>>> 0dc2a35 (complete java,python,typescript)
                         });
                 });
 

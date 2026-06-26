@@ -125,6 +125,15 @@ try
     await db.Database.MigrateAsync();
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
     logger.LogInformation("Migraciones aplicadas correctamente.");
+<<<<<<< HEAD
+=======
+
+    // Seeder idempotente: garantiza que TODOS los patrones y librerías de
+    // Python / Java / TypeScript / .NET existan, sin importar el estado del
+    // volumen de la BD ni del historial de migraciones de EF.
+    await ProjectForge.Infrastructure.Data.DataSeeder.SeedAsync(db);
+    logger.LogInformation("Seed de patrones y librerías verificado/aplicado.");
+>>>>>>> 0dc2a35 (complete java,python,typescript)
 }
 catch (Exception ex)
 {
@@ -141,7 +150,14 @@ if (!app.Environment.IsDevelopment())
 if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 
+<<<<<<< HEAD
 app.UseHttpsRedirection();
+=======
+// NOTA: NO usamos UseHttpsRedirection. Dentro del contenedor la app solo escucha
+// en http://+:8080 (ver ASPNETCORE_URLS). Redirigir a HTTPS aquí provocaría bucles
+// de redirección / errores 307 detrás del puerto publicado 5000. El TLS lo debe
+// terminar un reverse proxy (nginx/traefik/Caddy) por delante en producción.
+>>>>>>> 0dc2a35 (complete java,python,typescript)
 app.UseStaticFiles();
 app.UseRouting();
 app.UseSession();

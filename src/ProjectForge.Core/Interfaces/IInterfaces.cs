@@ -59,6 +59,10 @@ public interface IAiSuggestionService
 {
     Task<AiSuggestionResult> SuggestAsync(WizardSuggestionRequest request);
     Task<string> GenerateReadmeAsync(ReadmeGenerationRequest request);
+<<<<<<< HEAD
+=======
+    Task<string> ChatAsync(string systemPrompt, IEnumerable<(string Role, string Content)> messages);
+>>>>>>> 0dc2a35 (complete java,python,typescript)
 }
 
 public interface IProjectGeneratorService
