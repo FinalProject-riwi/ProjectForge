@@ -70,6 +70,7 @@ public class ProjectGeneratorService : IProjectGeneratorService
 
             // 2. Scaffolding según arquitectura
             await ScaffoldProjectAsync(project, cfg, projectPath, ct);
+            await ScaffoldJavaScriptBaseFilesAsync(project, cfg, projectPath, ct);
 
             // 3. Scaffold adicional según patrón de diseño
             await ScaffoldDesignPatternsAsync(project, cfg, projectPath, ct);
@@ -169,12 +170,40 @@ public class ProjectGeneratorService : IProjectGeneratorService
                 _ => new[] { ($"mkdir -p {path}/src {path}/tests", (string?)null) }
             },
 
-            ArchitectureType.JavaScript or ArchitectureType.TypeScript => new[]
+            ArchitectureType.JavaScript or ArchitectureType.TypeScript => cfg.Framework switch
             {
-                ($"npm init -y", (string?)path),
-                cfg.Framework == FrameworkType.NestJs
-                    ? ($"npm i -g @nestjs/cli && nest new {safeName} --directory . --skip-git", (string?)path)
-                    : ($"npm install express", (string?)path),
+                FrameworkType.NodeJs => new[]
+                {
+                    ($"npm init -y", (string?)path),
+                    ($"npm install", (string?)path),
+                    ($"npm pkg set scripts.start=node src/index.js", (string?)path),
+                },
+                FrameworkType.ExpressJs => new[]
+                {
+                    ($"npm init -y", (string?)path),
+                    ($"npm install express", (string?)path),
+                    ($"npm pkg set scripts.start=node src/server.js", (string?)path),
+                },
+                FrameworkType.NestJs => new[]
+                {
+                    ($"npx @nestjs/cli new {safeName} --language JS --package-manager npm --skip-git --directory .", (string?)path),
+                },
+                FrameworkType.NextJs => new[]
+                {
+                    ($"npm create next-app@latest . -- --js --app --eslint --src-dir --import-alias \"@/*\"", (string?)path),
+                },
+                FrameworkType.NestTs => new[]
+                {
+                    ($"npx @nestjs/cli new {safeName} --language TS --package-manager npm --skip-git --directory .", (string?)path),
+                },
+                FrameworkType.NextTs => new[]
+                {
+                    ($"npm create next-app@latest . -- --ts --app --eslint --src-dir --import-alias \"@/*\"", (string?)path),
+                },
+                _ => new[]
+                {
+                    ($"npm init -y", (string?)path),
+                }
             },
 
             ArchitectureType.Java => new[]
@@ -211,9 +240,11 @@ public class ProjectGeneratorService : IProjectGeneratorService
             return;
         }
 
-        if (cfg.Architecture != ArchitectureType.Php)
+        if (cfg.Architecture != ArchitectureType.Php &&
+            cfg.Architecture != ArchitectureType.JavaScript &&
+            cfg.Architecture != ArchitectureType.TypeScript)
         {
-            await EmitLogAsync(project, "Patterns", "ℹ️  El scaffold de patrones está habilitado solo para PHP por ahora", ct: ct);
+            await EmitLogAsync(project, "Patterns", "ℹ️  El scaffold de patrones está habilitado solo para PHP y JavaScript por ahora", ct: ct);
             return;
         }
 
@@ -247,7 +278,9 @@ public class ProjectGeneratorService : IProjectGeneratorService
                     }
                 }
             }
-            var files = BuildPhpPatternFiles(cfg.Framework, patternEnum.Value, project.Name);
+            var files = cfg.Architecture == ArchitectureType.Php
+                ? BuildPhpPatternFiles(cfg.Framework, patternEnum.Value, project.Name)
+                : BuildJavaScriptPatternFiles(cfg.Framework, patternEnum.Value, project.Name);
             foreach (var file in files)
             {
                 var fullPath = Path.Combine(path, file.RelativePath);
@@ -298,11 +331,53 @@ public class ProjectGeneratorService : IProjectGeneratorService
                 await EnsureSymfonyServiceBindingAsync(path, "App\\Port\\ProjectRepositoryPort", "App\\Adapters\\Persistence\\DoctrineProjectRepository", ct);
             }
 
+            if (cfg.Framework == FrameworkType.NestJs &&
+                patternEnum == DesignPattern.CQRS)
+            {
+                await EnsureNestJsAppModuleRegistrationAsync(path, ct);
+            }
+
+            if (cfg.Framework == FrameworkType.NodeJs &&
+                patternEnum == DesignPattern.CQRS)
+            {
+                await EnsureNodeJsCqrsAppAsync(path, ct);
+            }
+
+            if (cfg.Framework == FrameworkType.ExpressJs &&
+                patternEnum == DesignPattern.CQRS)
+            {
+                await EnsureExpressJsCqrsAppAsync(path, ct);
+            }
+
             appliedAny = true;
         }
 
         if (!appliedAny)
             await EmitLogAsync(project, "Patterns", "ℹ️  No se pudo resolver ningún scaffold de patrón", ct: ct);
+    }
+
+    private async Task ScaffoldJavaScriptBaseFilesAsync(Project project, WizardConfig cfg, string path, CancellationToken ct)
+    {
+        if (cfg.Architecture != ArchitectureType.JavaScript && cfg.Architecture != ArchitectureType.TypeScript)
+            return;
+
+        if (cfg.Framework is not (FrameworkType.NodeJs or FrameworkType.ExpressJs))
+            return;
+
+        var files = BuildJavaScriptBaseFiles(cfg.Framework, project.Name);
+        foreach (var file in files)
+        {
+            var fullPath = Path.Combine(path, file.RelativePath);
+            var dir = Path.GetDirectoryName(fullPath);
+            if (!string.IsNullOrWhiteSpace(dir))
+                Directory.CreateDirectory(dir);
+
+            if (!File.Exists(fullPath))
+            {
+                await File.WriteAllTextAsync(fullPath, file.Content, ct);
+                await EmitLogAsync(project, "Scaffold", $"✅ {file.RelativePath} generado", ct: ct);
+            }
+        }
     }
 
     private static IEnumerable<string> ReadScaffoldCommands(string? scaffoldCommandsJson)
@@ -338,7 +413,20 @@ public class ProjectGeneratorService : IProjectGeneratorService
                 ?? candidates.First();
         }
 
-        return candidates.FirstOrDefault(p => !p.Name.Contains("Symfony", StringComparison.OrdinalIgnoreCase))
+        if (framework == FrameworkType.NestJs)
+        {
+            return candidates.FirstOrDefault(p =>
+                p.Name.Contains("NestJS", StringComparison.OrdinalIgnoreCase) ||
+                p.Name.Contains("NestJs", StringComparison.OrdinalIgnoreCase) ||
+                p.Name.Contains("Nest", StringComparison.OrdinalIgnoreCase))
+                ?? candidates.First();
+        }
+
+        return candidates.FirstOrDefault(p =>
+                !p.Name.Contains("Symfony", StringComparison.OrdinalIgnoreCase) &&
+                !p.Name.Contains("NestJS", StringComparison.OrdinalIgnoreCase) &&
+                !p.Name.Contains("NestJs", StringComparison.OrdinalIgnoreCase) &&
+                !p.Name.Contains("Nest", StringComparison.OrdinalIgnoreCase))
             ?? candidates.First();
     }
 
@@ -379,6 +467,1286 @@ public class ProjectGeneratorService : IProjectGeneratorService
             FrameworkType.Symfony => BuildSymfonyPatternFiles(pattern, appName),
             _ => []
         };
+    }
+
+    private static IReadOnlyList<(string RelativePath, string Content)> BuildJavaScriptPatternFiles(
+        FrameworkType framework,
+        DesignPattern pattern,
+        string projectName)
+    {
+        return pattern switch
+        {
+            DesignPattern.Repository => new[]
+            {
+                ("src/domain/project.js", """
+class Project {
+  constructor({ id = null, name = '', description = null } = {}) {
+    this.id = id;
+    this.name = name;
+    this.description = description;
+  }
+}
+
+module.exports = { Project };
+"""),
+                ("src/ports/project-repository.js", """
+class ProjectRepositoryPort {
+  async all() {
+    throw new Error('Not implemented');
+  }
+
+  async find(id) {
+    throw new Error('Not implemented');
+  }
+
+  async create(project) {
+    throw new Error('Not implemented');
+  }
+
+  async update(id, project) {
+    throw new Error('Not implemented');
+  }
+}
+
+module.exports = { ProjectRepositoryPort };
+"""),
+                ("src/application/create-project-use-case.js", """
+const { Project } = require('../domain/project');
+
+class CreateProjectUseCase {
+  constructor(projects) {
+    this.projects = projects;
+  }
+
+  async execute(name, description = null) {
+    return this.projects.create(new Project({ name, description }));
+  }
+}
+
+module.exports = { CreateProjectUseCase };
+"""),
+                ("src/infrastructure/in-memory-project-repository.js", """
+const { Project } = require('../domain/project');
+
+class InMemoryProjectRepository {
+  constructor() {
+    this.items = new Map();
+    this.nextId = 1;
+  }
+
+  async all() {
+    return Array.from(this.items.values());
+  }
+
+  async find(id) {
+    return this.items.get(id) ?? null;
+  }
+
+  async create(project) {
+    const created = new Project({
+      id: this.nextId++,
+      name: project.name,
+      description: project.description,
+    });
+
+    this.items.set(created.id, created);
+    return created;
+  }
+
+  async update(id, project) {
+    const current = this.items.get(id);
+    if (!current) {
+      return null;
+    }
+
+    current.name = project.name;
+    current.description = project.description;
+    return current;
+  }
+}
+
+module.exports = { InMemoryProjectRepository };
+"""),
+            },
+            DesignPattern.CleanArchitecture => new[]
+            {
+                ("src/domain/project.js", """
+class Project {
+  constructor({ id = null, name = '', description = null } = {}) {
+    this.id = id;
+    this.name = name;
+    this.description = description;
+  }
+}
+
+module.exports = { Project };
+"""),
+                ("src/application/use-cases/create-project-use-case.js", """
+const { Project } = require('../../domain/project');
+
+class CreateProjectUseCase {
+  constructor(projects) {
+    this.projects = projects;
+  }
+
+  async execute(name, description = null) {
+    return this.projects.save(new Project({ name, description }));
+  }
+}
+
+module.exports = { CreateProjectUseCase };
+"""),
+                ("src/infrastructure/persistence/in-memory-project-repository.js", """
+const { Project } = require('../../../domain/project');
+
+class InMemoryProjectRepository {
+  constructor() {
+    this.items = new Map();
+    this.nextId = 1;
+  }
+
+  async save(project) {
+    const item = new Project({
+      id: this.nextId++,
+      name: project.name,
+      description: project.description,
+    });
+
+    this.items.set(item.id, item);
+    return item;
+  }
+
+  async find(id) {
+    return this.items.get(id) ?? null;
+  }
+
+  async all() {
+    return Array.from(this.items.values());
+  }
+}
+
+module.exports = { InMemoryProjectRepository };
+"""),
+                ("src/interfaces/http/project-controller.js", """
+class ProjectController {
+  constructor(createProjectUseCase) {
+    this.createProjectUseCase = createProjectUseCase;
+  }
+
+  async create(req, res) {
+    const project = await this.createProjectUseCase.execute(req.body.name, req.body.description ?? null);
+    res.status(201).json(project);
+  }
+}
+
+module.exports = { ProjectController };
+"""),
+            },
+            DesignPattern.HexagonalArchitecture => new[]
+            {
+                ("src/domain/project.js", """
+class Project {
+  constructor({ id = null, name = '', description = null } = {}) {
+    this.id = id;
+    this.name = name;
+    this.description = description;
+  }
+}
+
+module.exports = { Project };
+"""),
+                ("src/ports/project-repository-port.js", """
+class ProjectRepositoryPort {
+  async save(project) {
+    throw new Error('Not implemented');
+  }
+
+  async find(id) {
+    throw new Error('Not implemented');
+  }
+
+  async all() {
+    throw new Error('Not implemented');
+  }
+}
+
+module.exports = { ProjectRepositoryPort };
+"""),
+                ("src/application/use-cases/create-project-use-case.js", """
+const { Project } = require('../../domain/project');
+
+class CreateProjectUseCase {
+  constructor(projects) {
+    this.projects = projects;
+  }
+
+  async execute(name, description = null) {
+    return this.projects.save(new Project({ name, description }));
+  }
+}
+
+module.exports = { CreateProjectUseCase };
+"""),
+                ("src/adapters/persistence/in-memory-project-repository.js", """
+const { Project } = require('../../../domain/project');
+
+class InMemoryProjectRepository {
+  constructor() {
+    this.items = new Map();
+    this.nextId = 1;
+  }
+
+  async save(project) {
+    const item = new Project({
+      id: this.nextId++,
+      name: project.name,
+      description: project.description,
+    });
+
+    this.items.set(item.id, item);
+    return item;
+  }
+
+  async find(id) {
+    return this.items.get(id) ?? null;
+  }
+
+  async all() {
+    return Array.from(this.items.values());
+  }
+}
+
+module.exports = { InMemoryProjectRepository };
+"""),
+            },
+            DesignPattern.CQRS => BuildJavaScriptCqrsPatternFiles(framework),
+            DesignPattern.Mediator => new[]
+            {
+                ("src/application/mediator.js", """
+class ProjectMediator {
+  async dispatch(message) {
+    return message;
+  }
+}
+
+module.exports = { ProjectMediator };
+"""),
+                ("src/application/messages/create-project-message.js", """
+class CreateProjectMessage {
+  constructor(payload = {}) {
+    this.payload = payload;
+  }
+}
+
+module.exports = { CreateProjectMessage };
+"""),
+                ("src/application/handlers/create-project-handler.js", """
+class CreateProjectHandler {
+  async handle(message) {
+    return message.payload;
+  }
+}
+
+module.exports = { CreateProjectHandler };
+"""),
+            },
+            DesignPattern.Microservices => new[]
+            {
+                ("src/services/project-service.js", """
+class ProjectService {
+  async request(payload) {
+    return payload;
+  }
+}
+
+module.exports = { ProjectService };
+"""),
+                ("src/events/project-created.js", """
+class ProjectCreated {
+  constructor(payload = {}) {
+    this.payload = payload;
+  }
+}
+
+module.exports = { ProjectCreated };
+"""),
+                ("src/workers/project-worker.js", """
+class ProjectWorker {
+  async handle() {
+    // TODO: sincronizar microservicios
+  }
+}
+
+module.exports = { ProjectWorker };
+"""),
+                ("src/integrations/github-client.js", """
+class GitHubClient {
+  async createRepository(payload) {
+    return payload;
+  }
+}
+
+module.exports = { GitHubClient };
+"""),
+            },
+            _ => []
+        };
+    }
+
+    private static IReadOnlyList<(string RelativePath, string Content)> BuildJavaScriptCqrsPatternFiles(FrameworkType framework) =>
+        framework switch
+        {
+            FrameworkType.NestJs => BuildNestJsCqrsPatternFiles(),
+            FrameworkType.NodeJs => BuildNodeJsCqrsPatternFiles(),
+            FrameworkType.ExpressJs => BuildExpressJsCqrsPatternFiles(),
+            FrameworkType.NextJs => BuildNextJsCqrsPatternFiles(),
+            _ => BuildGenericJavaScriptCqrsPatternFiles()
+        };
+
+    private static IReadOnlyList<(string RelativePath, string Content)> BuildGenericJavaScriptCqrsPatternFiles() =>
+        new[]
+        {
+            ("src/application/commands/create-project-command.js", """
+class CreateProjectCommand {
+  constructor(payload = {}) {
+    this.payload = payload;
+  }
+}
+
+module.exports = { CreateProjectCommand };
+"""),
+            ("src/application/queries/get-project-query.js", """
+class GetProjectQuery {
+  constructor(id) {
+    this.id = id;
+  }
+}
+
+module.exports = { GetProjectQuery };
+"""),
+            ("src/application/handlers/create-project-command-handler.js", """
+class CreateProjectCommandHandler {
+  constructor(projects) {
+    this.projects = projects;
+  }
+
+  async handle(command) {
+    return this.projects.create(command.payload);
+  }
+}
+
+module.exports = { CreateProjectCommandHandler };
+"""),
+            ("src/application/handlers/get-project-query-handler.js", """
+class GetProjectQueryHandler {
+  constructor(projects) {
+    this.projects = projects;
+  }
+
+  async handle(query) {
+    return this.projects.find(query.id);
+  }
+}
+
+module.exports = { GetProjectQueryHandler };
+"""),
+        };
+
+    private static IReadOnlyList<(string RelativePath, string Content)> BuildNestJsCqrsPatternFiles() =>
+        new[]
+        {
+            ("src/cqrs/commands/create-project.command.js", """
+class CreateProjectCommand {
+  constructor(payload = {}) {
+    this.payload = payload;
+  }
+}
+
+module.exports = { CreateProjectCommand };
+"""),
+            ("src/cqrs/queries/get-project.query.js", """
+class GetProjectQuery {
+  constructor(id) {
+    this.id = id;
+  }
+}
+
+module.exports = { GetProjectQuery };
+"""),
+            ("src/cqrs/queries/get-projects.query.js", """
+class GetProjectsQuery {}
+
+module.exports = { GetProjectsQuery };
+"""),
+            ("src/cqrs/events/project-created.event.js", """
+class ProjectCreatedEvent {
+  constructor(projectId, name, description = null) {
+    this.projectId = projectId;
+    this.name = name;
+    this.description = description;
+  }
+}
+
+module.exports = { ProjectCreatedEvent };
+"""),
+            ("src/cqrs/handlers/create-project.handler.js", """
+const { CommandHandler, EventBus } = require('@nestjs/cqrs');
+const { CreateProjectCommand } = require('../commands/create-project.command');
+const { ProjectCreatedEvent } = require('../events/project-created.event');
+
+@CommandHandler(CreateProjectCommand)
+class CreateProjectHandler {
+  constructor(projects, eventBus) {
+    this.projects = projects;
+    this.eventBus = eventBus;
+  }
+
+  async execute(command) {
+    const project = this.projects.create(command.payload);
+    this.eventBus.publish(new ProjectCreatedEvent(project.id, project.name, project.description ?? null));
+    return project;
+  }
+}
+
+module.exports = { CreateProjectHandler };
+"""),
+            ("src/cqrs/handlers/get-project.handler.js", """
+const { QueryHandler } = require('@nestjs/cqrs');
+const { GetProjectQuery } = require('../queries/get-project.query');
+
+@QueryHandler(GetProjectQuery)
+class GetProjectHandler {
+  constructor(projects) {
+    this.projects = projects;
+  }
+
+  async execute(query) {
+    return this.projects.find(query.id);
+  }
+}
+
+module.exports = { GetProjectHandler };
+"""),
+            ("src/cqrs/handlers/get-projects.handler.js", """
+const { QueryHandler } = require('@nestjs/cqrs');
+const { GetProjectsQuery } = require('../queries/get-projects.query');
+
+@QueryHandler(GetProjectsQuery)
+class GetProjectsHandler {
+  constructor(projects) {
+    this.projects = projects;
+  }
+
+  async execute() {
+    return this.projects.all();
+  }
+}
+
+module.exports = { GetProjectsHandler };
+"""),
+            ("src/cqrs/handlers/project-created.handler.js", """
+const { EventsHandler } = require('@nestjs/cqrs');
+const { ProjectCreatedEvent } = require('../events/project-created.event');
+
+@EventsHandler(ProjectCreatedEvent)
+class ProjectCreatedHandler {
+  handle(event) {
+    console.log(`Project created: ${event.projectId} - ${event.name}`);
+  }
+}
+
+module.exports = { ProjectCreatedHandler };
+"""),
+            ("src/projects/projects.repository.js", """
+class ProjectsRepository {
+  constructor() {
+    this.items = new Map();
+    this.nextId = 1;
+  }
+
+  create(payload) {
+    const project = {
+      id: this.nextId++,
+      name: payload.name,
+      description: payload.description ?? null,
+      createdAt: new Date().toISOString(),
+    };
+
+    this.items.set(project.id, project);
+    return project;
+  }
+
+  find(id) {
+    return this.items.get(Number(id)) ?? null;
+  }
+
+  all() {
+    return Array.from(this.items.values());
+  }
+}
+
+module.exports = { ProjectsRepository };
+"""),
+            ("src/projects/projects.service.js", """
+const { CommandBus, QueryBus } = require('@nestjs/cqrs');
+const { CreateProjectCommand } = require('../cqrs/commands/create-project.command');
+const { GetProjectQuery } = require('../cqrs/queries/get-project.query');
+const { GetProjectsQuery } = require('../cqrs/queries/get-projects.query');
+
+class ProjectsService {
+  constructor(commandBus, queryBus) {
+    this.commandBus = commandBus;
+    this.queryBus = queryBus;
+  }
+
+  create(payload) {
+    return this.commandBus.execute(new CreateProjectCommand(payload));
+  }
+
+  findOne(id) {
+    return this.queryBus.execute(new GetProjectQuery(id));
+  }
+
+  findAll() {
+    return this.queryBus.execute(new GetProjectsQuery());
+  }
+}
+
+module.exports = { ProjectsService };
+"""),
+            ("src/projects/projects.controller.js", """
+const { Body, Controller, Get, Param, ParseIntPipe, Post } = require('@nestjs/common');
+
+@Controller('projects')
+class ProjectsController {
+  constructor(projects) {
+    this.projects = projects;
+  }
+
+  @Post()
+  async create(@Body() body) {
+    return this.projects.create(body);
+  }
+
+  @Get()
+  async findAll() {
+    return this.projects.findAll();
+  }
+
+  @Get(':id')
+  async findOne(@Param('id', ParseIntPipe) id) {
+    return this.projects.findOne(id);
+  }
+}
+
+module.exports = { ProjectsController };
+"""),
+            ("src/projects/projects.module.js", """
+const { Module } = require('@nestjs/common');
+const { CqrsModule } = require('@nestjs/cqrs');
+const { ProjectsController } = require('./projects.controller');
+const { ProjectsService } = require('./projects.service');
+const { ProjectsRepository } = require('./projects.repository');
+const { CreateProjectHandler } = require('../cqrs/handlers/create-project.handler');
+const { GetProjectHandler } = require('../cqrs/handlers/get-project.handler');
+const { GetProjectsHandler } = require('../cqrs/handlers/get-projects.handler');
+const { ProjectCreatedHandler } = require('../cqrs/handlers/project-created.handler');
+
+@Module({
+  imports: [CqrsModule],
+  controllers: [ProjectsController],
+  providers: [
+    ProjectsService,
+    ProjectsRepository,
+    CreateProjectHandler,
+    GetProjectHandler,
+    GetProjectsHandler,
+    ProjectCreatedHandler,
+  ],
+})
+class ProjectsModule {}
+
+module.exports = { ProjectsModule };
+"""),
+        };
+
+    private static IReadOnlyList<(string RelativePath, string Content)> BuildNodeJsCqrsPatternFiles() =>
+        BuildCommonJsCqrsCoreFiles()
+            .Concat(new[]
+            {
+                ("src/app.js", """
+const { createCqrsRuntime } = require('./cqrs/runtime');
+const { CreateProjectCommand } = require('./cqrs/commands/create-project.command');
+const { GetProjectQuery } = require('./cqrs/queries/get-project.query');
+const { GetProjectsQuery } = require('./cqrs/queries/get-projects.query');
+
+const runtime = createCqrsRuntime();
+
+function readBody(req) {
+  return new Promise(resolve => {
+    let raw = '';
+    req.on('data', chunk => {
+      raw += chunk;
+    });
+    req.on('end', () => {
+      if (!raw) {
+        resolve({});
+        return;
+      }
+
+      try {
+        resolve(JSON.parse(raw));
+      } catch {
+        resolve({});
+      }
+    });
+  });
+}
+
+function sendJson(res, statusCode, payload) {
+  res.writeHead(statusCode, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify(payload));
+}
+
+function createApp() {
+  return async (req, res) => {
+    const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+
+    if (req.method === 'GET' && url.pathname === '/health') {
+      sendJson(res, 200, { status: 'ok', app: 'node-cqrs' });
+      return;
+    }
+
+    if (req.method === 'GET' && url.pathname === '/projects') {
+      const projects = await runtime.queryBus.execute(new GetProjectsQuery());
+      sendJson(res, 200, projects);
+      return;
+    }
+
+    if (req.method === 'GET' && url.pathname.startsWith('/projects/')) {
+      const id = Number(url.pathname.split('/')[2]);
+      const project = await runtime.queryBus.execute(new GetProjectQuery(id));
+      if (!project) {
+        sendJson(res, 404, { message: 'Project not found' });
+        return;
+      }
+
+      sendJson(res, 200, project);
+      return;
+    }
+
+    if (req.method === 'POST' && url.pathname === '/projects') {
+      const body = await readBody(req);
+      const project = await runtime.commandBus.execute(new CreateProjectCommand(body));
+      sendJson(res, 201, project);
+      return;
+    }
+
+    sendJson(res, 404, { message: 'Not Found' });
+  };
+}
+
+module.exports = createApp;
+"""),
+            })
+            .ToList();
+
+    private static IReadOnlyList<(string RelativePath, string Content)> BuildExpressJsCqrsPatternFiles() =>
+        BuildCommonJsCqrsCoreFiles()
+            .Concat(new[]
+            {
+                ("src/app.js", """
+const express = require('express');
+const { createCqrsRuntime } = require('./cqrs/runtime');
+const { CreateProjectCommand } = require('./cqrs/commands/create-project.command');
+const { GetProjectQuery } = require('./cqrs/queries/get-project.query');
+const { GetProjectsQuery } = require('./cqrs/queries/get-projects.query');
+
+function createApp() {
+  const app = express();
+  const runtime = createCqrsRuntime();
+
+  app.use(express.json());
+  app.get('/health', (_req, res) => res.json({ status: 'ok', app: 'express-cqrs' }));
+  app.get('/', (_req, res) => res.json({ app: 'express-cqrs', status: 'running' }));
+
+  app.get('/projects', async (_req, res) => {
+    const projects = await runtime.queryBus.execute(new GetProjectsQuery());
+    res.json(projects);
+  });
+
+  app.get('/projects/:id', async (req, res) => {
+    const project = await runtime.queryBus.execute(new GetProjectQuery(Number(req.params.id)));
+    if (!project) {
+      res.status(404).json({ message: 'Project not found' });
+      return;
+    }
+
+    res.json(project);
+  });
+
+  app.post('/projects', async (req, res) => {
+    const project = await runtime.commandBus.execute(new CreateProjectCommand(req.body ?? {}));
+    res.status(201).json(project);
+  });
+
+  return app;
+}
+
+module.exports = createApp();
+"""),
+            })
+            .ToList();
+
+    private static IReadOnlyList<(string RelativePath, string Content)> BuildNextJsCqrsPatternFiles() =>
+        BuildNextJsCqrsCoreFiles()
+            .Concat(new[]
+            {
+                ("src/app/api/projects/route.js", """
+import { createCqrsRuntime } from '../../../lib/cqrs/runtime.js';
+import { CreateProjectCommand } from '../../../lib/cqrs/commands/create-project.command.js';
+import { GetProjectsQuery } from '../../../lib/cqrs/queries/get-projects.query.js';
+
+const runtime = createCqrsRuntime();
+
+export async function GET() {
+  const projects = await runtime.queryBus.execute(new GetProjectsQuery());
+  return Response.json(projects);
+}
+
+export async function POST(request) {
+  const payload = await request.json();
+  const project = await runtime.commandBus.execute(new CreateProjectCommand(payload));
+  return Response.json(project, { status: 201 });
+}
+"""),
+                ("src/app/api/projects/[id]/route.js", """
+import { createCqrsRuntime } from '../../../../lib/cqrs/runtime.js';
+import { GetProjectQuery } from '../../../../lib/cqrs/queries/get-project.query.js';
+
+const runtime = createCqrsRuntime();
+
+export async function GET(_request, { params }) {
+  const project = await runtime.queryBus.execute(new GetProjectQuery(Number(params.id)));
+  if (!project) {
+    return Response.json({ message: 'Project not found' }, { status: 404 });
+  }
+
+  return Response.json(project);
+}
+"""),
+            })
+            .ToList();
+
+    private static IReadOnlyList<(string RelativePath, string Content)> BuildCommonJsCqrsCoreFiles() =>
+        new[]
+        {
+            ("src/domain/project.js", """
+class Project {
+  constructor({ id = null, name = '', description = null, createdAt = null } = {}) {
+    this.id = id;
+    this.name = name;
+    this.description = description;
+    this.createdAt = createdAt;
+  }
+}
+
+module.exports = { Project };
+"""),
+            ("src/cqrs/command-bus.js", """
+class CommandBus {
+  constructor() {
+    this.handlers = new Map();
+  }
+
+  register(commandType, handler) {
+    this.handlers.set(commandType.name, handler);
+    return this;
+  }
+
+  async execute(command) {
+    const handler = this.handlers.get(command.constructor.name);
+    if (!handler) {
+      throw new Error(`No command handler registered for ${command.constructor.name}`);
+    }
+
+    return handler.handle(command);
+  }
+}
+
+module.exports = { CommandBus };
+"""),
+            ("src/cqrs/query-bus.js", """
+class QueryBus {
+  constructor() {
+    this.handlers = new Map();
+  }
+
+  register(queryType, handler) {
+    this.handlers.set(queryType.name, handler);
+    return this;
+  }
+
+  async execute(query) {
+    const handler = this.handlers.get(query.constructor.name);
+    if (!handler) {
+      throw new Error(`No query handler registered for ${query.constructor.name}`);
+    }
+
+    return handler.handle(query);
+  }
+}
+
+module.exports = { QueryBus };
+"""),
+            ("src/cqrs/event-bus.js", """
+class EventBus {
+  constructor() {
+    this.listeners = new Map();
+  }
+
+  subscribe(eventType, listener) {
+    const key = eventType.name;
+    const current = this.listeners.get(key) ?? [];
+    current.push(listener);
+    this.listeners.set(key, current);
+    return this;
+  }
+
+  async publish(event) {
+    const listeners = this.listeners.get(event.constructor.name) ?? [];
+    await Promise.all(listeners.map(listener => listener.handle(event)));
+  }
+}
+
+module.exports = { EventBus };
+"""),
+            ("src/cqrs/commands/create-project.command.js", """
+class CreateProjectCommand {
+  constructor(payload = {}) {
+    this.payload = payload;
+  }
+}
+
+module.exports = { CreateProjectCommand };
+"""),
+            ("src/cqrs/queries/get-project.query.js", """
+class GetProjectQuery {
+  constructor(id) {
+    this.id = id;
+  }
+}
+
+module.exports = { GetProjectQuery };
+"""),
+            ("src/cqrs/queries/get-projects.query.js", """
+class GetProjectsQuery {}
+
+module.exports = { GetProjectsQuery };
+"""),
+            ("src/cqrs/events/project-created.event.js", """
+class ProjectCreatedEvent {
+  constructor(projectId, name, description = null) {
+    this.projectId = projectId;
+    this.name = name;
+    this.description = description;
+  }
+}
+
+module.exports = { ProjectCreatedEvent };
+"""),
+            ("src/cqrs/handlers/create-project.handler.js", """
+const { ProjectCreatedEvent } = require('../events/project-created.event');
+
+class CreateProjectHandler {
+  constructor(projects, eventBus) {
+    this.projects = projects;
+    this.eventBus = eventBus;
+  }
+
+  async handle(command) {
+    const project = this.projects.create(command.payload);
+    await this.eventBus.publish(new ProjectCreatedEvent(project.id, project.name, project.description));
+    return project;
+  }
+}
+
+module.exports = { CreateProjectHandler };
+"""),
+            ("src/cqrs/handlers/get-project.handler.js", """
+class GetProjectHandler {
+  constructor(projects) {
+    this.projects = projects;
+  }
+
+  async handle(query) {
+    return this.projects.find(query.id);
+  }
+}
+
+module.exports = { GetProjectHandler };
+"""),
+            ("src/cqrs/handlers/get-projects.handler.js", """
+class GetProjectsHandler {
+  constructor(projects) {
+    this.projects = projects;
+  }
+
+  async handle() {
+    return this.projects.all();
+  }
+}
+
+module.exports = { GetProjectsHandler };
+"""),
+            ("src/cqrs/handlers/project-created.handler.js", """
+class ProjectCreatedHandler {
+  async handle(event) {
+    console.log(`Project created: ${event.projectId} - ${event.name}`);
+  }
+}
+
+module.exports = { ProjectCreatedHandler };
+"""),
+            ("src/cqrs/runtime.js", """
+const { CommandBus } = require('./command-bus');
+const { QueryBus } = require('./query-bus');
+const { EventBus } = require('./event-bus');
+const { ProjectsRepository } = require('../infrastructure/projects.repository');
+const { CreateProjectCommand } = require('./commands/create-project.command');
+const { GetProjectQuery } = require('./queries/get-project.query');
+const { GetProjectsQuery } = require('./queries/get-projects.query');
+const { ProjectCreatedEvent } = require('./events/project-created.event');
+const { CreateProjectHandler } = require('./handlers/create-project.handler');
+const { GetProjectHandler } = require('./handlers/get-project.handler');
+const { GetProjectsHandler } = require('./handlers/get-projects.handler');
+const { ProjectCreatedHandler } = require('./handlers/project-created.handler');
+
+function createCqrsRuntime() {
+  const projects = new ProjectsRepository();
+  const commandBus = new CommandBus();
+  const queryBus = new QueryBus();
+  const eventBus = new EventBus();
+
+  commandBus.register(CreateProjectCommand, new CreateProjectHandler(projects, eventBus));
+  queryBus.register(GetProjectQuery, new GetProjectHandler(projects));
+  queryBus.register(GetProjectsQuery, new GetProjectsHandler(projects));
+  eventBus.subscribe(ProjectCreatedEvent, new ProjectCreatedHandler());
+
+  return { projects, commandBus, queryBus, eventBus };
+}
+
+module.exports = { createCqrsRuntime };
+"""),
+            ("src/infrastructure/projects.repository.js", """
+const { Project } = require('../domain/project');
+
+class ProjectsRepository {
+  constructor() {
+    this.items = new Map();
+    this.nextId = 1;
+  }
+
+  create(payload) {
+    const project = new Project({
+      id: this.nextId++,
+      name: payload.name,
+      description: payload.description ?? null,
+      createdAt: new Date().toISOString(),
+    });
+
+    this.items.set(project.id, project);
+    return project;
+  }
+
+  find(id) {
+    return this.items.get(Number(id)) ?? null;
+  }
+
+  all() {
+    return Array.from(this.items.values());
+  }
+}
+
+module.exports = { ProjectsRepository };
+"""),
+        };
+
+    private static IReadOnlyList<(string RelativePath, string Content)> BuildNextJsCqrsCoreFiles() =>
+        new[]
+        {
+            ("src/lib/projects/project.js", """
+export class Project {
+  constructor({ id = null, name = '', description = null, createdAt = null } = {}) {
+    this.id = id;
+    this.name = name;
+    this.description = description;
+    this.createdAt = createdAt;
+  }
+}
+"""),
+            ("src/lib/cqrs/command-bus.js", """
+export class CommandBus {
+  constructor() {
+    this.handlers = new Map();
+  }
+
+  register(commandType, handler) {
+    this.handlers.set(commandType.name, handler);
+    return this;
+  }
+
+  async execute(command) {
+    const handler = this.handlers.get(command.constructor.name);
+    if (!handler) {
+      throw new Error(`No command handler registered for ${command.constructor.name}`);
+    }
+
+    return handler.handle(command);
+  }
+}
+"""),
+            ("src/lib/cqrs/query-bus.js", """
+export class QueryBus {
+  constructor() {
+    this.handlers = new Map();
+  }
+
+  register(queryType, handler) {
+    this.handlers.set(queryType.name, handler);
+    return this;
+  }
+
+  async execute(query) {
+    const handler = this.handlers.get(query.constructor.name);
+    if (!handler) {
+      throw new Error(`No query handler registered for ${query.constructor.name}`);
+    }
+
+    return handler.handle(query);
+  }
+}
+"""),
+            ("src/lib/cqrs/event-bus.js", """
+export class EventBus {
+  constructor() {
+    this.listeners = new Map();
+  }
+
+  subscribe(eventType, listener) {
+    const key = eventType.name;
+    const current = this.listeners.get(key) ?? [];
+    current.push(listener);
+    this.listeners.set(key, current);
+    return this;
+  }
+
+  async publish(event) {
+    const listeners = this.listeners.get(event.constructor.name) ?? [];
+    await Promise.all(listeners.map(listener => listener.handle(event)));
+  }
+}
+"""),
+            ("src/lib/cqrs/commands/create-project.command.js", """
+export class CreateProjectCommand {
+  constructor(payload = {}) {
+    this.payload = payload;
+  }
+}
+"""),
+            ("src/lib/cqrs/queries/get-project.query.js", """
+export class GetProjectQuery {
+  constructor(id) {
+    this.id = id;
+  }
+}
+"""),
+            ("src/lib/cqrs/queries/get-projects.query.js", """
+export class GetProjectsQuery {}
+"""),
+            ("src/lib/cqrs/events/project-created.event.js", """
+export class ProjectCreatedEvent {
+  constructor(projectId, name, description = null) {
+    this.projectId = projectId;
+    this.name = name;
+    this.description = description;
+  }
+}
+"""),
+            ("src/lib/cqrs/handlers/create-project.handler.js", """
+import { ProjectCreatedEvent } from '../events/project-created.event.js';
+
+export class CreateProjectHandler {
+  constructor(projects, eventBus) {
+    this.projects = projects;
+    this.eventBus = eventBus;
+  }
+
+  async handle(command) {
+    const project = this.projects.create(command.payload);
+    await this.eventBus.publish(new ProjectCreatedEvent(project.id, project.name, project.description));
+    return project;
+  }
+}
+"""),
+            ("src/lib/cqrs/handlers/get-project.handler.js", """
+export class GetProjectHandler {
+  constructor(projects) {
+    this.projects = projects;
+  }
+
+  async handle(query) {
+    return this.projects.find(query.id);
+  }
+}
+"""),
+            ("src/lib/cqrs/handlers/get-projects.handler.js", """
+export class GetProjectsHandler {
+  constructor(projects) {
+    this.projects = projects;
+  }
+
+  async handle() {
+    return this.projects.all();
+  }
+}
+"""),
+            ("src/lib/cqrs/handlers/project-created.handler.js", """
+export class ProjectCreatedHandler {
+  async handle(event) {
+    console.log(`Project created: ${event.projectId} - ${event.name}`);
+  }
+}
+"""),
+            ("src/lib/cqrs/runtime.js", """
+import { CommandBus } from './command-bus.js';
+import { QueryBus } from './query-bus.js';
+import { EventBus } from './event-bus.js';
+import { ProjectsRepository } from '../projects/projects.repository.js';
+import { CreateProjectCommand } from './commands/create-project.command.js';
+import { GetProjectQuery } from './queries/get-project.query.js';
+import { GetProjectsQuery } from './queries/get-projects.query.js';
+import { ProjectCreatedEvent } from './events/project-created.event.js';
+import { CreateProjectHandler } from './handlers/create-project.handler.js';
+import { GetProjectHandler } from './handlers/get-project.handler.js';
+import { GetProjectsHandler } from './handlers/get-projects.handler.js';
+import { ProjectCreatedHandler } from './handlers/project-created.handler.js';
+
+export function createCqrsRuntime() {
+  const projects = new ProjectsRepository();
+  const commandBus = new CommandBus();
+  const queryBus = new QueryBus();
+  const eventBus = new EventBus();
+
+  commandBus.register(CreateProjectCommand, new CreateProjectHandler(projects, eventBus));
+  queryBus.register(GetProjectQuery, new GetProjectHandler(projects));
+  queryBus.register(GetProjectsQuery, new GetProjectsHandler(projects));
+  eventBus.subscribe(ProjectCreatedEvent, new ProjectCreatedHandler());
+
+  return { projects, commandBus, queryBus, eventBus };
+}
+"""),
+            ("src/lib/projects/projects.repository.js", """
+import { Project } from './project.js';
+
+export class ProjectsRepository {
+  constructor() {
+    this.items = new Map();
+    this.nextId = 1;
+  }
+
+  create(payload) {
+    const project = new Project({
+      id: this.nextId++,
+      name: payload.name,
+      description: payload.description ?? null,
+      createdAt: new Date().toISOString(),
+    });
+
+    this.items.set(project.id, project);
+    return project;
+  }
+
+  find(id) {
+    return this.items.get(Number(id)) ?? null;
+  }
+
+  all() {
+    return Array.from(this.items.values());
+  }
+}
+"""),
+        };
+
+    private static IReadOnlyList<(string RelativePath, string Content)> BuildJavaScriptBaseFiles(
+        FrameworkType framework,
+        string projectName)
+    {
+        var appName = projectName.ToLowerInvariant().Replace(" ", "-");
+        var files = framework switch
+        {
+            FrameworkType.NodeJs => new[]
+        {
+            ("src/index.js", """
+const http = require('http');
+const createApp = require('./app');
+
+const port = process.env.PORT || 3000;
+const app = createApp();
+
+http.createServer(app).listen(port, () => {
+  console.log(`{{APP_NAME}} listening on port ${port}`);
+});
+"""),
+            ("src/app.js", """
+function createApp() {
+  return (req, res) => {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ app: '{{APP_NAME}}', status: 'ok' }));
+  };
+}
+
+module.exports = createApp;
+"""),
+        },
+            FrameworkType.ExpressJs => new[]
+        {
+            ("src/server.js", """
+const app = require('./app');
+
+const port = process.env.PORT || 3000;
+
+app.listen(port, () => {
+  console.log(`{{APP_NAME}} listening on port ${port}`);
+});
+"""),
+            ("src/app.js", """
+const express = require('express');
+
+function createApp() {
+  const app = express();
+
+  app.use(express.json());
+  app.get('/health', (_req, res) => res.json({ status: 'ok', app: '{{APP_NAME}}' }));
+  app.get('/', (_req, res) => res.json({ app: '{{APP_NAME}}', status: 'running' }));
+
+  return app;
+}
+
+module.exports = createApp();
+"""),
+            ("src/routes/index.js", """
+module.exports = function registerRoutes(app) {
+  app.get('/ping', (_req, res) => res.json({ ok: true }));
+};
+"""),
+        },
+            _ => []
+        };
+
+        return files
+            .Select(file => (RelativePath: file.Item1, Content: file.Item2.Replace("{{APP_NAME}}", appName)))
+            .ToList();
     }
 
     private static IReadOnlyList<(string RelativePath, string Content)> BuildLaravelPatternFiles(
@@ -1798,6 +3166,176 @@ final class CompleteProjectProvisioningListener
         await File.WriteAllTextAsync(servicesFile, updated, ct);
     }
 
+    private static async Task EnsureNestJsAppModuleRegistrationAsync(string path, CancellationToken ct)
+    {
+        var appModuleFile = Path.Combine(path, "src", "app.module.js");
+        if (!File.Exists(appModuleFile))
+            return;
+
+        var content = await File.ReadAllTextAsync(appModuleFile, ct);
+
+        const string moduleRequire = "const { ProjectsModule } = require('./projects/projects.module');";
+        if (!content.Contains(moduleRequire, StringComparison.Ordinal))
+        {
+            var marker = "const { AppService } = require('./app.service');";
+            var insertAt = content.IndexOf(marker, StringComparison.Ordinal);
+            if (insertAt >= 0)
+                content = content.Insert(insertAt + marker.Length + 1, moduleRequire + Environment.NewLine);
+        }
+
+        if (content.Contains("imports: [ProjectsModule]", StringComparison.Ordinal))
+        {
+            await File.WriteAllTextAsync(appModuleFile, content, ct);
+            return;
+        }
+
+        if (content.Contains("imports: [],", StringComparison.Ordinal))
+        {
+            content = content.Replace("imports: [],", "imports: [ProjectsModule],", StringComparison.Ordinal);
+            await File.WriteAllTextAsync(appModuleFile, content, ct);
+            return;
+        }
+
+        var importsMarker = "imports: [";
+        var start = content.IndexOf(importsMarker, StringComparison.Ordinal);
+        if (start >= 0)
+        {
+            var lineEnd = content.IndexOf('\n', start);
+            if (lineEnd > start)
+            {
+                var updated = content.Insert(lineEnd + 1, "    ProjectsModule,\n");
+                await File.WriteAllTextAsync(appModuleFile, updated, ct);
+                return;
+            }
+        }
+
+        await File.WriteAllTextAsync(appModuleFile, content, ct);
+    }
+
+    private static async Task EnsureNodeJsCqrsAppAsync(string path, CancellationToken ct)
+    {
+        var appFile = Path.Combine(path, "src", "app.js");
+        await File.WriteAllTextAsync(appFile, """
+const { createCqrsRuntime } = require('./cqrs/runtime');
+const { CreateProjectCommand } = require('./cqrs/commands/create-project.command');
+const { GetProjectQuery } = require('./cqrs/queries/get-project.query');
+const { GetProjectsQuery } = require('./cqrs/queries/get-projects.query');
+
+const runtime = createCqrsRuntime();
+
+function readBody(req) {
+  return new Promise(resolve => {
+    let raw = '';
+    req.on('data', chunk => {
+      raw += chunk;
+    });
+    req.on('end', () => {
+      if (!raw) {
+        resolve({});
+        return;
+      }
+
+      try {
+        resolve(JSON.parse(raw));
+      } catch {
+        resolve({});
+      }
+    });
+  });
+}
+
+function sendJson(res, statusCode, payload) {
+  res.writeHead(statusCode, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify(payload));
+}
+
+function createApp() {
+  return async (req, res) => {
+    const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+
+    if (req.method === 'GET' && url.pathname === '/health') {
+      sendJson(res, 200, { status: 'ok', app: 'node-cqrs' });
+      return;
+    }
+
+    if (req.method === 'GET' && url.pathname === '/projects') {
+      const projects = await runtime.queryBus.execute(new GetProjectsQuery());
+      sendJson(res, 200, projects);
+      return;
+    }
+
+    if (req.method === 'GET' && url.pathname.startsWith('/projects/')) {
+      const id = Number(url.pathname.split('/')[2]);
+      const project = await runtime.queryBus.execute(new GetProjectQuery(id));
+      if (!project) {
+        sendJson(res, 404, { message: 'Project not found' });
+        return;
+      }
+
+      sendJson(res, 200, project);
+      return;
+    }
+
+    if (req.method === 'POST' && url.pathname === '/projects') {
+      const body = await readBody(req);
+      const project = await runtime.commandBus.execute(new CreateProjectCommand(body));
+      sendJson(res, 201, project);
+      return;
+    }
+
+    sendJson(res, 404, { message: 'Not Found' });
+  };
+}
+
+module.exports = createApp;
+""", ct);
+    }
+
+    private static async Task EnsureExpressJsCqrsAppAsync(string path, CancellationToken ct)
+    {
+        var appFile = Path.Combine(path, "src", "app.js");
+        await File.WriteAllTextAsync(appFile, """
+const express = require('express');
+const { createCqrsRuntime } = require('./cqrs/runtime');
+const { CreateProjectCommand } = require('./cqrs/commands/create-project.command');
+const { GetProjectQuery } = require('./cqrs/queries/get-project.query');
+const { GetProjectsQuery } = require('./cqrs/queries/get-projects.query');
+
+function createApp() {
+  const app = express();
+  const runtime = createCqrsRuntime();
+
+  app.use(express.json());
+  app.get('/health', (_req, res) => res.json({ status: 'ok', app: 'express-cqrs' }));
+  app.get('/', (_req, res) => res.json({ app: 'express-cqrs', status: 'running' }));
+
+  app.get('/projects', async (_req, res) => {
+    const projects = await runtime.queryBus.execute(new GetProjectsQuery());
+    res.json(projects);
+  });
+
+  app.get('/projects/:id', async (req, res) => {
+    const project = await runtime.queryBus.execute(new GetProjectQuery(Number(req.params.id)));
+    if (!project) {
+      res.status(404).json({ message: 'Project not found' });
+      return;
+    }
+
+    res.json(project);
+  });
+
+  app.post('/projects', async (req, res) => {
+    const project = await runtime.commandBus.execute(new CreateProjectCommand(req.body ?? {}));
+    res.status(201).json(project);
+  });
+
+  return app;
+}
+
+module.exports = createApp();
+""", ct);
+    }
+
     private static string ToClassName(string value)
     {
         var chars = value
@@ -1818,7 +3356,7 @@ final class CompleteProjectProvisioningListener
             ["APP_NAME"] = project.Name.ToLower().Replace(" ", "-"),
             ["DB_NAME"]  = $"{project.Name.ToLower().Replace(" ", "_")}_db",
             ["DB_PORT"]  = GetDefaultDbPort(cfg.Database).ToString(),
-            ["APP_PORT"] = "8080"
+            ["APP_PORT"] = GetDefaultAppPort(cfg.Architecture, cfg.Framework).ToString()
         };
 
         if (cfg.Infrastructure == InfrastructureType.DockerCompose)
@@ -1962,6 +3500,18 @@ final class CompleteProjectProvisioningListener
         DatabaseType.Redis      => 6379,
         _                       => 5432
     };
+
+    private static int GetDefaultAppPort(ArchitectureType architecture, FrameworkType framework) =>
+        architecture switch
+        {
+            ArchitectureType.JavaScript or ArchitectureType.TypeScript => 3000,
+            ArchitectureType.Php => 8080,
+            _ => framework switch
+            {
+                FrameworkType.NextJs or FrameworkType.NestJs or FrameworkType.NodeJs or FrameworkType.ExpressJs => 3000,
+                _ => 8080
+            }
+        };
 
     /// <summary>
     /// Actualiza el estado del proyecto en DB y emite el cambio por SignalR.

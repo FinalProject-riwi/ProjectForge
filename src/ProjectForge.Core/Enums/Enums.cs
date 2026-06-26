@@ -65,6 +65,7 @@ public enum FrameworkType
     Laravel,
     Symfony,
     // JavaScript
+    NodeJs,
     ExpressJs,
     NestJs,
     NextJs,

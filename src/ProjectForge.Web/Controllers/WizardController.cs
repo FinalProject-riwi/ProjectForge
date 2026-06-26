@@ -266,6 +266,7 @@ public class WizardController : Controller
         },
         ArchitectureType.JavaScript => new()
         {
+            new() { Value = "NodeJs", Label = "Node.js", AvailableVersions = ["22.x", "20.x"] },
             new() { Value = "ExpressJs", Label = "Express.js", AvailableVersions = ["5.x", "4.x"] },
             new() { Value = "NestJs", Label = "NestJS", AvailableVersions = ["10.x"] },
             new() { Value = "NextJs", Label = "Next.js", AvailableVersions = ["14.x"] },
@@ -307,18 +308,45 @@ public class WizardController : Controller
             .OrderBy(p => p.Name)
             .ToList();
 
-        if (arch == ArchitectureType.Php)
-        {
-            patterns = framework == FrameworkType.Symfony
-                ? patterns.Where(p => p.Name.Contains("Symfony", StringComparison.OrdinalIgnoreCase)).ToList()
-                : patterns.Where(p => !p.Name.Contains("Symfony", StringComparison.OrdinalIgnoreCase)).ToList();
-        }
-
         return patterns
             .GroupBy(p => NormalizePatternValue(p.Pattern))
-            .Select(g => g.First())
+            .Select(g => SelectPatternForFramework(g.ToList(), arch, framework))
+            .Where(p => p != null)
+            .Select(p => p!)
             .Select(p => new OptionDto(NormalizePatternValue(p.Pattern), p.Name))
             .ToList();
+    }
+
+    private static DesignPatternEntry? SelectPatternForFramework(
+        IReadOnlyList<DesignPatternEntry> patterns,
+        ArchitectureType arch,
+        FrameworkType framework)
+    {
+        if (patterns.Count == 0)
+            return null;
+
+        if (arch == ArchitectureType.Php)
+        {
+            return framework == FrameworkType.Symfony
+                ? patterns.FirstOrDefault(p => p.Name.Contains("Symfony", StringComparison.OrdinalIgnoreCase))
+                : patterns.FirstOrDefault(p => !p.Name.Contains("Symfony", StringComparison.OrdinalIgnoreCase))
+                  ?? patterns.First();
+        }
+
+        if (framework is FrameworkType.NestJs or FrameworkType.NestTs)
+        {
+            return patterns.FirstOrDefault(p =>
+                p.Name.Contains("NestJS", StringComparison.OrdinalIgnoreCase) ||
+                p.Name.Contains("NestJs", StringComparison.OrdinalIgnoreCase) ||
+                p.Name.Contains("Nest", StringComparison.OrdinalIgnoreCase))
+                ?? patterns.First();
+        }
+
+        return patterns.FirstOrDefault(p =>
+                !p.Name.Contains("NestJS", StringComparison.OrdinalIgnoreCase) &&
+                !p.Name.Contains("NestJs", StringComparison.OrdinalIgnoreCase) &&
+                !p.Name.Contains("Nest", StringComparison.OrdinalIgnoreCase))
+            ?? patterns.First();
     }
 
     private List<OptionDto> GetLibraryOptions(ArchitectureType arch, FrameworkType framework)

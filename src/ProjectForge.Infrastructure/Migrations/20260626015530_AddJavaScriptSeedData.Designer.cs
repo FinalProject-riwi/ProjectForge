@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using ProjectForge.Infrastructure.Data;
 
@@ -11,9 +12,11 @@ using ProjectForge.Infrastructure.Data;
 namespace ProjectForge.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260626015530_AddJavaScriptSeedData")]
+    partial class AddJavaScriptSeedData
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -262,17 +265,6 @@ namespace ProjectForge.Infrastructure.Migrations
                             Name = "Microservices (JavaScript)",
                             Pattern = "Microservices",
                             ScaffoldCommandsJson = "[\"mkdir -p src/services src/events src/workers src/integrations\"]"
-                        },
-                        new
-                        {
-                            Id = 25,
-                            Architecture = "JavaScript",
-                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Implementa CQRS con el paquete oficial de NestJS usando CommandBus, QueryBus y EventBus.",
-                            ImplementationNotes = "Crear módulos, comandos, consultas, eventos de dominio y handlers; registrar CqrsModule en el modulo raiz.",
-                            Name = "CQRS (NestJS)",
-                            Pattern = "CQRS",
-                            ScaffoldCommandsJson = "[\"npm install @nestjs/cqrs\"]"
                         });
                 });
 
@@ -576,19 +568,6 @@ namespace ProjectForge.Infrastructure.Migrations
                             Name = "React Query",
                             PackageName = "@tanstack/react-query",
                             PopularityScore = 92
-                        },
-                        new
-                        {
-                            Id = 36,
-                            Architecture = "JavaScript",
-                            Category = "CQRS",
-                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "CommandBus, QueryBus y EventBus oficiales para NestJS",
-                            Framework = "NestJs",
-                            InstallCommand = "npm install @nestjs/cqrs",
-                            Name = "@nestjs/cqrs",
-                            PackageName = "@nestjs/cqrs",
-                            PopularityScore = 97
                         });
                 });
 

@@ -10,6 +10,7 @@ using ProjectForge.Core.Interfaces;
 using ProjectForge.Infrastructure;
 using ProjectForge.Infrastructure.Data;
 using ProjectForge.Infrastructure.Repositories;
+using ProjectForge.Infrastructure.Seeders.JavaScript;
 using ProjectForge.Infrastructure.Seeders.Php;
 using ProjectForge.Web.Hubs;
 
@@ -145,6 +146,7 @@ try
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     await db.Database.MigrateAsync();
     await PhpSeeder.SeedAsync(db);
+    await JavaScriptSeeder.SeedAsync(db);
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
     logger.LogInformation("Migraciones aplicadas correctamente.");
 }

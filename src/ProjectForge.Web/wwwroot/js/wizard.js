@@ -60,6 +60,7 @@ const frameworkCatalog = {
     { value: 'Symfony', label: 'Symfony', versions: ['7.x', '6.x'] },
   ],
   JavaScript: [
+    { value: 'NodeJs', label: 'Node.js', versions: ['22.x', '20.x'] },
     { value: 'ExpressJs', label: 'Express.js', versions: ['5.x', '4.x'] },
     { value: 'NestJs', label: 'NestJS', versions: ['10.x'] },
     { value: 'NextJs', label: 'Next.js', versions: ['14.x'] },
