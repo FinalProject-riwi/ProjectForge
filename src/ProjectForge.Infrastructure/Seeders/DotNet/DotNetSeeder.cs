@@ -1,9 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using ProjectForge.Core.Entities;
 
-namespace ProjectForge.Infrastructure.Seeders;
+namespace ProjectForge.Infrastructure.Seeders.DotNet;
 
-public static class ProjectTemplateSeeder
+public static class DotNetSeeder
 {
     private static readonly DateTime SeedDate = new(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
@@ -101,6 +101,23 @@ public static class ProjectTemplateSeeder
                     "    - uses: actions/setup-dotnet@v4\n      with:\n        dotnet-version: '10.0.x'\n" +
                     "    - run: dotnet restore\n    - run: dotnet build --no-restore\n    - run: dotnet test --no-build"
             }
+        );
+
+        mb.Entity<LibraryRecommendation>().HasData(
+            new LibraryRecommendation { Id = 1,  CreatedAt = SeedDate, Name = "MediatR",              PackageName = "MediatR",                       Architecture = Core.Enums.ArchitectureType.DotNet,   Framework = Core.Enums.FrameworkType.AspNetCoreWebApi, Category = "CQRS/Mediator",  Description = "Implementación del patrón Mediator para CQRS",          PopularityScore = 95, InstallCommand = "dotnet add package MediatR" },
+            new LibraryRecommendation { Id = 2,  CreatedAt = SeedDate, Name = "Entity Framework Core", PackageName = "Microsoft.EntityFrameworkCore",  Architecture = Core.Enums.ArchitectureType.DotNet,   Framework = Core.Enums.FrameworkType.AspNetCoreWebApi, Category = "ORM",           Description = "ORM oficial de Microsoft para .NET",                   PopularityScore = 99, InstallCommand = "dotnet add package Microsoft.EntityFrameworkCore" },
+            new LibraryRecommendation { Id = 3,  CreatedAt = SeedDate, Name = "FluentValidation",      PackageName = "FluentValidation.AspNetCore",    Architecture = Core.Enums.ArchitectureType.DotNet,   Category = "Validation",    Description = "Validación fluida y expresiva",                        PopularityScore = 92, InstallCommand = "dotnet add package FluentValidation.AspNetCore" },
+            new LibraryRecommendation { Id = 4,  CreatedAt = SeedDate, Name = "Serilog",               PackageName = "Serilog.AspNetCore",             Architecture = Core.Enums.ArchitectureType.DotNet,   Category = "Logging",       Description = "Logging estructurado para .NET",                       PopularityScore = 97, InstallCommand = "dotnet add package Serilog.AspNetCore" },
+            new LibraryRecommendation { Id = 5,  CreatedAt = SeedDate, Name = "AutoMapper",            PackageName = "AutoMapper",                    Architecture = Core.Enums.ArchitectureType.DotNet,   Category = "Mapping",       Description = "Mapeo automático entre objetos",                       PopularityScore = 94, InstallCommand = "dotnet add package AutoMapper" },
+            new LibraryRecommendation { Id = 6,  CreatedAt = SeedDate, Name = "Swashbuckle (Swagger)", PackageName = "Swashbuckle.AspNetCore",         Architecture = Core.Enums.ArchitectureType.DotNet,   Framework = Core.Enums.FrameworkType.AspNetCoreWebApi, Category = "Documentation", Description = "Generación automática de documentación OpenAPI",        PopularityScore = 98, InstallCommand = "dotnet add package Swashbuckle.AspNetCore" },
+            new LibraryRecommendation { Id = 7,  CreatedAt = SeedDate, Name = "xUnit",                 PackageName = "xunit",                         Architecture = Core.Enums.ArchitectureType.DotNet,   Category = "Testing",       Description = "Framework de testing unitario para .NET",              PopularityScore = 96, InstallCommand = "dotnet add package xunit" }
+        );
+
+        mb.Entity<DesignPatternEntry>().HasData(
+            new DesignPatternEntry { Id = 1, CreatedAt = SeedDate, Pattern = Core.Enums.DesignPattern.Repository,        Name = "Repository Pattern", Architecture = Core.Enums.ArchitectureType.DotNet,      Description = "Abstrae el acceso a datos detrás de interfaces, facilitando testing y mantenimiento." },
+            new DesignPatternEntry { Id = 2, CreatedAt = SeedDate, Pattern = Core.Enums.DesignPattern.CQRS,              Name = "CQRS",               Architecture = Core.Enums.ArchitectureType.DotNet,      Description = "Separa las operaciones de lectura (Queries) de las de escritura (Commands)." },
+            new DesignPatternEntry { Id = 3, CreatedAt = SeedDate, Pattern = Core.Enums.DesignPattern.CleanArchitecture, Name = "Clean Architecture", Architecture = Core.Enums.ArchitectureType.DotNet,      Description = "Arquitectura en capas concéntricas con dependencias hacia el centro." },
+            new DesignPatternEntry { Id = 4, CreatedAt = SeedDate, Pattern = Core.Enums.DesignPattern.Mediator,          Name = "Mediator",           Architecture = Core.Enums.ArchitectureType.DotNet,      Description = "Reduce el acoplamiento directo entre componentes usando un mediador." }
         );
     }
 }

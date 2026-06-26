@@ -1,4 +1,6 @@
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.OAuth;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
@@ -8,6 +10,7 @@ using ProjectForge.Core.Interfaces;
 using ProjectForge.Infrastructure;
 using ProjectForge.Infrastructure.Data;
 using ProjectForge.Infrastructure.Repositories;
+using ProjectForge.Infrastructure.Seeders.Php;
 using ProjectForge.Web.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -77,6 +80,13 @@ builder.Services.AddSession(opts =>
     opts.Cookie.SameSite = SameSiteMode.Lax;
 });
 
+builder.Services.AddAntiforgery(options =>
+{
+    options.Cookie.Name = "ProjectForge.Antiforgery.v2";
+    options.Cookie.HttpOnly = true;
+    options.Cookie.SameSite = SameSiteMode.Lax;
+});
+
 // ─── Autenticación GitHub OAuth ───────────────────────────────────────────────
 // NOTA: No hacemos throw si los valores no están — la app arranca igualmente
 // y muestra error solo si el usuario intenta hacer login sin configurar las credenciales.
@@ -93,7 +103,7 @@ builder.Services.AddAuthentication(options =>
     options.LoginPath = "/auth/login";
     options.LogoutPath = "/auth/logout";
     options.AccessDeniedPath = "/auth/denied";
-    options.Cookie.Name = "ProjectForge.Auth";
+    options.Cookie.Name = "ProjectForge.Auth.v2";
     options.Cookie.SameSite = SameSiteMode.Lax;
     options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
     options.ExpireTimeSpan = TimeSpan.FromDays(30);
@@ -108,6 +118,17 @@ builder.Services.AddAuthentication(options =>
     options.Scope.Add("user:email");
     options.SaveTokens = true;
     options.CallbackPath = "/auth/github/callback";
+    options.ClaimActions.MapJsonKey("avatar_url", "avatar_url");
+    options.ClaimActions.MapJsonKey("github_login", "login");
+    options.Events.OnRemoteFailure = context =>
+    {
+        context.HandleResponse();
+        var reason = string.IsNullOrWhiteSpace(context.Failure?.Message)
+            ? "No se pudo completar la autenticación con GitHub."
+            : "Has cancelado o denegado el acceso con GitHub.";
+        context.Response.Redirect($"/auth/denied?message={Uri.EscapeDataString(reason)}");
+        return Task.CompletedTask;
+    };
 });
 
 builder.Services.AddAuthorization();
@@ -123,6 +144,7 @@ try
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     await db.Database.MigrateAsync();
+    await PhpSeeder.SeedAsync(db);
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
     logger.LogInformation("Migraciones aplicadas correctamente.");
 }
@@ -141,7 +163,12 @@ if (!app.Environment.IsDevelopment())
 if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 
-app.UseHttpsRedirection();
+var httpsPort = app.Configuration["ASPNETCORE_HTTPS_PORT"]
+    ?? Environment.GetEnvironmentVariable("ASPNETCORE_HTTPS_PORT");
+if (!string.IsNullOrWhiteSpace(httpsPort))
+{
+    app.UseHttpsRedirection();
+}
 app.UseStaticFiles();
 app.UseRouting();
 app.UseSession();

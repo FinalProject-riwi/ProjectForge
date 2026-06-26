@@ -23,6 +23,7 @@ public class ProjectGeneratorService : IProjectGeneratorService
 {
     private readonly IProjectRepository _projects;
     private readonly ITemplateRepository _templates;
+    private readonly IDesignPatternRepository _designPatterns;
     private readonly IShellExecutor _shell;
     private readonly IGitHubService _github;
     private readonly IAiSuggestionService _ai;
@@ -32,6 +33,7 @@ public class ProjectGeneratorService : IProjectGeneratorService
     public ProjectGeneratorService(
         IProjectRepository projects,
         ITemplateRepository templates,
+        IDesignPatternRepository designPatterns,
         IShellExecutor shell,
         IGitHubService github,
         IAiSuggestionService ai,
@@ -40,6 +42,7 @@ public class ProjectGeneratorService : IProjectGeneratorService
     {
         _projects  = projects;
         _templates = templates;
+        _designPatterns = designPatterns;
         _shell     = shell;
         _github    = github;
         _ai        = ai;
@@ -68,16 +71,19 @@ public class ProjectGeneratorService : IProjectGeneratorService
             // 2. Scaffolding según arquitectura
             await ScaffoldProjectAsync(project, cfg, projectPath, ct);
 
-            // 3. Aplicar plantillas de BD e infraestructura
+            // 3. Scaffold adicional según patrón de diseño
+            await ScaffoldDesignPatternsAsync(project, cfg, projectPath, ct);
+
+            // 4. Aplicar plantillas de BD e infraestructura
             await ApplyTemplatesAsync(project, cfg, projectPath, ct);
 
-            // 4. Instalar dependencias / librerías seleccionadas
+            // 5. Instalar dependencias / librerías seleccionadas
             await InstallLibrariesAsync(project, cfg, projectPath, ct);
 
-            // 5. Generar README con IA
+            // 6. Generar README con IA
             await GenerateReadmeAsync(project, cfg, projectPath, ct);
 
-            // 6. Crear repo GitHub y hacer push
+            // 7. Crear repo GitHub y hacer push
             await EmitLogAsync(project, "GitHub", "🔗 Creando repositorio en GitHub...", ct: ct);
             var repoUrl = await PushToGitHubAsync(project, projectPath, ct);
 
@@ -165,10 +171,10 @@ public class ProjectGeneratorService : IProjectGeneratorService
 
             ArchitectureType.JavaScript or ArchitectureType.TypeScript => new[]
             {
-                ($"npm init -y", path),
+                ($"npm init -y", (string?)path),
                 cfg.Framework == FrameworkType.NestJs
-                    ? ($"npm i -g @nestjs/cli && nest new {safeName} --directory . --skip-git", path)
-                    : ($"npm install express", path),
+                    ? ($"npm i -g @nestjs/cli && nest new {safeName} --directory . --skip-git", (string?)path)
+                    : ($"npm install express", (string?)path),
             },
 
             ArchitectureType.Java => new[]
@@ -194,6 +200,1611 @@ public class ProjectGeneratorService : IProjectGeneratorService
 
             _ => Array.Empty<(string, string?)>()
         };
+    }
+
+    private async Task ScaffoldDesignPatternsAsync(Project project, WizardConfig cfg, string path, CancellationToken ct)
+    {
+        var selectedPatterns = JsonSerializer.Deserialize<List<string>>(cfg.DesignPatternsJson) ?? [];
+        if (selectedPatterns.Count == 0)
+        {
+            await EmitLogAsync(project, "Patterns", "ℹ️  Sin patrones seleccionados", ct: ct);
+            return;
+        }
+
+        if (cfg.Architecture != ArchitectureType.Php)
+        {
+            await EmitLogAsync(project, "Patterns", "ℹ️  El scaffold de patrones está habilitado solo para PHP por ahora", ct: ct);
+            return;
+        }
+
+        var availablePatterns = (await _designPatterns.GetByArchitectureAsync(cfg.Architecture)).ToList();
+        var appliedAny = false;
+
+        foreach (var selected in selectedPatterns.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var normalized = NormalizePatternToken(selected);
+            var patternEnum = ResolvePhpDesignPattern(normalized);
+            if (!patternEnum.HasValue)
+            {
+                await EmitLogAsync(project, "Patterns", $"⚠️ Patrón no reconocido: {selected}", isError: true, ct: ct);
+                continue;
+            }
+
+            var entry = ResolvePhpPatternEntry(availablePatterns, patternEnum, cfg.Framework);
+
+            if (entry != null)
+            {
+                await EmitLogAsync(project, "Patterns", $"🧩 Aplicando patrón: {entry.Name}", ct: ct);
+                foreach (var cmd in ReadScaffoldCommands(entry.ScaffoldCommandsJson))
+                {
+                    await EmitLogAsync(project, "Patterns", $"$ {cmd}", ct: ct);
+                    var result = await _shell.RunAsync(cmd, path, ct);
+
+                    if (!result.Success)
+                    {
+                        await EmitLogAsync(project, "Patterns", result.Stderr, isError: true, ct: ct);
+                        throw new InvalidOperationException($"Scaffold de patrón falló: {result.Stderr}");
+                    }
+                }
+            }
+            var files = BuildPhpPatternFiles(cfg.Framework, patternEnum.Value, project.Name);
+            foreach (var file in files)
+            {
+                var fullPath = Path.Combine(path, file.RelativePath);
+                var dir = Path.GetDirectoryName(fullPath);
+                if (!string.IsNullOrWhiteSpace(dir))
+                    Directory.CreateDirectory(dir);
+
+                if (!File.Exists(fullPath))
+                {
+                    await File.WriteAllTextAsync(fullPath, file.Content, ct);
+                    await EmitLogAsync(project, "Patterns", $"✅ {file.RelativePath} generado", ct: ct);
+                }
+            }
+
+            if (cfg.Framework == FrameworkType.Laravel &&
+                patternEnum == DesignPattern.Repository)
+            {
+                await EnsureLaravelProviderRegistrationAsync(path, "App\\Providers\\ProjectRepositoryServiceProvider::class", ct);
+            }
+
+            if (cfg.Framework == FrameworkType.Laravel &&
+                patternEnum == DesignPattern.CleanArchitecture)
+            {
+                await EnsureLaravelProviderRegistrationAsync(path, "App\\Providers\\CleanArchitectureServiceProvider::class", ct);
+            }
+
+            if (cfg.Framework == FrameworkType.Laravel &&
+                patternEnum == DesignPattern.HexagonalArchitecture)
+            {
+                await EnsureLaravelProviderRegistrationAsync(path, "App\\Providers\\HexagonalServiceProvider::class", ct);
+            }
+
+            if (cfg.Framework == FrameworkType.Symfony &&
+                patternEnum == DesignPattern.Repository)
+            {
+                await EnsureSymfonyServiceBindingAsync(path, "App\\Contract\\ProjectRepositoryInterface", "App\\Repository\\ProjectRepository", ct);
+            }
+
+            if (cfg.Framework == FrameworkType.Symfony &&
+                patternEnum == DesignPattern.CleanArchitecture)
+            {
+                await EnsureSymfonyServiceBindingAsync(path, "App\\Contract\\ProjectRepositoryInterface", "App\\Infrastructure\\Persistence\\DoctrineProjectRepository", ct);
+            }
+
+            if (cfg.Framework == FrameworkType.Symfony &&
+                patternEnum == DesignPattern.HexagonalArchitecture)
+            {
+                await EnsureSymfonyServiceBindingAsync(path, "App\\Port\\ProjectRepositoryPort", "App\\Adapters\\Persistence\\DoctrineProjectRepository", ct);
+            }
+
+            appliedAny = true;
+        }
+
+        if (!appliedAny)
+            await EmitLogAsync(project, "Patterns", "ℹ️  No se pudo resolver ningún scaffold de patrón", ct: ct);
+    }
+
+    private static IEnumerable<string> ReadScaffoldCommands(string? scaffoldCommandsJson)
+    {
+        if (string.IsNullOrWhiteSpace(scaffoldCommandsJson))
+            return [];
+
+        try
+        {
+            return JsonSerializer.Deserialize<List<string>>(scaffoldCommandsJson) ?? [];
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
+    private static DesignPatternEntry? ResolvePhpPatternEntry(
+        IReadOnlyCollection<DesignPatternEntry> availablePatterns,
+        DesignPattern? pattern,
+        FrameworkType framework)
+    {
+        if (!pattern.HasValue)
+            return null;
+
+        var candidates = availablePatterns.Where(p => p.Pattern == pattern.Value).ToList();
+        if (candidates.Count == 0)
+            return null;
+
+        if (framework == FrameworkType.Symfony)
+        {
+            return candidates.FirstOrDefault(p => p.Name.Contains("Symfony", StringComparison.OrdinalIgnoreCase))
+                ?? candidates.First();
+        }
+
+        return candidates.FirstOrDefault(p => !p.Name.Contains("Symfony", StringComparison.OrdinalIgnoreCase))
+            ?? candidates.First();
+    }
+
+    private static DesignPattern? ResolvePhpDesignPattern(string normalizedLabel) => normalizedLabel switch
+    {
+        "repository" or "repositorypattern" => DesignPattern.Repository,
+        "cleanarchitecture" or "cleanarch" => DesignPattern.CleanArchitecture,
+        "hexagonalarchitecture" or "hexagonal" => DesignPattern.HexagonalArchitecture,
+        "ddd" or "domaindrivendesign" or "domain-driven design" => DesignPattern.DomainDrivenDesign,
+        "eventsourcing" => DesignPattern.EventSourcing,
+        "microservices" => DesignPattern.Microservices,
+        "cqrs" => DesignPattern.CQRS,
+        "mediator" => DesignPattern.Mediator,
+        "saga" => DesignPattern.Saga,
+        _ => null
+    };
+
+    private static string NormalizePatternToken(string value)
+    {
+        var chars = value
+            .Trim()
+            .ToLowerInvariant()
+            .Where(c => char.IsLetterOrDigit(c))
+            .ToArray();
+        return new string(chars);
+    }
+
+    private static IReadOnlyList<(string RelativePath, string Content)> BuildPhpPatternFiles(
+        FrameworkType framework,
+        DesignPattern pattern,
+        string projectName)
+    {
+        var appName = ToClassName(projectName);
+
+        return framework switch
+        {
+            FrameworkType.Laravel => BuildLaravelPatternFiles(pattern, appName),
+            FrameworkType.Symfony => BuildSymfonyPatternFiles(pattern, appName),
+            _ => []
+        };
+    }
+
+    private static IReadOnlyList<(string RelativePath, string Content)> BuildLaravelPatternFiles(
+        DesignPattern pattern,
+        string appName) => pattern switch
+    {
+        DesignPattern.Repository => new[]
+        {
+            ("app/Contracts/ProjectRepositoryInterface.php", """
+<?php
+
+namespace App\Contracts;
+
+interface ProjectRepositoryInterface
+{
+    public function all(): array;
+
+    public function find(int $id): ?Project;
+
+    public function create(array $data): array;
+
+    public function update(int $id, array $data): ?array;
+}
+"""),
+            ("app/Models/Project.php", """
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+final class Project extends Model
+{
+    protected $fillable = ['name', 'description'];
+}
+"""),
+            ("app/Repositories/ProjectRepository.php", """
+<?php
+
+namespace App\Repositories;
+
+use App\Contracts\ProjectRepositoryInterface;
+use App\Models\Project as ProjectModel;
+
+class ProjectRepository implements ProjectRepositoryInterface
+{
+    public function all(): array
+    {
+        return ProjectModel::query()->latest()->get()->toArray();
+    }
+
+    public function find(int $id): ?Project
+    {
+        return ProjectModel::query()->find($id)?->toArray();
+    }
+
+    public function create(array $data): array
+    {
+        return ProjectModel::query()->create($data)->toArray();
+    }
+
+    public function update(int $id, array $data): ?array
+    {
+        $project = ProjectModel::query()->find($id);
+        if (!$project) {
+            return null;
+        }
+
+        $project->fill($data);
+        $project->save();
+
+        return $project->toArray();
+    }
+}
+"""),
+            ("app/Providers/ProjectRepositoryServiceProvider.php", """
+<?php
+
+namespace App\Providers;
+
+use App\Contracts\ProjectRepositoryInterface;
+use App\Repositories\ProjectRepository;
+use Illuminate\Support\ServiceProvider;
+
+class ProjectRepositoryServiceProvider extends ServiceProvider
+{
+    public function register(): void
+    {
+        $this->app->bind(ProjectRepositoryInterface::class, ProjectRepository::class);
+    }
+}
+"""),
+        },
+        DesignPattern.CleanArchitecture => new[]
+        {
+            ("app/Domain/Entities/Project.php", """
+<?php
+
+namespace App\Domain\Entities;
+
+final class Project
+{
+    public function __construct(
+        public readonly ?int $id = null,
+        public readonly string $name = '',
+        public readonly ?string $description = null
+    ) {
+    }
+}
+"""),
+            ("app/Contracts/ProjectRepositoryInterface.php", """
+<?php
+
+namespace App\Contracts;
+
+use App\Domain\Entities\Project;
+
+interface ProjectRepositoryInterface
+{
+    public function save(Project $project): Project;
+}
+"""),
+            ("app/Application/UseCases/CreateProjectUseCase.php", """
+<?php
+
+namespace App\Application\UseCases;
+
+use App\Contracts\ProjectRepositoryInterface;
+use App\Domain\Entities\Project;
+
+final class CreateProjectUseCase
+{
+    public function __construct(private readonly ProjectRepositoryInterface $projects)
+    {
+    }
+
+    public function execute(string $name, ?string $description = null): Project
+    {
+        return $this->projects->save(new Project(name: $name, description: $description));
+    }
+}
+"""),
+            ("app/Models/Project.php", """
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+final class Project extends Model
+{
+    protected $fillable = ['name', 'description'];
+}
+"""),
+            ("app/Infrastructure/Persistence/EloquentProjectRepository.php", """
+<?php
+
+namespace App\Infrastructure\Persistence;
+
+use App\Contracts\ProjectRepositoryInterface;
+use App\Domain\Entities\Project;
+use App\Models\Project as ProjectModel;
+
+final class EloquentProjectRepository implements ProjectRepositoryInterface
+{
+    public function save(Project $project): Project
+    {
+        $model = ProjectModel::query()->create([
+            'name' => $project->name,
+            'description' => $project->description,
+        ]);
+
+        return new Project(
+            id: $model->id,
+            name: $model->name,
+            description: $model->description,
+        );
+    }
+}
+"""),
+            ("app/Providers/CleanArchitectureServiceProvider.php", """
+<?php
+
+namespace App\Providers;
+
+use App\Contracts\ProjectRepositoryInterface;
+use App\Infrastructure\Persistence\EloquentProjectRepository;
+use Illuminate\Support\ServiceProvider;
+
+final class CleanArchitectureServiceProvider extends ServiceProvider
+{
+    public function register(): void
+    {
+        $this->app->bind(ProjectRepositoryInterface::class, EloquentProjectRepository::class);
+    }
+}
+"""),
+            ("database/migrations/2026_01_01_000000_create_projects_table.php", """
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('projects', function (Blueprint $table) {
+            $table->id();
+            $table->string('name');
+            $table->text('description')->nullable();
+            $table->timestamps();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('projects');
+    }
+};
+"""),
+        },
+        DesignPattern.HexagonalArchitecture => new[]
+        {
+            ("app/Domain/Entities/Project.php", """
+<?php
+
+namespace App\Domain\Entities;
+
+final class Project
+{
+    public function __construct(
+        public readonly ?int $id = null,
+        public readonly string $name = '',
+        public readonly ?string $description = null
+    ) {
+    }
+}
+"""),
+            ("app/Ports/ProjectRepositoryPort.php", """
+<?php
+
+namespace App\Ports;
+
+use App\Domain\Entities\Project;
+
+interface ProjectRepositoryPort
+{
+    public function save(Project $project): Project;
+}
+"""),
+            ("app/Application/UseCases/CreateProjectUseCase.php", """
+<?php
+
+namespace App\Application\UseCases;
+
+use App\Domain\Entities\Project;
+use App\Ports\ProjectRepositoryPort;
+
+final class CreateProjectUseCase
+{
+    public function __construct(private readonly ProjectRepositoryPort $projects)
+    {
+    }
+
+    public function execute(string $name, ?string $description = null): Project
+    {
+        return $this->projects->save(new Project(name: $name, description: $description));
+    }
+}
+"""),
+            ("app/Models/Project.php", """
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+final class Project extends Model
+{
+    protected $fillable = ['name', 'description'];
+}
+"""),
+            ("app/Adapters/Persistence/EloquentProjectRepository.php", """
+<?php
+
+namespace App\Adapters\Persistence;
+
+use App\Domain\Entities\Project;
+use App\Models\Project as ProjectModel;
+use App\Ports\ProjectRepositoryPort;
+
+final class EloquentProjectRepository implements ProjectRepositoryPort
+{
+    public function save(Project $project): Project
+    {
+        $model = ProjectModel::query()->create([
+            'name' => $project->name,
+            'description' => $project->description,
+        ]);
+
+        return new Project(
+            id: $model->id,
+            name: $model->name,
+            description: $model->description,
+        );
+    }
+}
+"""),
+            ("app/Providers/HexagonalServiceProvider.php", """
+<?php
+
+namespace App\Providers;
+
+use App\Adapters\Persistence\EloquentProjectRepository;
+use App\Ports\ProjectRepositoryPort;
+use Illuminate\Support\ServiceProvider;
+
+final class HexagonalServiceProvider extends ServiceProvider
+{
+    public function register(): void
+    {
+        $this->app->bind(ProjectRepositoryPort::class, EloquentProjectRepository::class);
+    }
+}
+"""),
+            ("database/migrations/2026_01_01_000000_create_projects_table.php", """
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('projects', function (Blueprint $table) {
+            $table->id();
+            $table->string('name');
+            $table->text('description')->nullable();
+            $table->timestamps();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('projects');
+    }
+};
+"""),
+        },
+        DesignPattern.DomainDrivenDesign => new[]
+        {
+            ("app/Domain/Entities/Project.php", """
+<?php
+
+namespace App\Domain\Entities;
+
+final class Project
+{
+    public function __construct(
+        public readonly ?int $id = null,
+        public readonly string $name = ''
+    ) {
+    }
+}
+"""),
+            ("app/Domain/ValueObjects/ProjectName.php", """
+<?php
+
+namespace App\Domain\ValueObjects;
+
+final class ProjectName
+{
+    public function __construct(public readonly string $value)
+    {
+    }
+}
+"""),
+            ("app/Application/Services/ProjectCreator.php", """
+<?php
+
+namespace App\Application\Services;
+
+final class ProjectCreator
+{
+    public function create(array $data): array
+    {
+        return $data;
+    }
+}
+"""),
+        },
+        DesignPattern.EventSourcing => new[]
+        {
+            ("app/Events/ProjectCreated.php", """
+<?php
+
+namespace App\Events;
+
+final class ProjectCreated
+{
+    public function __construct(public readonly array $payload = [])
+    {
+    }
+}
+"""),
+            ("app/Listeners/RecordProjectCreated.php", """
+<?php
+
+namespace App\Listeners;
+
+use App\Events\ProjectCreated;
+
+final class RecordProjectCreated
+{
+    public function handle(ProjectCreated $event): void
+    {
+        // TODO: persistir evento
+    }
+}
+"""),
+            ("app/Jobs/ReplayProjectEvents.php", """
+<?php
+
+namespace App\Jobs;
+
+final class ReplayProjectEvents
+{
+    public function handle(): void
+    {
+        // TODO: reprocesar eventos
+    }
+}
+"""),
+        },
+        DesignPattern.Microservices => new[]
+        {
+            ("app/Services/ProjectClient.php", """
+<?php
+
+namespace App\Services;
+
+final class ProjectClient
+{
+    public function request(array $payload): array
+    {
+        return $payload;
+    }
+}
+"""),
+            ("app/Jobs/SyncProject.php", """
+<?php
+
+namespace App\Jobs;
+
+final class SyncProject
+{
+    public function handle(): void
+    {
+        // TODO: sincronizar microservicios
+    }
+}
+"""),
+            ("app/Integrations/GitHub/GitHubRepositoryClient.php", """
+<?php
+
+namespace App\Integrations\GitHub;
+
+final class GitHubRepositoryClient
+{
+    public function createRepository(array $payload): array
+    {
+        return $payload;
+    }
+}
+"""),
+        },
+        DesignPattern.CQRS => new[]
+        {
+            ("app/Commands/CreateProjectCommand.php", """
+<?php
+
+namespace App\Commands;
+
+final class CreateProjectCommand
+{
+    public function __construct(public readonly array $payload = [])
+    {
+    }
+}
+"""),
+            ("app/Queries/GetProjectQuery.php", """
+<?php
+
+namespace App\Queries;
+
+final class GetProjectQuery
+{
+    public function __construct(public readonly int $id)
+    {
+    }
+}
+"""),
+            ("app/Handlers/CreateProjectHandler.php", """
+<?php
+
+namespace App\Handlers;
+
+final class CreateProjectHandler
+{
+    public function handle(array $payload): array
+    {
+        return $payload;
+    }
+}
+"""),
+        },
+        DesignPattern.Mediator => new[]
+        {
+            ("app/Actions/CreateProjectAction.php", """
+<?php
+
+namespace App\Actions;
+
+final class CreateProjectAction
+{
+    public function execute(array $payload): array
+    {
+        return $payload;
+    }
+}
+"""),
+            ("app/Actions/NotifyProjectCreatedAction.php", """
+<?php
+
+namespace App\Actions;
+
+final class NotifyProjectCreatedAction
+{
+    public function execute(array $payload): void
+    {
+        // TODO: notificar creación
+    }
+}
+"""),
+            ("app/Services/ProjectMediator.php", """
+<?php
+
+namespace App\Services;
+
+final class ProjectMediator
+{
+    public function dispatch(object $message): mixed
+    {
+        return $message;
+    }
+}
+"""),
+        },
+        DesignPattern.Saga => new[]
+        {
+            ("app/Sagas/ProjectProvisioningSaga.php", """
+<?php
+
+namespace App\Sagas;
+
+final class ProjectProvisioningSaga
+{
+    public function run(array $payload): array
+    {
+        return $payload;
+    }
+}
+"""),
+            ("app/Events/ProjectProvisioned.php", """
+<?php
+
+namespace App\Events;
+
+final class ProjectProvisioned
+{
+    public function __construct(public readonly array $payload = [])
+    {
+    }
+}
+"""),
+            ("app/Listeners/CompleteProjectProvisioning.php", """
+<?php
+
+namespace App\Listeners;
+
+use App\Events\ProjectProvisioned;
+
+final class CompleteProjectProvisioning
+{
+    public function handle(ProjectProvisioned $event): void
+    {
+        // TODO: completar saga
+    }
+}
+"""),
+        },
+        _ => []
+    };
+
+    private static IReadOnlyList<(string RelativePath, string Content)> BuildSymfonyPatternFiles(
+        DesignPattern pattern,
+        string appName) => pattern switch
+    {
+        DesignPattern.Repository => new[]
+        {
+            ("src/Entity/Project.php", """
+<?php
+
+namespace App\Entity;
+
+use Doctrine\ORM\Mapping as ORM;
+
+#[ORM\Entity]
+#[ORM\Table(name: 'projects')]
+class Project
+{
+    public function __construct(
+        #[ORM\Id]
+        #[ORM\GeneratedValue]
+        #[ORM\Column(type: 'integer')]
+        public ?int $id = null,
+        #[ORM\Column(length: 255)]
+        public string $name = '',
+        #[ORM\Column(type: 'text', nullable: true)]
+        public ?string $description = null
+    ) {
+    }
+}
+"""),
+            ("src/Contract/ProjectRepositoryInterface.php", """
+<?php
+
+namespace App\Contract;
+
+use App\Entity\Project;
+
+interface ProjectRepositoryInterface
+{
+    public function all(): array;
+
+    public function find(int $id): ?array;
+
+    public function create(Project $project): Project;
+
+    public function update(int $id, Project $project): ?Project;
+}
+"""),
+            ("src/Repository/ProjectRepository.php", """
+<?php
+
+namespace App\Repository;
+
+use App\Contract\ProjectRepositoryInterface;
+use App\Entity\Project;
+use Doctrine\ORM\EntityManagerInterface;
+
+final class ProjectRepository implements ProjectRepositoryInterface
+{
+    public function __construct(private readonly EntityManagerInterface $entityManager)
+    {
+    }
+
+    public function all(): array
+    {
+        return $this->entityManager->getRepository(Project::class)->findBy([], ['id' => 'DESC']);
+    }
+
+    public function find(int $id): ?Project
+    {
+        return $this->entityManager->find(Project::class, $id);
+    }
+
+    public function create(Project $project): Project
+    {
+        $this->entityManager->persist($project);
+        $this->entityManager->flush();
+
+        return $project;
+    }
+
+    public function update(int $id, Project $project): ?Project
+    {
+        $existing = $this->entityManager->find(Project::class, $id);
+
+        if (!$existing) {
+            return null;
+        }
+
+        $existing->name = $project->name;
+        $existing->description = $project->description;
+        $this->entityManager->flush();
+
+        return $existing;
+    }
+}
+"""),
+            ("src/Application/UseCase/CreateProjectUseCase.php", """
+<?php
+
+namespace App\Application\UseCase;
+
+use App\Contract\ProjectRepositoryInterface;
+use App\Entity\Project;
+
+final class CreateProjectUseCase
+{
+    public function __construct(private readonly ProjectRepositoryInterface $projects)
+    {
+    }
+
+    public function execute(string $name, ?string $description = null): Project
+    {
+        $project = new Project();
+        $project->name = $name;
+        $project->description = $description;
+
+        return $this->projects->create($project);
+    }
+}
+"""),
+            ("migrations/Version20260101000000.php", """
+<?php
+
+declare(strict_types=1);
+
+namespace DoctrineMigrations;
+
+use Doctrine\DBAL\Schema\Schema;
+use Doctrine\Migrations\AbstractMigration;
+
+final class Version20260101000000 extends AbstractMigration
+{
+    public function getDescription(): string
+    {
+        return 'Create projects table';
+    }
+
+    public function up(Schema $schema): void
+    {
+        $table = $schema->createTable('projects');
+        $table->addColumn('id', 'integer', ['autoincrement' => true]);
+        $table->addColumn('name', 'string', ['length' => 255]);
+        $table->addColumn('description', 'text', ['notnull' => false]);
+        $table->setPrimaryKey(['id']);
+    }
+
+    public function down(Schema $schema): void
+    {
+        $schema->dropTable('projects');
+    }
+}
+"""),
+        },
+        DesignPattern.CleanArchitecture => new[]
+        {
+            ("src/Domain/Entity/Project.php", """
+<?php
+
+namespace App\Domain\Entity;
+
+final class Project
+{
+    public function __construct(
+        public readonly ?int $id = null,
+        public readonly string $name = '',
+        public readonly ?string $description = null
+    ) {
+    }
+}
+"""),
+            ("src/Contract/ProjectRepositoryInterface.php", """
+<?php
+
+namespace App\Contract;
+
+use App\Domain\Entity\Project;
+
+interface ProjectRepositoryInterface
+{
+    public function save(Project $project): Project;
+
+    public function find(int $id): ?Project;
+
+    public function all(): array;
+}
+"""),
+            ("src/Application/UseCase/CreateProjectUseCase.php", """
+<?php
+
+namespace App\Application\UseCase;
+
+use App\Contract\ProjectRepositoryInterface;
+use App\Domain\Entity\Project;
+
+final class CreateProjectUseCase
+{
+    public function __construct(private readonly ProjectRepositoryInterface $projects)
+    {
+    }
+
+    public function execute(string $name, ?string $description = null): Project
+    {
+        return $this->projects->save(new Project(name: $name, description: $description));
+    }
+}
+"""),
+            ("src/Entity/Project.php", """
+<?php
+
+namespace App\Entity;
+
+use Doctrine\ORM\Mapping as ORM;
+
+#[ORM\Entity]
+#[ORM\Table(name: 'projects')]
+class Project
+{
+    #[ORM\Id]
+    #[ORM\GeneratedValue]
+    #[ORM\Column(type: 'integer')]
+    public ?int $id = null;
+
+    #[ORM\Column(length: 255)]
+    public string $name = '';
+
+    #[ORM\Column(type: 'text', nullable: true)]
+    public ?string $description = null;
+}
+"""),
+            ("src/Infrastructure/Persistence/DoctrineProjectRepository.php", """
+<?php
+
+namespace App\Infrastructure\Persistence;
+
+use App\Contract\ProjectRepositoryInterface;
+use App\Domain\Entity\Project as ProjectDomain;
+use App\Entity\Project as ProjectRecord;
+use Doctrine\ORM\EntityManagerInterface;
+
+final class DoctrineProjectRepository implements ProjectRepositoryInterface
+{
+    public function __construct(private readonly EntityManagerInterface $entityManager)
+    {
+    }
+
+    public function save(ProjectDomain $project): ProjectDomain
+    {
+        $record = $project->id !== null
+            ? $this->entityManager->find(ProjectRecord::class, $project->id)
+            : new ProjectRecord();
+
+        if (!$record instanceof ProjectRecord) {
+            $record = new ProjectRecord();
+        }
+
+        $record->name = $project->name;
+        $record->description = $project->description;
+
+        $this->entityManager->persist($record);
+        $this->entityManager->flush();
+
+        return new ProjectDomain(
+            id: $record->id,
+            name: $record->name,
+            description: $record->description,
+        );
+    }
+
+    public function find(int $id): ?ProjectDomain
+    {
+        $record = $this->entityManager->find(ProjectRecord::class, $id);
+
+        if (!$record instanceof ProjectRecord) {
+            return null;
+        }
+
+        return new ProjectDomain(
+            id: $record->id,
+            name: $record->name,
+            description: $record->description,
+        );
+    }
+
+    public function all(): array
+    {
+        $records = $this->entityManager->getRepository(ProjectRecord::class)->findBy([], ['id' => 'DESC']);
+
+        return array_map(
+            static fn (ProjectRecord $record): ProjectDomain => new ProjectDomain(
+                id: $record->id,
+                name: $record->name,
+                description: $record->description,
+            ),
+            $records
+        );
+    }
+}
+"""),
+            ("migrations/Version20260101000000.php", """
+<?php
+
+declare(strict_types=1);
+
+namespace DoctrineMigrations;
+
+use Doctrine\DBAL\Schema\Schema;
+use Doctrine\Migrations\AbstractMigration;
+
+final class Version20260101000000 extends AbstractMigration
+{
+    public function getDescription(): string
+    {
+        return 'Create projects table';
+    }
+
+    public function up(Schema $schema): void
+    {
+        $table = $schema->createTable('projects');
+        $table->addColumn('id', 'integer', ['autoincrement' => true]);
+        $table->addColumn('name', 'string', ['length' => 255]);
+        $table->addColumn('description', 'text', ['notnull' => false]);
+        $table->setPrimaryKey(['id']);
+    }
+
+    public function down(Schema $schema): void
+    {
+        $schema->dropTable('projects');
+    }
+}
+"""),
+        },
+        DesignPattern.HexagonalArchitecture => new[]
+        {
+            ("src/Port/ProjectRepositoryPort.php", """
+<?php
+
+namespace App\Port;
+
+use App\Domain\Entity\Project;
+
+interface ProjectRepositoryPort
+{
+    public function save(Project $project): Project;
+
+    public function find(int $id): ?Project;
+
+    public function all(): array;
+}
+"""),
+            ("src/Application/UseCase/CreateProjectUseCase.php", """
+<?php
+
+namespace App\Application\UseCase;
+
+use App\Domain\Entity\Project;
+use App\Port\ProjectRepositoryPort;
+
+final class CreateProjectUseCase
+{
+    public function __construct(private readonly ProjectRepositoryPort $projects)
+    {
+    }
+
+    public function execute(string $name, ?string $description = null): Project
+    {
+        return $this->projects->save(new Project(name: $name, description: $description));
+    }
+}
+"""),
+            ("src/Domain/Entity/Project.php", """
+<?php
+
+namespace App\Domain\Entity;
+
+final class Project
+{
+    public function __construct(
+        public readonly ?int $id = null,
+        public readonly string $name = '',
+        public readonly ?string $description = null
+    ) {
+    }
+}
+"""),
+            ("src/Entity/Project.php", """
+<?php
+
+namespace App\Entity;
+
+use Doctrine\ORM\Mapping as ORM;
+
+#[ORM\Entity]
+#[ORM\Table(name: 'projects')]
+class Project
+{
+    #[ORM\Id]
+    #[ORM\GeneratedValue]
+    #[ORM\Column(type: 'integer')]
+    public ?int $id = null;
+
+    #[ORM\Column(length: 255)]
+    public string $name = '';
+
+    #[ORM\Column(type: 'text', nullable: true)]
+    public ?string $description = null;
+}
+"""),
+            ("src/Adapters/Persistence/DoctrineProjectRepository.php", """
+<?php
+
+namespace App\Adapters\Persistence;
+
+use App\Domain\Entity\Project as ProjectDomain;
+use App\Entity\Project as ProjectRecord;
+use App\Port\ProjectRepositoryPort;
+use Doctrine\ORM\EntityManagerInterface;
+
+final class DoctrineProjectRepository implements ProjectRepositoryPort
+{
+    public function __construct(private readonly EntityManagerInterface $entityManager)
+    {
+    }
+
+    public function save(ProjectDomain $project): ProjectDomain
+    {
+        $record = $project->id !== null
+            ? $this->entityManager->find(ProjectRecord::class, $project->id)
+            : new ProjectRecord();
+
+        if (!$record instanceof ProjectRecord) {
+            $record = new ProjectRecord();
+        }
+
+        $record->name = $project->name;
+        $record->description = $project->description;
+
+        $this->entityManager->persist($record);
+        $this->entityManager->flush();
+
+        return new ProjectDomain(
+            id: $record->id,
+            name: $record->name,
+            description: $record->description,
+        );
+    }
+
+    public function find(int $id): ?ProjectDomain
+    {
+        $record = $this->entityManager->find(ProjectRecord::class, $id);
+
+        if (!$record instanceof ProjectRecord) {
+            return null;
+        }
+
+        return new ProjectDomain(
+            id: $record->id,
+            name: $record->name,
+            description: $record->description,
+        );
+    }
+
+    public function all(): array
+    {
+        $records = $this->entityManager->getRepository(ProjectRecord::class)->findBy([], ['id' => 'DESC']);
+
+        return array_map(
+            static fn (ProjectRecord $record): ProjectDomain => new ProjectDomain(
+                id: $record->id,
+                name: $record->name,
+                description: $record->description,
+            ),
+            $records
+        );
+    }
+}
+"""),
+            ("migrations/Version20260101000000.php", """
+<?php
+
+declare(strict_types=1);
+
+namespace DoctrineMigrations;
+
+use Doctrine\DBAL\Schema\Schema;
+use Doctrine\Migrations\AbstractMigration;
+
+final class Version20260101000000 extends AbstractMigration
+{
+    public function getDescription(): string
+    {
+        return 'Create projects table';
+    }
+
+    public function up(Schema $schema): void
+    {
+        $table = $schema->createTable('projects');
+        $table->addColumn('id', 'integer', ['autoincrement' => true]);
+        $table->addColumn('name', 'string', ['length' => 255]);
+        $table->addColumn('description', 'text', ['notnull' => false]);
+        $table->setPrimaryKey(['id']);
+    }
+
+    public function down(Schema $schema): void
+    {
+        $schema->dropTable('projects');
+    }
+}
+"""),
+        },
+        DesignPattern.DomainDrivenDesign => new[]
+        {
+            ("src/Domain/Entity/Project.php", """
+<?php
+
+namespace App\Domain\Entity;
+
+final class Project
+{
+    public function __construct(
+        public readonly ?int $id = null,
+        public readonly string $name = ''
+    ) {
+    }
+}
+"""),
+            ("src/Domain/ValueObject/ProjectName.php", """
+<?php
+
+namespace App\Domain\ValueObject;
+
+final class ProjectName
+{
+    public function __construct(public readonly string $value)
+    {
+    }
+}
+"""),
+            ("src/Application/Service/ProjectCreator.php", """
+<?php
+
+namespace App\Application\Service;
+
+final class ProjectCreator
+{
+    public function create(array $data): array
+    {
+        return $data;
+    }
+}
+"""),
+        },
+        DesignPattern.EventSourcing => new[]
+        {
+            ("src/Event/ProjectCreated.php", """
+<?php
+
+namespace App\Event;
+
+final class ProjectCreated
+{
+    public function __construct(public readonly array $payload = [])
+    {
+    }
+}
+"""),
+            ("src/EventListener/ProjectCreatedListener.php", """
+<?php
+
+namespace App\EventListener;
+
+use App\Event\ProjectCreated;
+
+final class ProjectCreatedListener
+{
+    public function __invoke(ProjectCreated $event): void
+    {
+        // TODO: persistir evento
+    }
+}
+"""),
+            ("src/MessageHandler/ReplayProjectEventsHandler.php", """
+<?php
+
+namespace App\MessageHandler;
+
+final class ReplayProjectEventsHandler
+{
+    public function __invoke(object $message): void
+    {
+        // TODO: reprocesar eventos
+    }
+}
+"""),
+        },
+        DesignPattern.Microservices => new[]
+        {
+            ("src/Service/ProjectClient.php", """
+<?php
+
+namespace App\Service;
+
+final class ProjectClient
+{
+    public function request(array $payload): array
+    {
+        return $payload;
+    }
+}
+"""),
+            ("src/MessageHandler/SyncProjectHandler.php", """
+<?php
+
+namespace App\MessageHandler;
+
+final class SyncProjectHandler
+{
+    public function __invoke(object $message): void
+    {
+        // TODO: sincronizar microservicios
+    }
+}
+"""),
+            ("src/Integration/GitHub/GitHubRepositoryClient.php", """
+<?php
+
+namespace App\Integration\GitHub;
+
+final class GitHubRepositoryClient
+{
+    public function createRepository(array $payload): array
+    {
+        return $payload;
+    }
+}
+"""),
+        },
+        DesignPattern.CQRS => new[]
+        {
+            ("src/Command/CreateProjectCommand.php", """
+<?php
+
+namespace App\Command;
+
+final class CreateProjectCommand
+{
+    public function __construct(public readonly array $payload = [])
+    {
+    }
+}
+"""),
+            ("src/Query/GetProjectQuery.php", """
+<?php
+
+namespace App\Query;
+
+final class GetProjectQuery
+{
+    public function __construct(public readonly int $id)
+    {
+    }
+}
+"""),
+            ("src/Handler/CreateProjectHandler.php", """
+<?php
+
+namespace App\Handler;
+
+final class CreateProjectHandler
+{
+    public function __invoke(array $payload): array
+    {
+        return $payload;
+    }
+}
+"""),
+        },
+        DesignPattern.Mediator => new[]
+        {
+            ("src/Service/ProjectMediator.php", """
+<?php
+
+namespace App\Service;
+
+final class ProjectMediator
+{
+    public function dispatch(object $message): mixed
+    {
+        return $message;
+    }
+}
+"""),
+            ("src/Message/CreateProjectMessage.php", """
+<?php
+
+namespace App\Message;
+
+final class CreateProjectMessage
+{
+    public function __construct(public readonly array $payload = [])
+    {
+    }
+}
+"""),
+            ("src/MessageHandler/CreateProjectHandler.php", """
+<?php
+
+namespace App\MessageHandler;
+
+final class CreateProjectHandler
+{
+    public function __invoke(object $message): void
+    {
+        // TODO: procesar mensaje
+    }
+}
+"""),
+        },
+        DesignPattern.Saga => new[]
+        {
+            ("src/Saga/ProjectProvisioningSaga.php", """
+<?php
+
+namespace App\Saga;
+
+final class ProjectProvisioningSaga
+{
+    public function run(array $payload): array
+    {
+        return $payload;
+    }
+}
+"""),
+            ("src/Event/ProjectProvisioned.php", """
+<?php
+
+namespace App\Event;
+
+final class ProjectProvisioned
+{
+    public function __construct(public readonly array $payload = [])
+    {
+    }
+}
+"""),
+            ("src/EventListener/CompleteProjectProvisioningListener.php", """
+<?php
+
+namespace App\EventListener;
+
+use App\Event\ProjectProvisioned;
+
+final class CompleteProjectProvisioningListener
+{
+    public function __invoke(ProjectProvisioned $event): void
+    {
+        // TODO: completar saga
+    }
+}
+"""),
+        },
+        _ => []
+    };
+
+    private static async Task EnsureLaravelProviderRegistrationAsync(string path, string providerEntry, CancellationToken ct)
+    {
+        var providersFile = Path.Combine(path, "bootstrap", "providers.php");
+        if (!File.Exists(providersFile))
+            return;
+
+        var content = await File.ReadAllTextAsync(providersFile, ct);
+        if (content.Contains(providerEntry, StringComparison.Ordinal))
+            return;
+
+        var insertMarker = "return [";
+        var idx = content.IndexOf(insertMarker, StringComparison.Ordinal);
+        if (idx < 0)
+            return;
+
+        var insertAt = content.IndexOf('\n', idx);
+        if (insertAt < 0)
+            return;
+
+        var updated = content.Insert(insertAt + 1, $"    {providerEntry},\n");
+        await File.WriteAllTextAsync(providersFile, updated, ct);
+    }
+
+    private static async Task EnsureSymfonyServiceBindingAsync(string path, string serviceId, string implementationService, CancellationToken ct)
+    {
+        var servicesFile = Path.Combine(path, "config", "services.yaml");
+        if (!File.Exists(servicesFile))
+            return;
+
+        var content = await File.ReadAllTextAsync(servicesFile, ct);
+        var bindingLine = $"{serviceId}: '@{implementationService}'";
+        if (content.Contains(bindingLine, StringComparison.Ordinal))
+            return;
+
+        var insertMarker = "services:";
+        var idx = content.IndexOf(insertMarker, StringComparison.Ordinal);
+        if (idx < 0)
+            return;
+
+        var insertAt = content.IndexOf('\n', idx);
+        if (insertAt < 0)
+            return;
+
+        var updated = content.Insert(insertAt + 1, $"    {bindingLine}\n");
+        await File.WriteAllTextAsync(servicesFile, updated, ct);
+    }
+
+    private static string ToClassName(string value)
+    {
+        var chars = value
+            .Split(new[] { ' ', '-', '_', '.', '/' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(part => char.ToUpperInvariant(part[0]) + part[1..])
+            .ToArray();
+        return string.Concat(chars);
     }
 
     // ─── Paso 3: Aplicar plantillas ───────────────────────────────────────────

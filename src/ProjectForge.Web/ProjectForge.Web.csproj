@@ -18,7 +18,6 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.*" />
-    <ProjectReference Include="..\ProjectForge.Application\ProjectForge.Application.csproj" />
     <ProjectReference Include="..\ProjectForge.Infrastructure\ProjectForge.Infrastructure.csproj" />
   </ItemGroup>
 </Project>

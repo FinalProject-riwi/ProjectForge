@@ -37,7 +37,16 @@ public class AnthropicAiSuggestionService : IAiSuggestionService
     {
         // ── 1. Intentar leer desde caché ──────────────────────────────────────
         var cacheKey = BuildCacheKey(request);
-        var cached = await _cacheRepo.GetByCacheKeyAsync(cacheKey);
+        AiSuggestionCache? cached = null;
+        try
+        {
+            cached = await _cacheRepo.GetByCacheKeyAsync(cacheKey);
+        }
+        catch
+        {
+            // La tabla de caché puede no existir aún en bases antiguas.
+        }
+
         if (cached != null)
         {
             var patterns = JsonSerializer.Deserialize<List<string>>(cached.PatternsJson) ?? [];

@@ -47,6 +47,7 @@ public class ProjectRepository : Repository<Project>, IProjectRepository
             .Include(p => p.User)
             .Include(p => p.WizardConfig).ThenInclude(w => w.VpsCredentials)
             .Include(p => p.Logs)
+            .AsSplitQuery()
             .FirstOrDefaultAsync(p => p.Id == projectId);
 }
 

@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using ProjectForge.Core.Entities;
-using ProjectForge.Infrastructure.Seeders;
+using ProjectForge.Infrastructure.Seeders.DotNet;
+using ProjectForge.Infrastructure.Seeders.JavaScript;
+using ProjectForge.Infrastructure.Seeders.Python;
 
 namespace ProjectForge.Infrastructure.Data;
 
@@ -86,8 +88,8 @@ public class AppDbContext : DbContext
             e.HasIndex(c => c.CacheKey).IsUnique();
         });
 
-        ProjectTemplateSeeder.Seed(modelBuilder);
-        LibraryRecommendationSeeder.Seed(modelBuilder);
-        DesignPatternSeeder.Seed(modelBuilder);
+        DotNetSeeder.Seed(modelBuilder);
+        PythonSeeder.Seed(modelBuilder);
+        JavaScriptSeeder.Seed(modelBuilder);
     }
 }

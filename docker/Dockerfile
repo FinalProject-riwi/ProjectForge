@@ -9,14 +9,14 @@ COPY src/ProjectForge.Core/ProjectForge.Core.csproj                     src/Proj
 COPY src/ProjectForge.Infrastructure/ProjectForge.Infrastructure.csproj src/ProjectForge.Infrastructure/
 
 # Restore limpio — sin caché de Windows contaminando
-RUN dotnet restore src/ProjectForge.Web/ProjectForge.Web.csproj
+RUN dotnet restore src/ProjectForge.Web/ProjectForge.Web.csproj -m:1
 
 # Copiar el resto del código fuente
 COPY src/ src/
 
 # Publish
 RUN dotnet publish src/ProjectForge.Web/ProjectForge.Web.csproj \
-    -c Release -o /app/publish /p:UseAppHost=false
+    -c Release -o /app/publish /p:UseAppHost=false -m:1
 
 # ─── Stage 2: Runtime ─────────────────────────────────────────────────────────
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS final
@@ -24,6 +24,7 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git curl nodejs npm python3 python3-pip python3-venv openssh-client unzip \
+    php-cli php-xml php-mbstring php-zip php-curl php-sqlite3 composer \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /root \
     && git config --global user.name "ProjectForge Bot" \

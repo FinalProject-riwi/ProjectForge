@@ -40,7 +40,7 @@
                     {
                         <div class="avatar avatar-fallback">@userInitial</div>
                     }
-                    <span>@User.Identity.Name</span>
+                    <span>@userName</span>
                     <form asp-controller="Auth" asp-action="Logout" method="post" style="display:inline">
                         @Html.AntiForgeryToken()
                         <button type="submit" class="btn btn-ghost btn-sm">Salir</button>
