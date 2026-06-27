@@ -5,7 +5,7 @@ public enum ArchitectureType
     DotNet,
     Java,
     Python,
-    Laravel,
+    Php,
     JavaScript,
     TypeScript
 }
@@ -65,6 +65,7 @@ public enum FrameworkType
     Laravel,
     Symfony,
     // JavaScript
+    NodeJs,
     ExpressJs,
     NestJs,
     NextJs,

@@ -47,6 +47,7 @@ public class ProjectRepository : Repository<Project>, IProjectRepository
             .Include(p => p.User)
             .Include(p => p.WizardConfig).ThenInclude(w => w.VpsCredentials)
             .Include(p => p.Logs)
+            .AsSplitQuery()
             .FirstOrDefaultAsync(p => p.Id == projectId);
 }
 
@@ -64,8 +65,17 @@ public class TemplateRepository : Repository<ProjectTemplate>, ITemplateReposito
         DatabaseType? db = null, InfrastructureType? infra = null)
     {
         var q = _set.Where(t => t.Architecture == arch && t.TemplateType == templateType && t.IsActive);
-        if (db.HasValue) q = q.Where(t => t.Database == db || t.Database == null);
-        if (infra.HasValue) q = q.Where(t => t.Infrastructure == infra || t.Infrastructure == null);
+
+        if (db.HasValue || infra.HasValue)
+        {
+            q = q
+                .OrderByDescending(t => db.HasValue && t.Database == db)
+                .ThenByDescending(t => infra.HasValue && t.Infrastructure == infra)
+                .ThenByDescending(t => t.Version);
+
+            return await q.FirstOrDefaultAsync();
+        }
+
         return await q.OrderByDescending(t => t.Version).FirstOrDefaultAsync();
     }
 

@@ -8,6 +8,23 @@
 
 ---
 
+## 🌐 Lenguajes y Frameworks Soportados
+
+| Lenguaje | Frameworks | Seeder | Patrones de diseño |
+|---|---|---|---|
+| **C# / .NET** | ASP.NET Core Web API, MVC, Blazor Server/WASM, Minimal API | `DotNetSeeder` | Repository, CQRS, Clean Arch, DDD, Hexagonal |
+| **Java** | Spring Boot, Quarkus, Micronaut | `JavaSeeder` | Repository, CQRS, Clean Arch, DDD, Hexagonal |
+| **Python** | FastAPI, Django, Flask | `PythonSeeder` | Repository, CQRS, Clean Architecture |
+| **PHP** | Laravel, Symfony | `PhpSeeder` (4 archivos modulares) | DDD, Clean Arch, Hexagonal, Repository, CQRS, Event Sourcing, Mediator, Saga, Microservices |
+| **JavaScript** | Node.js, Express.js, NestJS, Next.js | `JavaScriptSeeder` | Repository, Clean Arch, Hexagonal, CQRS, Event Sourcing, Mediator, Microservices |
+| **TypeScript** | NestJS (TS), Next.js (TS) | `JavaScriptSeeder` | CQRS (NestJS), Repository, Clean Arch |
+
+> Cada seeder es completamente independiente y modular. El `AppDbContext` los registra todos
+> en `OnModelCreating`. El `Program.cs` ejecuta sus `SeedAsync()` al arrancar la aplicación.
+
+
+---
+
 ## ✨ Características
 
 | Feature | Descripción |
@@ -31,17 +48,25 @@ ProjectForge/
 │   ├── ProjectForge.Core/             # Entidades, interfaces, enums
 │   │   ├── Entities/                  # ApplicationUser, Project, WizardConfig, ...
 │   │   ├── Interfaces/                # IProjectRepo, IGitHubService, IAiService, ...
+│   │   ├── Exceptions/                # DomainException y errores del núcleo
 │   │   └── Enums/                     # ArchitectureType, DatabaseType, ...
 │   │
 │   ├── ProjectForge.Application/      # Casos de uso
 │   │   ├── AI/                        # AnthropicAiSuggestionService
 │   │   ├── Services/                  # ProjectGeneratorService, VpsDeploymentService
+│   │   ├── UseCases/                  # CreateProjectUseCase y futuros casos de uso
 │   │   └── DTOs/                      # WizardDtos, ProjectDtos
 │   │
 │   ├── ProjectForge.Infrastructure/   # Implementaciones
-│   │   ├── Data/                      # AppDbContext, Seeds
+│   │   ├── Data/                      # AppDbContext (registra todos los seeders)
 │   │   ├── Repositories/              # EF Core repositories
 │   │   ├── Migrations/                # EF Core migrations
+│   │   ├── Seeders/
+│   │   │   ├── DotNet/                # DotNetSeeder (C# / .NET)
+│   │   │   ├── Java/                  # JavaSeeder (Spring Boot, Quarkus, Micronaut)
+│   │   │   ├── JavaScript/            # JavaScriptSeeder (Node, Express, NestJS, Next.js)
+│   │   │   ├── Php/                   # PhpSeeder (Laravel, Symfony) — modular en 4 archivos
+│   │   │   └── Python/                # PythonSeeder (FastAPI, Django, Flask)
 │   │   └── Infrastructure.cs          # ShellExecutor, GitHubService, AES Encryption
 │   │
 │   └── ProjectForge.Web/              # ASP.NET Core MVC
@@ -122,6 +147,7 @@ La aplicación estará disponible en **http://localhost:5000**
 | `GET` | `/auth/github/callback` | Callback OAuth |
 | `POST` | `/auth/logout` | Cerrar sesión |
 | `GET` | `/dashboard` | Lista de proyectos del usuario |
+| `POST` | `/projects` | Crea un proyecto mediante `CreateProjectUseCase` |
 | `GET` | `/wizard` | Inicio del wizard |
 | `GET/POST` | `/wizard/step1..5` | Pasos del wizard |
 | `GET` | `/wizard/generate/{id}` | Vista de generación en tiempo real |

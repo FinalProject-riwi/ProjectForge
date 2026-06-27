@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
+using ProjectForge.Application.UseCases.Projects;
 using ProjectForge.Core.Interfaces;
 
 namespace ProjectForge.Web.Controllers;
@@ -28,11 +29,40 @@ public class ProjectsController : Controller
 {
     private readonly IProjectRepository _projects;
     private readonly IVpsDeploymentService _vps;
+    private readonly ICreateProjectUseCase _createProject;
 
-    public ProjectsController(IProjectRepository projects, IVpsDeploymentService vps)
+    public ProjectsController(
+        IProjectRepository projects,
+        IVpsDeploymentService vps,
+        ICreateProjectUseCase createProject)
     {
         _projects = projects;
         _vps = vps;
+        _createProject = createProject;
+    }
+
+    [HttpPost("")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Create([FromForm] CreateProjectFormDto request, CancellationToken ct)
+    {
+        if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+            return Unauthorized();
+
+        if (request.WizardConfigId <= 0)
+            return BadRequest("WizardConfigId is required.");
+
+        var project = await _createProject.ExecuteAsync(new CreateProjectRequest(
+            userId,
+            request.WizardConfigId,
+            request.Name,
+            request.Description), ct);
+
+        return CreatedAtAction(nameof(Detail), new { id = project.Id }, new
+        {
+            project.Id,
+            project.Name,
+            project.Description
+        });
     }
 
     [HttpGet("{id:int}")]
@@ -64,4 +94,11 @@ public class ProjectsController : Controller
         await _projects.DeleteAsync(id);
         return Ok();
     }
+}
+
+public sealed class CreateProjectFormDto
+{
+    public int WizardConfigId { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
 }
