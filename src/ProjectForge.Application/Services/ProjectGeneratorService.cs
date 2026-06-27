@@ -66,7 +66,6 @@ public partial class ProjectGeneratorService : IProjectGeneratorService
 
             // 1. Crear carpeta de trabajo
             Directory.CreateDirectory(projectPath);
-            Directory.CreateDirectory(Path.Combine(projectPath, ".github", "workflows"));
             await EmitLogAsync(project, "Scaffold", $"📁 Directorio de trabajo: {projectPath}", ct: ct);
 
             // 2. Scaffolding según arquitectura
