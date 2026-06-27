@@ -276,6 +276,106 @@ app.Run();
 }
 """),
             },
+            "mvvm" => new[]
+            {
+                ("src/Presentation/ViewModels/ItemViewModel.cs", """
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
+
+namespace Presentation.ViewModels;
+
+public class ItemViewModel : INotifyPropertyChanged
+{
+    private string _name = string.Empty;
+    private string _description = string.Empty;
+
+    public string Name
+    {
+        get => _name;
+        set { _name = value; OnPropertyChanged(); }
+    }
+
+    public string Description
+    {
+        get => _description;
+        set { _description = value; OnPropertyChanged(); }
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+        => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+}
+"""),
+                ("src/Presentation/Commands/RelayCommand.cs", """
+using System.Windows.Input;
+
+namespace Presentation.Commands;
+
+public class RelayCommand(Action<object?> execute, Func<object?, bool>? canExecute = null) : ICommand
+{
+    public bool CanExecute(object? parameter) => canExecute?.Invoke(parameter) ?? true;
+    public void Execute(object? parameter) => execute(parameter);
+    public event EventHandler? CanExecuteChanged;
+    public void RaiseCanExecuteChanged() => CanExecuteChanged?.Invoke(this, EventArgs.Empty);
+}
+"""),
+            },
+            "saga" => new[]
+            {
+                ("src/Application/Sagas/OrderSaga.cs", """
+using MediatR;
+
+namespace Application.Sagas;
+
+/// <summary>
+/// Saga that coordinates the order creation workflow.
+/// Each step compensates on failure to maintain consistency.
+/// </summary>
+public class OrderSaga(IMediator mediator)
+{
+    public async Task<bool> ExecuteAsync(CreateOrderSagaRequest request, CancellationToken ct = default)
+    {
+        var orderId = Guid.NewGuid();
+        var reservationId = default(Guid?);
+
+        try
+        {
+            // Step 1: Create order
+            await mediator.Send(new CreateOrderCommand(orderId, request.CustomerId, request.Items), ct);
+
+            // Step 2: Reserve inventory
+            reservationId = await mediator.Send(new ReserveInventoryCommand(orderId, request.Items), ct);
+
+            // Step 3: Process payment
+            await mediator.Send(new ProcessPaymentCommand(orderId, request.PaymentInfo), ct);
+
+            // Step 4: Confirm order
+            await mediator.Send(new ConfirmOrderCommand(orderId), ct);
+
+            return true;
+        }
+        catch
+        {
+            // Compensation: rollback in reverse order
+            if (reservationId.HasValue)
+                await mediator.Send(new ReleaseInventoryCommand(reservationId.Value), ct);
+
+            await mediator.Send(new CancelOrderCommand(orderId), ct);
+            return false;
+        }
+    }
+}
+
+public record CreateOrderSagaRequest(Guid CustomerId, IEnumerable<object> Items, object PaymentInfo);
+public record CreateOrderCommand(Guid OrderId, Guid CustomerId, IEnumerable<object> Items) : IRequest;
+public record ReserveInventoryCommand(Guid OrderId, IEnumerable<object> Items) : IRequest<Guid>;
+public record ProcessPaymentCommand(Guid OrderId, object PaymentInfo) : IRequest;
+public record ConfirmOrderCommand(Guid OrderId) : IRequest;
+public record CancelOrderCommand(Guid OrderId) : IRequest;
+public record ReleaseInventoryCommand(Guid ReservationId) : IRequest;
+"""),
+            },
             _ => Array.Empty<(string, string)>()
         };
     }
@@ -471,6 +571,75 @@ public class OrdersApplication {
 }
 """),
             },
+            "mediator" => new[]
+            {
+                ("src/main/java/application/mediator/Mediator.java", """
+package application.mediator;
+
+import java.util.HashMap;
+import java.util.Map;
+
+public class Mediator {
+    private final Map<Class<?>, RequestHandler<?, ?>> handlers = new HashMap<>();
+
+    @SuppressWarnings("unchecked")
+    public <TRequest, TResponse> void register(Class<TRequest> type, RequestHandler<TRequest, TResponse> handler) {
+        handlers.put(type, handler);
+    }
+
+    @SuppressWarnings("unchecked")
+    public <TResponse> TResponse send(Object request) throws Exception {
+        var handler = (RequestHandler<Object, TResponse>) handlers.get(request.getClass());
+        if (handler == null) throw new IllegalArgumentException("No handler for " + request.getClass().getSimpleName());
+        return handler.handle(request);
+    }
+}
+"""),
+                ("src/main/java/application/mediator/RequestHandler.java", """
+package application.mediator;
+
+@FunctionalInterface
+public interface RequestHandler<TRequest, TResponse> {
+    TResponse handle(TRequest request) throws Exception;
+}
+"""),
+            },
+            "saga" => new[]
+            {
+                ("src/main/java/application/saga/OrderSaga.java", """
+package application.saga;
+
+import org.springframework.stereotype.Service;
+
+@Service
+public class OrderSaga {
+    public boolean execute(String customerId, Object[] items, Object paymentInfo) {
+        String orderId = java.util.UUID.randomUUID().toString();
+        String reservationId = null;
+
+        try {
+            createOrder(orderId, customerId, items);
+            reservationId = reserveInventory(orderId, items);
+            processPayment(orderId, paymentInfo);
+            confirmOrder(orderId);
+            return true;
+        } catch (Exception e) {
+            // Compensate in reverse order
+            if (reservationId != null) releaseInventory(reservationId);
+            cancelOrder(orderId);
+            return false;
+        }
+    }
+
+    private void createOrder(String id, String customerId, Object[] items) { /* implement */ }
+    private String reserveInventory(String orderId, Object[] items) { return java.util.UUID.randomUUID().toString(); }
+    private void processPayment(String orderId, Object paymentInfo) { /* implement */ }
+    private void confirmOrder(String orderId) { /* implement */ }
+    private void cancelOrder(String orderId) { /* implement */ }
+    private void releaseInventory(String reservationId) { /* implement */ }
+}
+"""),
+            },
             _ => Array.Empty<(string, string)>()
         };
     }
@@ -649,6 +818,111 @@ from dataclasses import dataclass
 class ValueObject:
     # Base class for all Value Objects. Immutable by default (frozen=True).
     pass
+"""),
+            },
+            "microservices" => new[]
+            {
+                ("services/items/main.py", """
+from fastapi import FastAPI
+
+app = FastAPI(title="Items Service")
+
+@app.get("/health")
+def health():
+    return {"service": "items", "status": "ok"}
+
+@app.get("/items")
+def list_items():
+    return []
+"""),
+                ("services/notifications/main.py", """
+from fastapi import FastAPI
+
+app = FastAPI(title="Notifications Service")
+
+@app.get("/health")
+def health():
+    return {"service": "notifications", "status": "ok"}
+"""),
+                ("services/gateway/main.py", """
+import httpx
+from fastapi import FastAPI, Request
+
+app = FastAPI(title="API Gateway")
+
+SERVICES = {
+    "items": "http://items-service:8000",
+    "notifications": "http://notifications-service:8001",
+}
+
+@app.get("/health")
+def health():
+    return {"gateway": True, "services": list(SERVICES.keys())}
+"""),
+            },
+            "mediator" => new[]
+            {
+                ("app/application/mediator.py", """
+from typing import Any, Callable, Dict, Type
+
+class Mediator:
+    def __init__(self):
+        self._handlers: Dict[Type, Callable] = {}
+
+    def register(self, request_type: Type, handler: Callable) -> None:
+        self._handlers[request_type] = handler
+
+    async def send(self, request: Any) -> Any:
+        handler = self._handlers.get(type(request))
+        if not handler:
+            raise ValueError(f"No handler registered for {type(request).__name__}")
+        return await handler(request)
+"""),
+                ("app/application/messages.py", """
+from dataclasses import dataclass
+
+@dataclass
+class CreateItemRequest:
+    name: str
+    description: str
+
+@dataclass
+class GetAllItemsRequest:
+    pass
+"""),
+            },
+            "saga" => new[]
+            {
+                ("app/application/sagas/order_saga.py", """
+import uuid
+from typing import Optional
+
+class OrderSaga:
+    \"\"\"Orchestration saga for order creation workflow.\"\"\"
+
+    async def execute(self, customer_id: str, items: list, payment_info: dict) -> bool:
+        order_id = str(uuid.uuid4())
+        reservation_id: Optional[str] = None
+
+        try:
+            await self._create_order(order_id, customer_id, items)
+            reservation_id = await self._reserve_inventory(order_id, items)
+            await self._process_payment(order_id, payment_info)
+            await self._confirm_order(order_id)
+            return True
+        except Exception as e:
+            print(f"Saga failed: {e} — compensating...")
+            if reservation_id:
+                await self._release_inventory(reservation_id)
+            await self._cancel_order(order_id)
+            return False
+
+    async def _create_order(self, order_id, customer_id, items): pass
+    async def _reserve_inventory(self, order_id, items) -> str: return str(uuid.uuid4())
+    async def _process_payment(self, order_id, payment_info): pass
+    async def _confirm_order(self, order_id): pass
+    async def _cancel_order(self, order_id): pass
+    async def _release_inventory(self, reservation_id): pass
 """),
             },
             _ => Array.Empty<(string, string)>()

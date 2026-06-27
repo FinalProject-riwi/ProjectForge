@@ -170,6 +170,50 @@ public static class JavaScriptSeeder
                 Description = "Implementa CQRS con el paquete oficial de NestJS usando CommandBus, QueryBus y EventBus.",
                 ImplementationNotes = "Crear módulos, comandos, consultas, eventos de dominio y handlers; registrar CqrsModule en el modulo raiz.",
                 ScaffoldCommandsJson = "[\"npm install @nestjs/cqrs\"]"
+            },
+            new DesignPatternEntry
+            {
+                Id = 26,
+                CreatedAt = SeedDate,
+                Pattern = Core.Enums.DesignPattern.EventSourcing,
+                Name = "Event Sourcing (JavaScript)",
+                Architecture = Core.Enums.ArchitectureType.JavaScript,
+                Description = "Estado derivado de una secuencia de eventos inmutables en Node.js.",
+                ImplementationNotes = "DomainEvent base class, InMemoryEventStore, BaseAggregate con apply/pullEvents.",
+                ScaffoldCommandsJson = "[\"mkdir -p src/domain/aggregates src/domain/events src/infrastructure\"]"
+            },
+            new DesignPatternEntry
+            {
+                Id = 27,
+                CreatedAt = SeedDate,
+                Pattern = Core.Enums.DesignPattern.DomainDrivenDesign,
+                Name = "Domain-Driven Design (JavaScript)",
+                Architecture = Core.Enums.ArchitectureType.JavaScript,
+                Description = "Aggregates, Entities y Value Objects para Node.js.",
+                ImplementationNotes = "BaseAggregate con domain events, ValueObject inmutable, DomainEvent con id y occurredAt.",
+                ScaffoldCommandsJson = "[\"mkdir -p src/domain/aggregates src/domain/events src/domain/value-objects\"]"
+            },
+            new DesignPatternEntry
+            {
+                Id = 28,
+                CreatedAt = SeedDate,
+                Pattern = Core.Enums.DesignPattern.Saga,
+                Name = "Saga (JavaScript)",
+                Architecture = Core.Enums.ArchitectureType.JavaScript,
+                Description = "Orquesta flujos de trabajo con compensacion en Node.js.",
+                ImplementationNotes = "OrderSaga con pasos async y compensacion. EventBus simple para subscripcion a eventos.",
+                ScaffoldCommandsJson = "[\"mkdir -p src/application/sagas\"]"
+            },
+            new DesignPatternEntry
+            {
+                Id = 29,
+                CreatedAt = SeedDate,
+                Pattern = Core.Enums.DesignPattern.MVVM,
+                Name = "MVVM (JavaScript/React)",
+                Architecture = Core.Enums.ArchitectureType.JavaScript,
+                Description = "Separacion de UI y logica con custom hooks como ViewModel.",
+                ImplementationNotes = "Custom hook como ViewModel que expone estado y acciones. Componente View solo renderiza.",
+                ScaffoldCommandsJson = "[\"mkdir -p src/presentation/view-models src/presentation/views\"]"
             }
         };
 

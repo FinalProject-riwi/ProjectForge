@@ -74,6 +74,7 @@ public partial class ProjectGeneratorService : IProjectGeneratorService
             await ScaffoldJavaScriptBaseFilesAsync(project, cfg, projectPath, ct);
             await ScaffoldPythonFilesInternalAsync(project, cfg, projectPath, ct);
             await ScaffoldJavaFilesInternalAsync(project, cfg, projectPath, ct);
+            await ScaffoldJavaBaseFilesAsync(project, cfg, projectPath, ct);  // DB config, pom.xml, Dockerfile
 
             // 3. Scaffold adicional según patrón de diseño
             await ScaffoldDesignPatternsAsync(project, cfg, projectPath, ct);

@@ -243,6 +243,12 @@ bootstrap();
             "cqrs" => BuildJavaScriptCqrsPatternFiles(framework),
             "eventsourcing" => BuildJavaScriptEventSourcingPatternFiles(framework),
             "mediator" => BuildJavaScriptMediatorPatternFiles(framework),
+            "repository" => BuildJavaScriptRepositoryPatternFiles(framework),
+            "cleanarchitecture" => BuildJavaScriptCleanArchitecturePatternFiles(framework),
+            "hexagonalarchitecture" => BuildJavaScriptHexagonalPatternFiles(framework),
+            "domaindrivendesign" => BuildJavaScriptDddPatternFiles(framework),
+            "microservices" => BuildJavaScriptMicroservicesPatternFiles(framework),
+            "saga" => BuildJavaScriptSagaPatternFiles(framework),
             _ => Array.Empty<(string, string)>()
         };
     }
@@ -333,13 +339,468 @@ bootstrap();
     }
 
     private static IReadOnlyList<(string RelativePath, string Content)> BuildJavaScriptCqrsPatternFiles(FrameworkType framework)
-        => Array.Empty<(string, string)>();
+    {
+        var isNest = framework is FrameworkType.NestJs or FrameworkType.NestTs;
+        if (isNest)
+        {
+            return new[]
+            {
+                ("src/application/commands/create-item.command.ts", """
+export class CreateItemCommand {
+  constructor(
+    public readonly name: string,
+    public readonly description: string,
+  ) {}
+}
+"""),
+                ("src/application/handlers/create-item.handler.ts", """
+import { CommandHandler, ICommandHandler } from '@nestjs/cqrs';
+import { CreateItemCommand } from '../commands/create-item.command';
+
+@CommandHandler(CreateItemCommand)
+export class CreateItemHandler implements ICommandHandler<CreateItemCommand> {
+  async execute(command: CreateItemCommand): Promise<void> {
+    // TODO: inject repository and save item
+    console.log('Creating item:', command.name);
+  }
+}
+"""),
+                ("src/application/queries/get-all-items.query.ts", """
+export class GetAllItemsQuery {}
+"""),
+            };
+        }
+
+        return new[]
+        {
+            ("src/application/commands/createItem.js", """
+class CreateItemCommand {
+  constructor(name, description) {
+    this.name = name;
+    this.description = description;
+  }
+}
+module.exports = { CreateItemCommand };
+"""),
+            ("src/application/handlers/createItemHandler.js", """
+const { CreateItemCommand } = require('../commands/createItem');
+
+class CreateItemHandler {
+  constructor(repository) {
+    this.repository = repository;
+  }
+
+  async handle(command) {
+    if (!(command instanceof CreateItemCommand))
+      throw new Error('Invalid command');
+    return this.repository.save({ name: command.name, description: command.description });
+  }
+}
+module.exports = { CreateItemHandler };
+"""),
+            ("src/application/queries/getAllItems.js", """
+class GetAllItemsQuery {}
+
+class GetAllItemsHandler {
+  constructor(repository) {
+    this.repository = repository;
+  }
+
+  async handle() {
+    return this.repository.findAll();
+  }
+}
+module.exports = { GetAllItemsQuery, GetAllItemsHandler };
+"""),
+        };
+    }
 
     private static IReadOnlyList<(string RelativePath, string Content)> BuildJavaScriptEventSourcingPatternFiles(FrameworkType framework)
-        => Array.Empty<(string, string)>();
+    {
+        return new[]
+        {
+            ("src/domain/events/domainEvent.js", """
+class DomainEvent {
+  constructor(aggregateId, type, payload) {
+    this.id = crypto.randomUUID();
+    this.aggregateId = aggregateId;
+    this.type = type;
+    this.payload = payload;
+    this.occurredAt = new Date().toISOString();
+  }
+}
+module.exports = { DomainEvent };
+"""),
+            ("src/infrastructure/eventStore.js", """
+class InMemoryEventStore {
+  constructor() {
+    this.events = [];
+  }
+
+  async append(event) {
+    this.events.push(event);
+  }
+
+  async getByAggregateId(aggregateId) {
+    return this.events.filter(e => e.aggregateId === aggregateId);
+  }
+}
+module.exports = { InMemoryEventStore };
+"""),
+            ("src/domain/aggregates/baseAggregate.js", """
+const { DomainEvent } = require('../events/domainEvent');
+
+class BaseAggregate {
+  constructor(id) {
+    this.id = id;
+    this._pendingEvents = [];
+  }
+
+  apply(type, payload) {
+    const event = new DomainEvent(this.id, type, payload);
+    this._pendingEvents.push(event);
+    this._handleEvent(event);
+    return event;
+  }
+
+  _handleEvent(event) {} // override in subclasses
+
+  pullEvents() {
+    const events = [...this._pendingEvents];
+    this._pendingEvents = [];
+    return events;
+  }
+}
+module.exports = { BaseAggregate };
+"""),
+        };
+    }
 
     private static IReadOnlyList<(string RelativePath, string Content)> BuildJavaScriptMediatorPatternFiles(FrameworkType framework)
-        => Array.Empty<(string, string)>();
+    {
+        return new[]
+        {
+            ("src/application/mediator.js", """
+class Mediator {
+  constructor() {
+    this._handlers = new Map();
+  }
+
+  register(requestType, handler) {
+    this._handlers.set(requestType, handler);
+    return this;
+  }
+
+  async send(request) {
+    const handler = this._handlers.get(request.constructor);
+    if (!handler) throw new Error(`No handler for ${request.constructor.name}`);
+    return handler.handle(request);
+  }
+}
+module.exports = { Mediator };
+"""),
+            ("src/application/messages/index.js", """
+class CreateItemRequest {
+  constructor(name, description) {
+    this.name = name;
+    this.description = description;
+  }
+}
+
+class GetAllItemsRequest {}
+
+module.exports = { CreateItemRequest, GetAllItemsRequest };
+"""),
+        };
+    }
+
+    private static IReadOnlyList<(string RelativePath, string Content)> BuildJavaScriptRepositoryPatternFiles(FrameworkType framework)
+    {
+        var isNest = framework is FrameworkType.NestJs or FrameworkType.NestTs;
+        if (isNest)
+        {
+            return new[]
+            {
+                ("src/domain/repositories/item.repository.interface.ts", """
+export interface IItemRepository {
+  findById(id: number): Promise<any | null>;
+  findAll(): Promise<any[]>;
+  save(item: any): Promise<any>;
+  delete(id: number): Promise<void>;
+}
+"""),
+                ("src/infrastructure/repositories/item.repository.ts", """
+import { Injectable } from '@nestjs/common';
+import { IItemRepository } from '../../domain/repositories/item.repository.interface';
+
+@Injectable()
+export class ItemRepository implements IItemRepository {
+  private items: any[] = [];
+
+  async findById(id: number) { return this.items.find(i => i.id === id) ?? null; }
+  async findAll() { return this.items; }
+  async save(item: any) { this.items.push(item); return item; }
+  async delete(id: number) { this.items = this.items.filter(i => i.id !== id); }
+}
+"""),
+            };
+        }
+
+        return new[]
+        {
+            ("src/domain/repositories/itemRepository.js", """
+class ItemRepository {
+  constructor() { this.items = []; this._nextId = 1; }
+
+  async findById(id) { return this.items.find(i => i.id === id) ?? null; }
+  async findAll() { return [...this.items]; }
+  async save(item) {
+    if (!item.id) item.id = this._nextId++;
+    const idx = this.items.findIndex(i => i.id === item.id);
+    if (idx >= 0) this.items[idx] = item; else this.items.push(item);
+    return item;
+  }
+  async delete(id) { this.items = this.items.filter(i => i.id !== id); }
+}
+module.exports = { ItemRepository };
+"""),
+        };
+    }
+
+    private static IReadOnlyList<(string RelativePath, string Content)> BuildJavaScriptCleanArchitecturePatternFiles(FrameworkType framework)
+    {
+        return new[]
+        {
+            ("src/domain/entities/item.js", """
+class Item {
+  constructor({ id = null, name, description, createdAt = new Date() } = {}) {
+    if (!name) throw new Error('name is required');
+    this.id = id;
+    this.name = name;
+    this.description = description;
+    this.createdAt = createdAt;
+  }
+
+  static create(name, description) {
+    return new Item({ name, description });
+  }
+}
+module.exports = { Item };
+"""),
+            ("src/application/use-cases/createItem.js", """
+const { Item } = require('../../domain/entities/item');
+
+class CreateItemUseCase {
+  constructor(itemRepository) {
+    this.itemRepository = itemRepository;
+  }
+
+  async execute({ name, description }) {
+    const item = Item.create(name, description);
+    return this.itemRepository.save(item);
+  }
+}
+module.exports = { CreateItemUseCase };
+"""),
+            ("src/infrastructure/index.js", """
+// Infrastructure bootstrap — wire repositories and use-cases here
+module.exports = {};
+"""),
+        };
+    }
+
+    private static IReadOnlyList<(string RelativePath, string Content)> BuildJavaScriptHexagonalPatternFiles(FrameworkType framework)
+    {
+        return new[]
+        {
+            ("src/core/ports/itemPort.js", """
+/**
+ * Port (interface) for item persistence.
+ * Implement this in src/infrastructure/adapters/.
+ */
+class ItemPort {
+  async findById(id) { throw new Error('Not implemented'); }
+  async findAll() { throw new Error('Not implemented'); }
+  async save(item) { throw new Error('Not implemented'); }
+  async delete(id) { throw new Error('Not implemented'); }
+}
+module.exports = { ItemPort };
+"""),
+            ("src/infrastructure/adapters/inMemoryItemAdapter.js", """
+const { ItemPort } = require('../../core/ports/itemPort');
+
+class InMemoryItemAdapter extends ItemPort {
+  constructor() { super(); this.items = []; this._nextId = 1; }
+
+  async findById(id) { return this.items.find(i => i.id === id) ?? null; }
+  async findAll() { return [...this.items]; }
+  async save(item) {
+    if (!item.id) item.id = this._nextId++;
+    const idx = this.items.findIndex(i => i.id === item.id);
+    if (idx >= 0) this.items[idx] = item; else this.items.push(item);
+    return item;
+  }
+  async delete(id) { this.items = this.items.filter(i => i.id !== id); }
+}
+module.exports = { InMemoryItemAdapter };
+"""),
+            ("src/core/domain/item.js", """
+class Item {
+  constructor(name, description) {
+    this.id = null;
+    this.name = name;
+    this.description = description;
+    this.createdAt = new Date();
+  }
+}
+module.exports = { Item };
+"""),
+        };
+    }
+
+    private static IReadOnlyList<(string RelativePath, string Content)> BuildJavaScriptDddPatternFiles(FrameworkType framework)
+    {
+        return new[]
+        {
+            ("src/domain/aggregates/baseAggregate.js", """
+class BaseAggregate {
+  constructor(id) {
+    this.id = id;
+    this._domainEvents = [];
+  }
+
+  addDomainEvent(event) { this._domainEvents.push(event); }
+  pullDomainEvents() { const ev = [...this._domainEvents]; this._domainEvents = []; return ev; }
+}
+module.exports = { BaseAggregate };
+"""),
+            ("src/domain/events/domainEvent.js", """
+class DomainEvent {
+  constructor(name, payload) {
+    this.id = Math.random().toString(36).slice(2);
+    this.name = name;
+    this.payload = payload;
+    this.occurredAt = new Date();
+  }
+}
+module.exports = { DomainEvent };
+"""),
+            ("src/domain/value-objects/valueObject.js", """
+class ValueObject {
+  equals(other) {
+    return JSON.stringify(this) === JSON.stringify(other);
+  }
+}
+module.exports = { ValueObject };
+"""),
+        };
+    }
+
+    private static IReadOnlyList<(string RelativePath, string Content)> BuildJavaScriptMicroservicesPatternFiles(FrameworkType framework)
+    {
+        return new[]
+        {
+            ("services/gateway/index.js", """
+const http = require('http');
+
+const services = {
+  items: 'http://localhost:3001',
+  notifications: 'http://localhost:3002',
+};
+
+// Simple proxy gateway
+const server = http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({ gateway: true, services: Object.keys(services) }));
+});
+
+server.listen(process.env.PORT || 3000, () =>
+  console.log(`Gateway running on port ${process.env.PORT || 3000}`)
+);
+"""),
+            ("services/items/index.js", """
+const http = require('http');
+
+const server = http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({ service: 'items', items: [] }));
+});
+
+server.listen(process.env.PORT || 3001, () =>
+  console.log(`Items service running on port ${process.env.PORT || 3001}`)
+);
+"""),
+            ("services/notifications/index.js", """
+const http = require('http');
+
+const server = http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({ service: 'notifications' }));
+});
+
+server.listen(process.env.PORT || 3002, () =>
+  console.log(`Notifications service running on port ${process.env.PORT || 3002}`)
+);
+"""),
+        };
+    }
+
+    private static IReadOnlyList<(string RelativePath, string Content)> BuildJavaScriptSagaPatternFiles(FrameworkType framework)
+    {
+        var isNest = framework is FrameworkType.NestJs or FrameworkType.NestTs;
+        if (isNest)
+        {
+            return new[]
+            {
+                ("src/application/sagas/order.saga.ts", """
+import { Injectable } from '@nestjs/common';
+import { Saga, ICommand, ofType } from '@nestjs/cqrs';
+import { Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
+
+@Injectable()
+export class OrderSaga {
+  @Saga()
+  orderCreated = (events$: Observable<any>): Observable<ICommand> => {
+    return events$.pipe(
+      ofType('OrderCreatedEvent'),
+      map(event => {
+        console.log('Saga: OrderCreatedEvent received', event);
+        // Return next command to execute
+        return { type: 'SendConfirmationCommand', payload: event };
+      }),
+    );
+  };
+}
+"""),
+            };
+        }
+
+        return new[]
+        {
+            ("src/application/sagas/orderSaga.js", """
+class OrderSaga {
+  constructor(eventBus, commandBus) {
+    this.eventBus = eventBus;
+    this.commandBus = commandBus;
+    this._subscribe();
+  }
+
+  _subscribe() {
+    this.eventBus.on('OrderCreated', async (event) => {
+      console.log('Saga: OrderCreated', event);
+      await this.commandBus.dispatch({ type: 'SendConfirmation', orderId: event.orderId });
+    });
+    this.eventBus.on('PaymentFailed', async (event) => {
+      console.log('Saga: PaymentFailed — compensating', event);
+      await this.commandBus.dispatch({ type: 'CancelOrder', orderId: event.orderId });
+    });
+  }
+}
+module.exports = { OrderSaga };
+"""),
+        };
+    }
 
     private static string NormalizePatternToken(string value)
         => new string(value.Where(char.IsLetterOrDigit).ToArray()).ToLowerInvariant();
