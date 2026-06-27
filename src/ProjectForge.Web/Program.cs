@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using ProjectForge.Application.AI;
 using ProjectForge.Application.Services;
+using ProjectForge.Application.UseCases.Projects;
 using ProjectForge.Core.Interfaces;
 using ProjectForge.Infrastructure;
 using ProjectForge.Infrastructure.Data;
@@ -51,6 +52,7 @@ builder.Services.AddScoped<IShellExecutor, ShellExecutor>();
 builder.Services.AddScoped<IGitHubService, GitHubService>();
 builder.Services.AddScoped<IEncryptionService, AesEncryptionService>();
 builder.Services.AddScoped<IAiSuggestionService, MultiProviderAiSuggestionService>();
+builder.Services.AddScoped<ICreateProjectUseCase, CreateProjectUseCase>();
 builder.Services.AddScoped<IProjectGeneratorService, ProjectGeneratorService>();
 builder.Services.AddScoped<IVpsDeploymentService, VpsDeploymentService>();
 

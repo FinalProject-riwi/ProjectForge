@@ -74,6 +74,32 @@ public static partial class PhpSeeder
             },
             new LibraryRecommendation
             {
+                Id = 16,
+                CreatedAt = SeedDate,
+                Name = "Laravel Event Sourcing",
+                PackageName = "spatie/laravel-event-sourcing",
+                Architecture = ArchitectureType.Php,
+                Framework = FrameworkType.Laravel,
+                Category = "Event Sourcing",
+                Description = "Event store, projectors y replay para Laravel",
+                PopularityScore = 94,
+                InstallCommand = "composer require spatie/laravel-event-sourcing"
+            },
+            new LibraryRecommendation
+            {
+                Id = 17,
+                CreatedAt = SeedDate,
+                Name = "Laravel MongoDB",
+                PackageName = "mongodb/laravel-mongodb",
+                Architecture = ArchitectureType.Php,
+                Framework = FrameworkType.Laravel,
+                Category = "Database",
+                Description = "Driver oficial para usar MongoDB con Laravel",
+                PopularityScore = 93,
+                InstallCommand = "composer require mongodb/laravel-mongodb"
+            },
+            new LibraryRecommendation
+            {
                 Id = 21,
                 CreatedAt = SeedDate,
                 Name = "Symfony ORM Pack",

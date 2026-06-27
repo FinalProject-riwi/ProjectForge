@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using System.Text.Json;
 using ProjectForge.Application.DTOs;
+using ProjectForge.Application.UseCases.Projects;
 using ProjectForge.Core.Entities;
 using ProjectForge.Core.Enums;
 using ProjectForge.Core.Interfaces;
@@ -20,13 +21,15 @@ public class WizardController : Controller
 {
     private readonly AppDbContext _db;
     private readonly IAiSuggestionService _ai;
+    private readonly ICreateProjectUseCase _createProject;
     private readonly IProjectGeneratorService _generator;
 
     public WizardController(
         AppDbContext db, IAiSuggestionService ai,
+        ICreateProjectUseCase createProject,
         IProjectGeneratorService generator)
     {
-        _db = db; _ai = ai; _generator = generator;
+        _db = db; _ai = ai; _createProject = createProject; _generator = generator;
     }
 
     // ── GET /wizard ────────────────────────────────────────────────────────────
@@ -104,24 +107,18 @@ public class WizardController : Controller
             DeploymentTarget   = DeploymentTarget.Local,
             DesignPatternsJson = JsonSerializer.Serialize(patterns),
             LibrariesJson      = JsonSerializer.Serialize(libs),
+            AdditionalOptionsJson = JsonSerializer.Serialize(new { createPrivateRepo }),
             CreatedAt          = DateTime.UtcNow,
         };
 
         _db.WizardConfigs.Add(config);
         await _db.SaveChangesAsync();
 
-        var project = new Project
-        {
-            Name          = projectName.Trim(),
-            Description   = description?.Trim() ?? "",
-            UserId        = userId,
-            WizardConfigId = config.Id,
-            Status        = ProjectStatus.Draft,
-            CreatedAt     = DateTime.UtcNow,
-        };
-
-        _db.Projects.Add(project);
-        await _db.SaveChangesAsync();
+        var project = await _createProject.ExecuteAsync(new CreateProjectRequest(
+            userId,
+            config.Id,
+            projectName.Trim(),
+            description?.Trim()), HttpContext.RequestAborted);
 
         return RedirectToAction("Generate", new { id = project.Id });
     }

@@ -15,9 +15,9 @@ public static partial class PhpSeeder
                 Pattern = DesignPattern.Repository,
                 Name = "Repository Pattern",
                 Architecture = ArchitectureType.Php,
-                Description = "Aisla Eloquent o Doctrine detras de contratos, util para pruebas y desacoplamiento.",
-                ImplementationNotes = "Crear app/Contracts, app/Repositories, app/Models y una migracion; registrar bindings en un service provider.",
-                ScaffoldCommandsJson = "[\"mkdir -p app/Contracts app/Repositories app/Models app/Providers database/migrations\"]"
+                Description = "Aisla la persistencia detras de un contrato y una implementacion Eloquent en Laravel.",
+                ImplementationNotes = "Crear app/Repositories/Contracts, app/Repositories, app/Http/Controllers, app/Models y app/Providers; registrar el binding en un provider.",
+                ScaffoldCommandsJson = "[\"mkdir -p app/Repositories/Contracts app/Repositories app/Http/Controllers app/Models app/Providers database/migrations routes\"]"
             },
             new DesignPatternEntry
             {
@@ -27,8 +27,8 @@ public static partial class PhpSeeder
                 Name = "Clean Architecture",
                 Architecture = ArchitectureType.Php,
                 Description = "Organiza Laravel o Symfony en capas para mantener la logica de negocio fuera del framework.",
-                ImplementationNotes = "Separar app/Domain, app/Application y app/Infrastructure; agregar contratos, modelo y provider para el binding.",
-                ScaffoldCommandsJson = "[\"mkdir -p app/Domain app/Application app/Infrastructure app/Contracts app/Models app/Providers database/migrations\"]"
+                ImplementationNotes = "Separar app/Domain, app/Application, app/Http/Controllers y app/Infrastructure; exponer un comando o DTO de entrada y registrar el binding en un provider.",
+                ScaffoldCommandsJson = "[\"mkdir -p app/Domain app/Application/DTOs app/Application/Interfaces app/Application/UseCases app/Http/Controllers app/Infrastructure/Persistence app/Models app/Providers database/migrations routes\"]"
             },
             new DesignPatternEntry
             {
@@ -38,8 +38,8 @@ public static partial class PhpSeeder
                 Name = "Hexagonal Architecture",
                 Architecture = ArchitectureType.Php,
                 Description = "Usa puertos y adaptadores para que Laravel o Symfony actuen solo como capa de entrada y salida.",
-                ImplementationNotes = "Modelar puertos en app/Ports, casos de uso en app/Application, entidad en Domain y adaptadores Eloquent en app/Adapters; registrar bindings en un provider de Laravel.",
-                ScaffoldCommandsJson = "[\"mkdir -p app/Ports app/Adapters/Persistence app/Domain/Entities app/Application/UseCases app/Models app/Providers database/migrations\"]"
+                ImplementationNotes = "Modelar puertos de entrada en app/Application/Ports/In y puertos de salida en app/Application/Ports/Out; los controladores consumen los puertos de entrada y los adaptadores Eloquent implementan los de salida.",
+                ScaffoldCommandsJson = "[\"mkdir -p app/Domain/Entities app/Application/DTOs app/Application/Ports/In app/Application/Ports/Out app/Application/UseCases app/Http/Controllers app/Infrastructure/Persistence app/Models app/Providers database/migrations routes\"]"
             },
             new DesignPatternEntry
             {
@@ -49,8 +49,8 @@ public static partial class PhpSeeder
                 Name = "Domain-Driven Design",
                 Architecture = ArchitectureType.Php,
                 Description = "Estructura el codigo alrededor del dominio, no de los controladores o de la capa HTTP.",
-                ImplementationNotes = "Crear entidades, value objects y servicios de aplicacion por dominio; agrupar por bounded context.",
-                ScaffoldCommandsJson = "[\"mkdir -p app/Domain/Entities app/Domain/ValueObjects app/Application\"]"
+                ImplementationNotes = "Crear aggregate roots, value objects, domain services, domain events, repositorios de dominio, casos de uso, controller HTTP y provider por bounded context.",
+                ScaffoldCommandsJson = "[\"mkdir -p app/Domain/Aggregates app/Domain/Entities app/Domain/Events app/Domain/Repositories app/Domain/Services app/Domain/ValueObjects app/Application/DTOs app/Application/UseCases app/Infrastructure/Persistence app/Http/Controllers app/Models app/Providers database/migrations routes\"]"
             },
             new DesignPatternEntry
             {
@@ -59,9 +59,9 @@ public static partial class PhpSeeder
                 Pattern = DesignPattern.EventSourcing,
                 Name = "Event Sourcing",
                 Architecture = ArchitectureType.Php,
-                Description = "Registra cambios como eventos para auditoria y reconstruccion del estado.",
-                ImplementationNotes = "Separar eventos, listeners y jobs; considerar una libreria de event sourcing si el dominio lo requiere.",
-                ScaffoldCommandsJson = "[\"mkdir -p app/Events app/Listeners app/Jobs\"]"
+                Description = "Registra los cambios como eventos y reconstruye el agregado por rehidratacion.",
+                ImplementationNotes = "Crear stored_events, projectors, read models, event store, use cases y controlador HTTP; el agregado debe soportar replay y fromHistory.",
+                ScaffoldCommandsJson = "[\"mkdir -p app/Domain/Aggregates app/Domain/Events app/Domain/Repositories app/Application/DTOs app/Application/UseCases app/Infrastructure/EventStore app/Infrastructure/Projectors app/Models database/migrations routes\"]"
             },
             new DesignPatternEntry
             {
@@ -70,9 +70,9 @@ public static partial class PhpSeeder
                 Pattern = DesignPattern.Microservices,
                 Name = "Microservices",
                 Architecture = ArchitectureType.Php,
-                Description = "Divide el sistema en servicios pequenos solo cuando hay limites de dominio y despliegue claros.",
-                ImplementationNotes = "Separar integraciones externas, colas y contratos; evitar sobrecargar un monolito sin necesidad.",
-                ScaffoldCommandsJson = "[\"mkdir -p app/Services app/Jobs app/Integrations\"]"
+                Description = "Divide el sistema en un gateway y servicios Laravel separados, con despliegue independiente y mensajeria asincrona.",
+                ImplementationNotes = "Crear un gateway en la raiz, servicios en services/projects y services/notifications, un broker RabbitMQ y bases separadas por servicio.",
+                ScaffoldCommandsJson = "[\"mkdir -p services/projects services/notifications shared/contracts\"]"
             },
             new DesignPatternEntry
             {
@@ -81,9 +81,9 @@ public static partial class PhpSeeder
                 Pattern = DesignPattern.Repository,
                 Name = "Repository Pattern (Symfony)",
                 Architecture = ArchitectureType.Php,
-                Description = "Separa la persistencia del dominio usando repositorios de Symfony con Doctrine o DBAL.",
-                ImplementationNotes = "Crear src/Entity, src/Contract, src/Application/UseCase y src/Repository; registrar el binding en config/services.yaml y agregar la migracion.",
-                ScaffoldCommandsJson = "[\"mkdir -p src/Entity src/Contract src/Application/UseCase src/Repository migrations\"]"
+                Description = "Separa la persistencia del dominio usando controladores, casos de uso y repositorios Doctrine en Symfony.",
+                ImplementationNotes = "Crear src/Domain, src/Application/DTOs, src/Application/UseCases, src/Controller y src/Infrastructure/Persistence; registrar los bindings en config/services.yaml y exponer las rutas por atributos.",
+                ScaffoldCommandsJson = "[\"mkdir -p src/Domain/Aggregates src/Domain/Entities src/Domain/Events src/Domain/Repositories src/Domain/Services src/Domain/ValueObjects src/Application/DTOs src/Application/UseCases src/Infrastructure/Persistence src/Controller config/packages config/routes migrations\"]"
             },
             new DesignPatternEntry
             {
@@ -92,9 +92,9 @@ public static partial class PhpSeeder
                 Pattern = DesignPattern.CleanArchitecture,
                 Name = "Clean Architecture (Symfony)",
                 Architecture = ArchitectureType.Php,
-                Description = "Organiza Symfony en capas para mantener la logica de negocio fuera de los controladores y bundles.",
-                ImplementationNotes = "Separar src/Domain, src/Application, src/Entity y src/Infrastructure; registrar el contrato en config/services.yaml y crear la migracion.",
-                ScaffoldCommandsJson = "[\"mkdir -p src/Domain/Entity src/Contract src/Application/UseCase src/Entity src/Infrastructure/Persistence migrations\"]"
+                Description = "Organiza Symfony en capas para mantener la logica de negocio fuera de los controladores y de la capa HTTP.",
+                ImplementationNotes = "Separar src/Domain, src/Application, src/Infrastructure y src/Controller; exponer DTOs, casos de uso y adaptadores de persistencia claramente definidos.",
+                ScaffoldCommandsJson = "[\"mkdir -p src/Domain/Aggregates src/Domain/Entities src/Domain/Events src/Domain/Repositories src/Domain/Services src/Domain/ValueObjects src/Application/DTOs src/Application/UseCases src/Infrastructure/Persistence src/Controller config/packages config/routes migrations\"]"
             },
             new DesignPatternEntry
             {
@@ -104,8 +104,8 @@ public static partial class PhpSeeder
                 Name = "Hexagonal Architecture (Symfony)",
                 Architecture = ArchitectureType.Php,
                 Description = "Usa puertos y adaptadores para aislar Symfony del dominio.",
-                ImplementationNotes = "Modelar puertos en src/Port, casos de uso en src/Application, entidad Doctrine en src/Entity y adaptadores en src/Adapters; registrar el binding en config/services.yaml y crear la migracion.",
-                ScaffoldCommandsJson = "[\"mkdir -p src/Port src/Application/UseCase src/Domain/Entity src/Entity src/Adapters/Persistence migrations\"]"
+                ImplementationNotes = "Modelar puertos de entrada en src/Application/Ports/In y puertos de salida en src/Application/Ports/Out; los controladores consumen los puertos de entrada y Doctrine implementa los de salida.",
+                ScaffoldCommandsJson = "[\"mkdir -p src/Application/Ports/In src/Application/Ports/Out src/Application/DTOs src/Application/UseCases src/Domain/Aggregates src/Domain/Entities src/Domain/Repositories src/Infrastructure/Persistence src/Controller config/packages config/routes migrations\"]"
             },
             new DesignPatternEntry
             {
@@ -115,8 +115,8 @@ public static partial class PhpSeeder
                 Name = "Domain-Driven Design (Symfony)",
                 Architecture = ArchitectureType.Php,
                 Description = "Estructura el codigo alrededor del dominio y no alrededor del framework.",
-                ImplementationNotes = "Crear src/Domain/Entity, src/Domain/ValueObject y src/Application por bounded context.",
-                ScaffoldCommandsJson = "[\"mkdir -p src/Domain/Entity src/Domain/ValueObject src/Application\"]"
+                ImplementationNotes = "Crear agregados, value objects, eventos, repositorios de dominio, casos de uso y un controlador por bounded context.",
+                ScaffoldCommandsJson = "[\"mkdir -p src/Domain/Aggregates src/Domain/Entities src/Domain/Events src/Domain/Repositories src/Domain/Services src/Domain/ValueObjects src/Application/DTOs src/Application/UseCases src/Infrastructure/Persistence src/Controller config/packages config/routes migrations\"]"
             },
             new DesignPatternEntry
             {
@@ -125,9 +125,9 @@ public static partial class PhpSeeder
                 Pattern = DesignPattern.EventSourcing,
                 Name = "Event Sourcing (Symfony)",
                 Architecture = ArchitectureType.Php,
-                Description = "Conserva el historial de cambios como eventos para auditoria y reconstruccion del estado.",
-                ImplementationNotes = "Crear src/Event, src/EventListener y src/MessageHandler; valorar Messenger para asincronia.",
-                ScaffoldCommandsJson = "[\"mkdir -p src/Event src/EventListener src/MessageHandler\"]"
+                Description = "Conserva el historial de cambios como eventos y reconstruye el agregado al rehidratarlo.",
+                ImplementationNotes = "Crear stored_events, proyecciones, event store, projectors, casos de uso y controlador HTTP; el agregado debe poder reconstituirse desde el historial.",
+                ScaffoldCommandsJson = "[\"mkdir -p src/Domain/Aggregates src/Domain/Events src/Domain/Repositories src/Application/DTOs src/Application/UseCases src/Infrastructure/EventStore src/Infrastructure/Projectors src/Entity config/packages config/routes migrations\"]"
             },
             new DesignPatternEntry
             {
@@ -136,9 +136,9 @@ public static partial class PhpSeeder
                 Pattern = DesignPattern.Microservices,
                 Name = "Microservices (Symfony)",
                 Architecture = ArchitectureType.Php,
-                Description = "Divide la aplicacion solo cuando existan limites claros entre servicios.",
-                ImplementationNotes = "Separar clientes HTTP, mensajes y contratos de integracion; usar Messenger o colas para desacoplar.",
-                ScaffoldCommandsJson = "[\"mkdir -p src/Service src/MessageHandler src/Integration\"]"
+                Description = "Divide la aplicacion en un gateway y servicios Symfony separados, con despliegue independiente y mensajeria asincrona.",
+                ImplementationNotes = "Crear un gateway en la raiz, servicios en services/projects y services/notifications, colas con Redis o RabbitMQ y compose con los servicios de apoyo.",
+                ScaffoldCommandsJson = "[\"mkdir -p services/projects services/notifications shared/contracts\"]"
             }
         };
 }

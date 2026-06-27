@@ -31,11 +31,13 @@ ProjectForge/
 │   ├── ProjectForge.Core/             # Entidades, interfaces, enums
 │   │   ├── Entities/                  # ApplicationUser, Project, WizardConfig, ...
 │   │   ├── Interfaces/                # IProjectRepo, IGitHubService, IAiService, ...
+│   │   ├── Exceptions/                # DomainException y errores del núcleo
 │   │   └── Enums/                     # ArchitectureType, DatabaseType, ...
 │   │
 │   ├── ProjectForge.Application/      # Casos de uso
 │   │   ├── AI/                        # AnthropicAiSuggestionService
 │   │   ├── Services/                  # ProjectGeneratorService, VpsDeploymentService
+│   │   ├── UseCases/                  # CreateProjectUseCase y futuros casos de uso
 │   │   └── DTOs/                      # WizardDtos, ProjectDtos
 │   │
 │   ├── ProjectForge.Infrastructure/   # Implementaciones
@@ -122,6 +124,7 @@ La aplicación estará disponible en **http://localhost:5000**
 | `GET` | `/auth/github/callback` | Callback OAuth |
 | `POST` | `/auth/logout` | Cerrar sesión |
 | `GET` | `/dashboard` | Lista de proyectos del usuario |
+| `POST` | `/projects` | Crea un proyecto mediante `CreateProjectUseCase` |
 | `GET` | `/wizard` | Inicio del wizard |
 | `GET/POST` | `/wizard/step1..5` | Pasos del wizard |
 | `GET` | `/wizard/generate/{id}` | Vista de generación en tiempo real |

@@ -1,4 +1,5 @@
 using ProjectForge.Core.Enums;
+using ProjectForge.Core.Exceptions;
 
 namespace ProjectForge.Core.Entities;
 
@@ -34,6 +35,69 @@ public class Project : BaseEntity
     public ApplicationUser User { get; set; } = null!;
     public ICollection<ProjectLog> Logs { get; set; } = new List<ProjectLog>();
     public string? GeneratedReadme { get; set; }
+
+    public static Project Create(string name, string? description, int userId, int wizardConfigId)
+    {
+        var project = new Project
+        {
+            UserId = RequirePositiveId(userId, nameof(userId)),
+            WizardConfigId = RequirePositiveId(wizardConfigId, nameof(wizardConfigId)),
+            Status = ProjectStatus.Draft,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        project.Rename(name);
+        project.UpdateDescription(description);
+        return project;
+    }
+
+    public void Rename(string name)
+    {
+        var normalized = NormalizeName(name);
+        if (normalized.Length < 3)
+            throw new DomainException("Project name must contain at least 3 characters.");
+
+        Name = normalized;
+        Touch();
+    }
+
+    public void UpdateDescription(string? description)
+    {
+        Description = string.IsNullOrWhiteSpace(description) ? string.Empty : description.Trim();
+        Touch();
+    }
+
+    public void MarkGenerating()
+    {
+        Status = ProjectStatus.Generating;
+        Touch();
+    }
+
+    public void MarkPublished(string repositoryUrl, string localPath)
+    {
+        if (string.IsNullOrWhiteSpace(repositoryUrl))
+            throw new DomainException("Repository URL cannot be empty.");
+
+        RepositoryUrl = repositoryUrl.Trim();
+        LocalPath = string.IsNullOrWhiteSpace(localPath) ? null : localPath.Trim();
+        Status = ProjectStatus.Published;
+        ErrorMessage = null;
+        Touch();
+    }
+
+    public void MarkFailed(string errorMessage)
+    {
+        ErrorMessage = string.IsNullOrWhiteSpace(errorMessage) ? "Unknown error" : errorMessage.Trim();
+        Status = ProjectStatus.Failed;
+        Touch();
+    }
+
+    private void Touch() => UpdatedAt = DateTime.UtcNow;
+
+    private static int RequirePositiveId(int value, string parameterName) =>
+        value > 0 ? value : throw new DomainException($"{parameterName} must be greater than zero.");
+
+    private static string NormalizeName(string name) => string.IsNullOrWhiteSpace(name) ? string.Empty : name.Trim();
 }
 
 public class WizardConfig : BaseEntity
