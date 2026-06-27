@@ -1,0 +1,189 @@
+@{
+    ViewData["Title"] = "Nuevo Proyecto";
+    Layout = "_Layout";
+}
+
+<div class="wizard-container">
+    <!-- Progress Bar -->
+    <div class="wizard-progress">
+        <div class="progress-steps">
+            @foreach (var (label, i) in new[] { "Arquitectura", "Framework & BD", "Infraestructura", "Patrones & Libs", "Confirmar" }.Select((l, i) => (l, i + 1)))
+            {
+                <div class="progress-step" id="step-indicator-@i" data-step="@i">
+                    <div class="step-circle">@i</div>
+                    <span class="step-label">@label</span>
+                </div>
+            }
+        </div>
+        <div class="progress-bar-track">
+            <div class="progress-bar-fill" id="progress-fill" style="width: 20%"></div>
+        </div>
+    </div>
+
+    <form id="wizard-form">
+        @Html.AntiForgeryToken()
+
+        <!-- ── Step 1: Arquitectura ──────────────────────────────────────── -->
+        <div class="wizard-step active" data-step="1">
+            <h2>¿Qué arquitectura usará tu proyecto?</h2>
+            <p class="step-description">Selecciona el lenguaje base de tu aplicación</p>
+
+            <div class="arch-grid">
+                @foreach (var arch in new[] {
+                    ("DotNet", "C# / .NET", "🔷", "ASP.NET Core, Blazor, Minimal API"),
+                    ("Java", "Java", "☕", "Spring Boot, Quarkus, Micronaut"),
+                    ("Python", "Python", "🐍", "FastAPI, Django, Flask"),
+                    ("Php", "PHP", "🐘", "Laravel, Symfony"),
+                    ("JavaScript", "JavaScript", "🟨", "Node.js, Express, NestJS, Next.js"),
+                    ("TypeScript", "TypeScript", "🔷", "NestTS, Next.js, Angular")
+                })
+                {
+                    <label class="arch-card" data-value="@arch.Item1">
+                        <input type="radio" name="architecture" value="@arch.Item1" />
+                        <span class="arch-icon">@arch.Item3</span>
+                        <span class="arch-name">@arch.Item2</span>
+                        <span class="arch-desc">@arch.Item4</span>
+                    </label>
+                }
+            </div>
+        </div>
+
+        <!-- ── Step 2: Framework & BD ────────────────────────────────────── -->
+        <div class="wizard-step" data-step="2">
+            <h2>Framework y Base de Datos</h2>
+
+            <div class="form-section">
+                <label>Framework</label>
+                <div id="framework-options" class="option-grid">
+                    <!-- Cargado dinámicamente por JS -->
+                </div>
+
+                <label class="mt-4">Versión</label>
+                <select name="frameworkVersion" id="framework-version-select" class="form-select">
+                    <option value="">Selecciona un framework primero</option>
+                </select>
+            </div>
+
+            <div class="form-section mt-6">
+                <label>Base de Datos</label>
+                <div class="db-grid">
+                    @foreach (var db in new[] {
+                        ("PostgreSQL", "🐘", "Recomendado"),
+                        ("MySQL", "🐬", "Popular"),
+                        ("SqlServer", "🟦", "Empresarial"),
+                        ("MongoDB", "🍃", "NoSQL"),
+                        ("Redis", "🔴", "Cache/Cola"),
+                        ("SQLite", "📦", "Desarrollo")
+                    })
+                    {
+                        <label class="db-card" data-value="@db.Item1">
+                            <input type="radio" name="database" value="@db.Item1" />
+                            <span class="db-icon">@db.Item2</span>
+                            <span class="db-name">@db.Item1</span>
+                            <span class="db-badge">@db.Item3</span>
+                        </label>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Step 3: Infraestructura ────────────────────────────────────── -->
+        <div class="wizard-step" data-step="3">
+            <h2>Infraestructura y Despliegue</h2>
+
+            <div class="infra-grid">
+                <label class="infra-card" data-value="None">
+                    <input type="radio" name="infrastructure" value="None" checked />
+                    <span class="infra-icon">💻</span>
+                    <strong>Sin contenedores</strong>
+                    <span>Solo el código del proyecto</span>
+                </label>
+                <label class="infra-card" data-value="DockerCompose">
+                    <input type="radio" name="infrastructure" value="DockerCompose" />
+                    <span class="infra-icon">🐳</span>
+                    <strong>Docker Compose</strong>
+                    <span>Ideal para desarrollo local y un solo servidor</span>
+                </label>
+                <label class="infra-card" data-value="Kubernetes">
+                    <input type="radio" name="infrastructure" value="Kubernetes" />
+                    <span class="infra-icon">⚙️</span>
+                    <strong>Kubernetes</strong>
+                    <span>Escalado horizontal, múltiples VPS</span>
+                </label>
+            </div>
+
+            <!-- VPS Credentials (visible solo cuando Kubernetes) -->
+            <div id="vps-section" style="display:none" class="vps-section mt-6">
+                <h3>Servidores VPS</h3>
+                <p class="text-muted">Agrega las credenciales SSH de cada nodo</p>
+                <div id="vps-list"></div>
+                <button type="button" class="btn btn-secondary" onclick="addVpsRow()">+ Agregar servidor</button>
+            </div>
+        </div>
+
+        <!-- ── Step 4: Patrones & Librerías ─────────────────────────────── -->
+        <div class="wizard-step" data-step="4">
+            <h2>Patrones y Librerías</h2>
+
+            <div class="ai-suggestion-banner" id="ai-banner">
+                <span class="ai-icon">🤖</span>
+                <span id="ai-rationale">Analizando tu configuración con IA...</span>
+            </div>
+
+            <div class="two-columns">
+                <div>
+                    <h3>Patrones de Diseño</h3>
+                    <div id="patterns-list" class="checklist"></div>
+                </div>
+                <div>
+                    <h3>Librerías Recomendadas</h3>
+                    <div id="libraries-list" class="checklist"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Step 5: Confirmar ─────────────────────────────────────────── -->
+        <div class="wizard-step" data-step="5">
+            <h2>Confirmar y Crear</h2>
+
+            <div class="summary-card">
+                <div id="config-summary"></div>
+            </div>
+
+            <div class="form-group mt-6">
+                <label>Nombre del proyecto / repositorio</label>
+                <input type="text" name="projectName" id="project-name" class="form-input"
+                       placeholder="mi-proyecto-genial" pattern="[a-zA-Z0-9_-]+" required />
+                <small>Solo letras, números, guiones y guiones bajos</small>
+            </div>
+
+            <div class="form-group">
+                <label>Descripción</label>
+                <textarea name="description" class="form-textarea" rows="3"
+                          placeholder="Descripción breve del proyecto..."></textarea>
+            </div>
+
+            <label class="checkbox-label">
+                <input type="checkbox" name="createPrivateRepo" />
+                Crear repositorio privado en GitHub
+            </label>
+        </div>
+
+        <!-- Navigation Buttons -->
+        <div class="wizard-nav">
+            <button type="button" id="btn-prev" class="btn btn-ghost" onclick="prevStep()" style="display:none">
+                ← Anterior
+            </button>
+            <button type="button" id="btn-next" class="btn btn-primary" onclick="nextStep()">
+                Siguiente →
+            </button>
+            <button type="submit" id="btn-submit" class="btn btn-success" style="display:none">
+                🚀 Generar Proyecto
+            </button>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+<script src="~/js/wizard.js"></script>
+}

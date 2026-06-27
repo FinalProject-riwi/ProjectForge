@@ -1,0 +1,211 @@
+@{
+    ViewData["Title"] = "Generando Proyecto";
+    int projectId = ViewBag.ProjectId;
+}
+
+<div class="generation-page">
+    <div class="generation-header">
+        <div class="forge-animation">
+            <div class="gear gear-1">⚙</div>
+            <div class="gear gear-2">⚙</div>
+        </div>
+        <h1>Forjando tu proyecto...</h1>
+        <p class="subtitle" id="current-step-label">Conectando al servidor...</p>
+    </div>
+
+    <div class="generation-progress">
+        <div class="progress-track">
+            <div class="progress-indicator" id="gen-progress" style="width:0%"></div>
+        </div>
+    </div>
+
+    <div class="terminal-container">
+        <div class="terminal-header">
+            <div class="terminal-dots">
+                <span class="dot red"></span>
+                <span class="dot yellow"></span>
+                <span class="dot green" id="conn-dot" style="background:#555"></span>
+            </div>
+            <span class="terminal-title">ProjectForge Terminal</span>
+            <span id="conn-status" style="margin-left:auto;font-size:11px;color:#888">● Conectando...</span>
+        </div>
+        <div id="terminal-output" class="terminal-body">
+            <p class="terminal-line info">$ projectforge generate --project-id @projectId</p>
+            <p class="terminal-line info" id="init-msg">Iniciando conexión SignalR...</p>
+        </div>
+    </div>
+
+    <div id="completion-panel" style="display:none" class="completion-panel">
+        <div class="completion-icon success" id="completion-icon">✓</div>
+        <h2 id="completion-title">¡Proyecto generado exitosamente!</h2>
+        <div id="completion-links" class="completion-links"></div>
+        <a href="/dashboard" class="btn btn-primary mt-4">Ver Dashboard</a>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+(function() {
+    const projectId = @projectId;
+
+    const stepProgress = { Scaffold: 15, Templates: 35, Dependencies: 55, README: 72, GitHub: 88 };
+
+    const terminal   = document.getElementById('terminal-output');
+    const progressEl = document.getElementById('gen-progress');
+    const stepLabel  = document.getElementById('current-step-label');
+    const connDot    = document.getElementById('conn-dot');
+    const connStatus = document.getElementById('conn-status');
+
+    let currentProgress = 0;
+
+    function addLine(text, cssClass) {
+        cssClass = cssClass || 'success';
+        const initMsg = document.getElementById('init-msg');
+        if (initMsg) initMsg.remove();
+
+        const line = document.createElement('p');
+        line.className = 'terminal-line ' + cssClass;
+
+        const ts = document.createElement('span');
+        ts.className = 'ts';
+        ts.textContent = new Date().toLocaleTimeString('es-CO', { hour12: false });
+
+        line.appendChild(ts);
+        line.appendChild(document.createTextNode(' ' + text));
+        terminal.appendChild(line);
+        terminal.scrollTop = terminal.scrollHeight;
+    }
+
+    function setProgress(pct, label) {
+        if (pct > currentProgress) {
+            currentProgress = pct;
+            progressEl.style.width = pct + '%';
+        }
+        if (label) stepLabel.textContent = label;
+    }
+
+    function setConnected() {
+        connDot.style.background = '#22c55e';
+        connStatus.textContent = '● Conectado';
+        connStatus.style.color = '#22c55e';
+    }
+
+    function setDisconnected(msg) {
+        connDot.style.background = '#ef4444';
+        connStatus.textContent = '● ' + (msg || 'Desconectado');
+        connStatus.style.color = '#ef4444';
+    }
+
+    function showCompletion(success) {
+        setProgress(100, success ? '¡Completado!' : 'Error en generación');
+        document.getElementById('completion-icon').textContent  = success ? '✓' : '✗';
+        document.getElementById('completion-icon').className    = 'completion-icon ' + (success ? 'success' : 'error');
+        document.getElementById('completion-title').textContent = success
+            ? '¡Proyecto generado y subido a GitHub! 🚀'
+            : 'Ocurrió un error durante la generación';
+        const panel = document.getElementById('completion-panel');
+        panel.style.display = 'block';
+        panel.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function init() {
+        // Verificar que la librería SignalR esté cargada
+        if (typeof signalR === 'undefined') {
+            addLine('❌ Error: librería SignalR no disponible. Recarga la página.', 'error');
+            setDisconnected('Sin librería');
+            return;
+        }
+
+        const connection = new signalR.HubConnectionBuilder()
+            .withUrl('/hubs/generation')
+            .withAutomaticReconnect([2000, 3000, 5000, 10000])
+            .configureLogging(signalR.LogLevel.Warning)
+            .build();
+
+        connection.on('ReceiveLog', function(log) {
+            var cssClass = log.isError ? 'error' : 'success';
+            addLine('[' + log.step + '] ' + log.message, cssClass);
+            var pct = stepProgress[log.step] || currentProgress;
+            var short = log.message.length > 55 ? log.message.substring(0, 55) + '...' : log.message;
+            setProgress(pct, log.step + ': ' + short);
+        });
+
+        connection.on('StatusChanged', function(status) {
+            if (status === 'Generating') {
+                setProgress(5, 'Generando...');
+            } else if (status === 'Published') {
+                showCompletion(true);
+            } else if (status === 'Failed') {
+                showCompletion(false);
+            }
+        });
+
+        connection.onreconnecting(function() {
+            connDot.style.background = '#f59e0b';
+            connStatus.textContent = '● Reconectando...';
+            connStatus.style.color = '#f59e0b';
+        });
+
+        connection.onreconnected(function() {
+            setConnected();
+            addLine('✅ Reconectado al servidor', 'success');
+        });
+
+        connection.onclose(function(err) {
+            setDisconnected('Desconectado');
+            if (err) addLine('⚠️ Conexión cerrada: ' + err.message, 'error');
+        });
+
+        async function startGeneration() {
+            try {
+                addLine('🔌 Conectando a /hubs/generation...', 'info');
+                await connection.start();
+                setConnected();
+                addLine('✅ Conexión establecida', 'success');
+
+                await connection.invoke('JoinProjectRoom', projectId.toString());
+                addLine('📡 Escuchando eventos del proyecto #' + projectId + '...', 'info');
+                setProgress(3, 'Iniciando generación...');
+
+                // Lanzar generación — los logs llegan por SignalR en tiempo real
+                fetch('/wizard/generate/' + projectId + '/start', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(function(resp) { return resp.json(); })
+                .then(function(data) {
+                    if (data.repositoryUrl) {
+                        document.getElementById('completion-links').innerHTML =
+                            '<a href="' + data.repositoryUrl + '" target="_blank" class="btn btn-outline">🔗 Ver en GitHub</a>';
+                    }
+                    // Si el status no llegó por SignalR, mostrarlo aquí
+                    if (data.success === true && currentProgress < 100) showCompletion(true);
+                    if (data.success === false && currentProgress < 100) showCompletion(false);
+                })
+                .catch(function(err) {
+                    addLine('❌ Error HTTP al iniciar generación: ' + err.message, 'error');
+                });
+
+            } catch(err) {
+                setDisconnected('Error de conexión');
+                addLine('❌ No se pudo conectar: ' + err.message, 'error');
+                addLine('ℹ️ Reintentando en 4 segundos...', 'info');
+                setTimeout(startGeneration, 4000);
+            }
+        }
+
+        startGeneration();
+    }
+
+    // Esperar a que el DOM esté listo y SignalR cargado
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+})();
+</script>
+}

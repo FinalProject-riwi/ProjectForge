@@ -1,0 +1,67 @@
+version: '3.9'
+
+services:
+  # ── Aplicación Web (.NET 10) ───────────────────────────────────────────────
+  web:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: projectforge-web
+    ports:
+      - "5000:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:8080
+      - DOTNET_RUNNING_IN_CONTAINER=true
+      - ConnectionStrings__Default=Server=sqlserver,1433;Database=ProjectForgeDb;User Id=sa;Password=${DB_PASSWORD:-ProjectForge!23};TrustServerCertificate=True;MultipleActiveResultSets=true
+      - GitHub__ClientId=${GITHUB_CLIENT_ID:-PLACEHOLDER}
+      - GitHub__ClientSecret=${GITHUB_CLIENT_SECRET:-PLACEHOLDER}
+      - Anthropic__ApiKey=${ANTHROPIC_API_KEY:-PLACEHOLDER}
+      - OpenAI__ApiKey=${OPENAI_API_KEY:-PLACEHOLDER}
+      - Gemini__ApiKey=${GEMINI_API_KEY:-PLACEHOLDER}
+      - Encryption__Key=${ENCRYPTION_KEY:-DefaultKeyChangeThisInProduction32}
+      - Generation__WorkspacePath=/workspaces
+      - ASPNETCORE_DataProtection__KeysPath=/dataprotection-keys
+    volumes:
+      - workspaces:/workspaces
+      - dataprotection-keys:/dataprotection-keys
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - projectforge-net
+
+  # ── SQL Server 2022 ────────────────────────────────────────────────────────
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: projectforge-db
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=${DB_PASSWORD:-ProjectForge!23}
+      - MSSQL_PID=Express
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqldata:/var/opt/mssql
+    healthcheck:
+      test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "${DB_PASSWORD:-ProjectForge!23}" -Q "SELECT 1" -No || exit 1
+      interval: 15s
+      timeout: 10s
+      retries: 15
+      start_period: 60s
+    restart: unless-stopped
+    networks:
+      - projectforge-net
+
+volumes:
+  sqldata:
+    driver: local
+  workspaces:
+    driver: local
+  dataprotection-keys:
+    driver: local
+
+networks:
+  projectforge-net:
+    driver: bridge

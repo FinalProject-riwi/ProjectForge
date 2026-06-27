@@ -1,0 +1,135 @@
+@{
+    ViewData["Title"] = "ProjectForge – Genera proyectos completos con IA";
+    Layout = "_Layout";
+}
+
+<section class="hero">
+    <div class="hero-bg">
+        <div class="hero-grid"></div>
+    </div>
+    <div class="hero-content">
+        <div class="hero-badge">✦ Impulsado por IA · GitHub OAuth · Multi-stack</div>
+        <h1 class="hero-title">
+            Genera proyectos de software<br/>
+            <span class="gradient-text">listos para producción</span>
+        </h1>
+        <p class="hero-subtitle">
+            Selecciona tu stack, arquitectura e infraestructura. La IA sugiere patrones y librerías.
+            ProjectForge genera el código, lo sube a GitHub y configura tu CI/CD automáticamente.
+        </p>
+        <div class="hero-actions">
+            @if (User.Identity?.IsAuthenticated == true)
+            {
+                <a asp-controller="Wizard" asp-action="Index" class="btn btn-primary btn-lg">
+                    🚀 Crear nuevo proyecto
+                </a>
+                <a asp-controller="Dashboard" asp-action="Index" class="btn btn-ghost btn-lg">
+                    Ver Dashboard →
+                </a>
+            }
+            else
+            {
+                <a asp-controller="Auth" asp-action="GitHubLogin" class="btn btn-primary btn-lg">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+                    Empezar con GitHub — gratis
+                </a>
+                <span class="hero-note">Sin tarjeta de crédito. Conecta tu cuenta de GitHub.</span>
+            }
+        </div>
+    </div>
+</section>
+
+<!-- Features -->
+<section class="features-section">
+    <h2 class="section-title">Todo lo que necesitas para arrancar</h2>
+    <p class="section-subtitle">De cero a repositorio en menos de 2 minutos</p>
+
+    <div class="features-grid">
+        @foreach (var feat in new[] {
+            ("🏗️", "Wizard paso a paso", "Elige arquitectura, framework, base de datos e infraestructura con una interfaz guiada e intuitiva."),
+            ("🤖", "Sugerencias con IA", "Claude analiza tu stack y recomienda los patrones de diseño y librerías más adecuados para tu proyecto."),
+            ("⚡", "Generación automática", "Ejecuta dotnet new, npm init, django-admin y más comandos de scaffolding automáticamente en tu máquina."),
+            ("🐳", "Docker & Kubernetes", "Genera docker-compose.yml, Dockerfiles y manifiestos de Kubernetes listos para producción."),
+            ("📤", "Push a GitHub", "Crea el repositorio, hace el commit inicial y el push. Todo autenticado con tu GitHub OAuth token."),
+            ("🖥️", "Deploy en VPS", "Ingresa credenciales SSH de tus servidores y despliega directamente desde la interfaz."),
+            ("📄", "README generado", "La IA redacta un README completo con endpoints, comandos, CI/CD y guía de contribución."),
+            ("🔄", "GitHub Actions CI/CD", "Incluye pipeline de CI/CD listo para usar con build, test y deploy automático."),
+        })
+        {
+            <div class="feature-card">
+                <span class="feature-icon">@feat.Item1</span>
+                <h3>@feat.Item2</h3>
+                <p>@feat.Item3</p>
+            </div>
+        }
+    </div>
+</section>
+
+<!-- Supported stacks -->
+<section class="stacks-section">
+    <h2 class="section-title">Stacks soportados</h2>
+    <div class="stacks-row">
+        @foreach (var stack in new[] {
+            (".NET 8", "🔷"), ("Java / Spring", "☕"), ("Python / FastAPI", "🐍"),
+            ("PHP", "🐘"), ("Node.js", "🟨"), ("TypeScript", "📘"),
+            ("PostgreSQL", "🐘"), ("MySQL", "🐬"), ("MongoDB", "🍃"),
+            ("Docker", "🐳"), ("Kubernetes", "⚙️"), ("GitHub Actions", "🔄")
+        })
+        {
+            <div class="stack-badge">
+                <span>@stack.Item2</span> @stack.Item1
+            </div>
+        }
+    </div>
+</section>
+
+@section Scripts {
+<style>
+.hero { position: relative; min-height: 90vh; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.hero-bg { position: absolute; inset: 0; z-index: 0; }
+.hero-grid {
+    position: absolute; inset: 0;
+    background-image:
+        linear-gradient(rgba(59,130,246,.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(59,130,246,.06) 1px, transparent 1px);
+    background-size: 48px 48px;
+}
+.hero-bg::after {
+    content: ''; position: absolute; inset: 0;
+    background: radial-gradient(ellipse 70% 60% at 50% 40%, rgba(59,130,246,.12), transparent 70%);
+}
+.hero-content { position: relative; z-index: 1; text-align: center; max-width: 760px; padding: 2rem; }
+.hero-badge {
+    display: inline-block; padding: .35rem 1rem; border-radius: 999px;
+    background: rgba(59,130,246,.1); border: 1px solid rgba(59,130,246,.3);
+    color: #93c5fd; font-size: .8rem; font-weight: 500; margin-bottom: 1.5rem; letter-spacing: .05em;
+}
+.hero-title { font-size: clamp(2.2rem, 5vw, 3.8rem); font-weight: 700; line-height: 1.15; margin-bottom: 1.25rem; }
+.gradient-text { background: linear-gradient(135deg, #3b82f6, #8b5cf6, #ec4899); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.hero-subtitle { font-size: 1.15rem; color: var(--text-dim); max-width: 600px; margin: 0 auto 2rem; line-height: 1.7; }
+.hero-actions { display: flex; flex-direction: column; align-items: center; gap: 1rem; }
+.btn-lg { padding: .75rem 2rem; font-size: 1rem; }
+.hero-note { font-size: .8rem; color: var(--text-muted); }
+
+.features-section, .stacks-section { padding: 5rem 0; }
+.section-title { text-align: center; font-size: 2rem; margin-bottom: .5rem; }
+.section-subtitle { text-align: center; color: var(--text-muted); margin-bottom: 3rem; }
+.features-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1.25rem; }
+.feature-card {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 1.5rem; transition: all .2s;
+}
+.feature-card:hover { border-color: var(--primary); transform: translateY(-3px); box-shadow: 0 8px 32px rgba(59,130,246,.1); }
+.feature-icon { font-size: 1.8rem; display: block; margin-bottom: .75rem; }
+.feature-card h3 { font-size: 1rem; margin-bottom: .4rem; }
+.feature-card p { font-size: .875rem; color: var(--text-muted); line-height: 1.6; }
+
+.stacks-row { display: flex; flex-wrap: wrap; gap: .75rem; justify-content: center; }
+.stack-badge {
+    display: flex; align-items: center; gap: .4rem;
+    padding: .45rem 1rem; border-radius: 999px;
+    background: var(--bg-card); border: 1px solid var(--border);
+    font-size: .875rem; color: var(--text-dim);
+}
+</style>
+}
