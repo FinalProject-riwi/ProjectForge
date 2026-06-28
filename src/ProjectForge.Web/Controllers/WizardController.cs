@@ -57,6 +57,18 @@ public class WizardController : Controller
             return RedirectToAction("Index");
         }
 
+        // Sanitizar el nombre para que sea válido como nombre de carpeta y repo Git.
+        // Reemplaza cualquier carácter que no sea letra, dígito o guión.
+        var safeProjectName = System.Text.RegularExpressions.Regex.Replace(
+            projectName.Trim(), @"[^\w\-]", "-");
+        if (safeProjectName.Length < 2)
+        {
+            TempData["Error"] = "El nombre del proyecto contiene solo caracteres inválidos. Usa letras, números o guiones.";
+            return RedirectToAction("Index");
+        }
+        // Usar el nombre sanitizado de aquí en adelante
+        projectName = safeProjectName;
+
         // Validar que el userId del claim existe en BD.
         // Si la cookie se firmó con claves Data Protection rotadas (ej: reinicio de contenedor
         // sin volumen persistente), el claim puede traer un ID que ya no existe → FK violation.
@@ -86,12 +98,17 @@ public class WizardController : Controller
             .ToList();
         var libs     = TryParseJson<List<string>>(libsJson)     ?? new List<string>();
 
+        // Validaciones async para evitar bloquear el pool de conexiones
+        // (GetPatternOptions y GetLibraryOptions consultan la BD)
+        var patternOptions = await GetPatternOptionsAsync(architecture, framework);
+        var libraryOptions = await GetLibraryOptionsAsync(architecture, framework);
+
         if (!IsValidArchitecture(architecture) ||
             !IsValidFramework(architecture, framework) ||
             !IsValidDatabase(architecture, framework, database) ||
             !IsValidInfrastructure(architecture, framework, database, infrastructure) ||
-            patterns.Any(p => !IsValidPattern(architecture, framework, p)) ||
-            libs.Any(l => !IsValidLibrary(architecture, framework, l)))
+            patterns.Any(p => !patternOptions.Any(o => o.Value.Equals(NormalizePatternValue(p), StringComparison.OrdinalIgnoreCase))) ||
+            libs.Any(l => !libraryOptions.Any(o => o.Value.Equals(l, StringComparison.OrdinalIgnoreCase))))
         {
             TempData["Error"] = "La configuración seleccionada ya no es válida. Recarga el wizard y selecciona una opción disponible.";
             return RedirectToAction("Index");
@@ -135,11 +152,14 @@ public class WizardController : Controller
     [IgnoreAntiforgeryToken]
     public IActionResult StartGeneration(int id)
     {
-        // Lanzar en background para que el HTTP response vuelva inmediatamente.
-        // Los logs y el estado final llegan al browser por SignalR.
+        // Capturar IServiceProvider ANTES de entrar al Task.Run.
+        // HttpContext puede haber sido liberado cuando el task ejecute
+        // (el request ya terminó), causando ObjectDisposedException.
+        var services = HttpContext.RequestServices;
+
         _ = Task.Run(async () =>
         {
-            using var scope = HttpContext.RequestServices.CreateScope();
+            using var scope = services.CreateScope();
             var generator = scope.ServiceProvider.GetRequiredService<IProjectGeneratorService>();
             await generator.GenerateAsync(id);
         });
@@ -314,6 +334,23 @@ public class WizardController : Controller
             .ToList();
     }
 
+    // Versión async para validaciones en Step5Post (evita bloquear el pool de conexiones)
+    private async Task<List<OptionDto>> GetPatternOptionsAsync(ArchitectureType arch, FrameworkType framework)
+    {
+        var patterns = await _db.DesignPatterns
+            .Where(p => p.Architecture == arch)
+            .OrderBy(p => p.Name)
+            .ToListAsync();
+
+        return patterns
+            .GroupBy(p => NormalizePatternValue(p.Pattern))
+            .Select(g => SelectPatternForFramework(g.ToList(), arch, framework))
+            .Where(p => p != null)
+            .Select(p => p!)
+            .Select(p => new OptionDto(NormalizePatternValue(p.Pattern), p.Name))
+            .ToList();
+    }
+
     private static DesignPatternEntry? SelectPatternForFramework(
         IReadOnlyList<DesignPatternEntry> patterns,
         ArchitectureType arch,
@@ -353,6 +390,20 @@ public class WizardController : Controller
             .OrderByDescending(l => l.PopularityScore)
             .ThenBy(l => l.Name)
             .ToList();
+
+        return libraries
+            .Select(l => new OptionDto(l.PackageName, l.Name, l.Category))
+            .ToList();
+    }
+
+    // Versión async para validaciones en Step5Post
+    private async Task<List<OptionDto>> GetLibraryOptionsAsync(ArchitectureType arch, FrameworkType framework)
+    {
+        var libraries = await _db.Libraries
+            .Where(l => l.Architecture == arch && (l.Framework == null || l.Framework == framework))
+            .OrderByDescending(l => l.PopularityScore)
+            .ThenBy(l => l.Name)
+            .ToListAsync();
 
         return libraries
             .Select(l => new OptionDto(l.PackageName, l.Name, l.Category))

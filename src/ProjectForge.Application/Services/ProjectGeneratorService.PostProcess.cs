@@ -639,7 +639,22 @@ framework:
 
     private async Task<string> PushToGitHubAsync(Project project, string path, CancellationToken ct)
     {
-        var token = project.User.AccessToken;
+        // El access_token está encriptado en BD — desencriptar antes de usar
+        var encryptedToken = project.User.AccessToken;
+        string token;
+        try
+        {
+            token = _encryptionService.Decrypt(encryptedToken);
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException(
+                "No se pudo desencriptar el token de GitHub. El usuario debe volver a iniciar sesión.", ex);
+        }
+
+        if (string.IsNullOrWhiteSpace(token))
+            throw new InvalidOperationException("El token de acceso de GitHub está vacío. El usuario debe volver a iniciar sesión.");
+
         var repoUrl = await _github.CreateRepositoryAsync(token, project.Name, project.Description, ShouldCreatePrivateRepo(project.WizardConfig));
         await EmitLogAsync(project, "GitHub", $"✅ Repositorio creado: {repoUrl}", ct: ct);
 

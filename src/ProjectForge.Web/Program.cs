@@ -112,7 +112,8 @@ builder.Services.AddAuthentication(options =>
     options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
     options.DefaultChallengeScheme = "GitHub";
 })
-.AddCookie(options =>
+// Cookie principal de la aplicación
+.AddCookie(CookieAuthenticationDefaults.AuthenticationScheme, options =>
 {
     options.LoginPath = "/auth/login";
     options.LogoutPath = "/auth/logout";
@@ -123,10 +124,22 @@ builder.Services.AddAuthentication(options =>
     options.ExpireTimeSpan = TimeSpan.FromDays(30);
     options.SlidingExpiration = true;
 })
+// Cookie temporal para el ticket externo de GitHub OAuth
+// (scheme separado para evitar colisión con la cookie de app)
+.AddCookie("ExternalCookies", options =>
+{
+    options.Cookie.Name = "ProjectForge.External";
+    options.Cookie.SameSite = SameSiteMode.Lax;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+    options.ExpireTimeSpan = TimeSpan.FromMinutes(10);
+})
 .AddGitHub("GitHub", options =>
 {
     options.ClientId = githubClientId;
     options.ClientSecret = githubClientSecret;
+    // El ticket externo se almacena en la cookie "ExternalCookies",
+    // no en la cookie principal de la app — evita el redirect loop.
+    options.SignInScheme = "ExternalCookies";
     options.Scope.Add("repo");
     options.Scope.Add("workflow");
     options.Scope.Add("user:email");

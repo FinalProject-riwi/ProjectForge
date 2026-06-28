@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc;
 using ProjectForge.Core.Entities;
+using ProjectForge.Core.Interfaces;
 using ProjectForge.Infrastructure.Data;
 using System.Net;
 using System.Net.Http.Headers;
@@ -17,17 +18,20 @@ public class AuthController : Controller
     private readonly IConfiguration _configuration;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<AuthController> _logger;
+    private readonly IEncryptionService _encryptionService;
 
     public AuthController(
         AppDbContext db,
         IConfiguration configuration,
         IHttpClientFactory httpClientFactory,
-        ILogger<AuthController> logger)
+        ILogger<AuthController> logger,
+        IEncryptionService encryptionService)
     {
         _db = db;
         _configuration = configuration;
         _httpClientFactory = httpClientFactory;
         _logger = logger;
+        _encryptionService = encryptionService;
     }
 
     [HttpGet("/auth/login")]
@@ -60,8 +64,9 @@ public class AuthController : Controller
     [HttpGet("/auth/complete")]
     public async Task<IActionResult> Complete(string? returnUrl = null)
     {
-        // Intentar leer el external cookie de GitHub que el middleware OAuth dejó
-        var externalResult = await HttpContext.AuthenticateAsync("GitHub");
+        // Leer el ticket externo de GitHub desde la cookie "ExternalCookies"
+        // (scheme separado configurado en Program.cs con options.SignInScheme = "ExternalCookies")
+        var externalResult = await HttpContext.AuthenticateAsync("ExternalCookies");
 
         if (externalResult.Succeeded)
         {
@@ -76,6 +81,7 @@ public class AuthController : Controller
             var accessToken = externalResult.Properties?.GetTokenValue("access_token") ?? "";
 
             // Upsert usuario en BD
+            // Guardar el accessToken encriptado en BD para seguridad
             var user = _db.Users.FirstOrDefault(u => u.GitHubId == githubId);
             if (user == null)
             {
@@ -85,7 +91,10 @@ public class AuthController : Controller
             user.Username    = username;
             user.Email       = email;
             user.AvatarUrl   = string.IsNullOrWhiteSpace(avatar) ? user.AvatarUrl : avatar;
-            user.AccessToken = accessToken;
+            // Encriptar el access_token antes de persistir en BD
+            user.AccessToken = !string.IsNullOrWhiteSpace(accessToken)
+                ? _encryptionService.Encrypt(accessToken)
+                : user.AccessToken;
             user.UpdatedAt   = DateTime.UtcNow;
             await _db.SaveChangesAsync();
 
@@ -105,6 +114,9 @@ public class AuthController : Controller
                 CookieAuthenticationDefaults.AuthenticationScheme,
                 appPrincipal,
                 new AuthenticationProperties { IsPersistent = true });
+
+            // Limpiar la cookie temporal externa (ya no la necesitamos)
+            await HttpContext.SignOutAsync("ExternalCookies");
 
             return LocalRedirect(returnUrl ?? "/dashboard");
         }
@@ -174,7 +186,11 @@ public class AuthController : Controller
                 "Basic",
                 Convert.ToBase64String(Encoding.UTF8.GetBytes($"{clientId}:{clientSecret}")));
             request.Headers.UserAgent.ParseAdd("ProjectForge");
-            request.Content = JsonContent.Create(new { access_token = user.AccessToken });
+            // Desencriptar antes de enviar a la API de GitHub
+            string plainToken;
+            try { plainToken = _encryptionService.Decrypt(user.AccessToken); }
+            catch { plainToken = user.AccessToken; } // fallback si ya está en plano (tokens legacy)
+            request.Content = JsonContent.Create(new { access_token = plainToken });
 
             using var client = _httpClientFactory.CreateClient();
             using var response = await client.SendAsync(request);

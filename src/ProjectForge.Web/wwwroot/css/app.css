@@ -317,3 +317,80 @@ a { color: var(--primary); text-decoration: none; }
 @media (max-width: 768px) {
   .detail-grid { grid-template-columns: 1fr; }
 }
+
+/* ── Light theme ─────────────────────────────────────────────────────────── */
+[data-theme="light"] {
+  --bg: #f8fafc;
+  --bg-card: #ffffff;
+  --bg-elevated: #f1f5f9;
+  --border: #e2e8f0;
+  --border-active: #3b82f6;
+  --text: #0f172a;
+  --text-muted: #64748b;
+  --text-dim: #475569;
+  --primary: #2563eb;
+  --primary-dark: #1d4ed8;
+  --success: #059669;
+  --danger: #dc2626;
+  --warning: #d97706;
+  --accent: #7c3aed;
+  --shadow: 0 4px 24px rgba(0,0,0,.08);
+}
+
+/* Ajustes puntuales para el tema claro */
+[data-theme="light"] .navbar {
+  background: rgba(248,250,252,.97);
+  border-bottom-color: var(--border);
+}
+[data-theme="light"] .hero-bg {
+  background: linear-gradient(135deg, #eff6ff 0%, #f8fafc 100%);
+}
+[data-theme="light"] .hero-grid {
+  opacity: 0.06;
+}
+[data-theme="light"] .btn-ghost {
+  background: transparent;
+  color: var(--text-dim);
+  border-color: var(--border);
+}
+[data-theme="light"] .btn-ghost:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+[data-theme="light"] .arch-card,
+[data-theme="light"] .db-card,
+[data-theme="light"] .infra-card,
+[data-theme="light"] .pattern-card,
+[data-theme="light"] .lib-card {
+  background: var(--bg-card);
+  border-color: var(--border);
+}
+[data-theme="light"] .arch-card:hover,
+[data-theme="light"] .db-card:hover {
+  border-color: var(--primary);
+}
+[data-theme="light"] .log-entry { background: var(--bg-elevated); }
+[data-theme="light"] .log-entry.error { background: #fef2f2; }
+
+/* ── Theme toggle button ─────────────────────────────────────────────────── */
+.theme-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all .2s;
+  flex-shrink: 0;
+  font-size: 1rem;
+  line-height: 1;
+}
+.theme-toggle:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--bg-card);
+}

@@ -27,19 +27,22 @@ public class ApiV1Controller : ControllerBase
     private readonly ICreateProjectUseCase _createProject;
     private readonly IProjectGeneratorService _generator;
     private readonly IProjectRepository _projects;
+    private readonly IEncryptionService _encryption;
 
     public ApiV1Controller(
         AppDbContext db,
         IAiSuggestionService ai,
         ICreateProjectUseCase createProject,
         IProjectGeneratorService generator,
-        IProjectRepository projects)
+        IProjectRepository projects,
+        IEncryptionService encryption)
     {
         _db = db;
         _ai = ai;
         _createProject = createProject;
         _generator = generator;
         _projects = projects;
+        _encryption = encryption;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -52,7 +55,23 @@ public class ApiV1Controller : ControllerBase
         if (string.IsNullOrWhiteSpace(authHeader) || !authHeader.StartsWith("Bearer "))
             return null;
         var token = authHeader["Bearer ".Length..].Trim();
-        return await _db.Users.FirstOrDefaultAsync(u => u.AccessToken == token);
+
+        // El access_token se almacena encriptado en BD — hay que desencriptar
+        // cada registro para comparar. Para no afectar el pool de conexiones,
+        // traemos solo los IDs + tokens encriptados (sin cargar toda la entidad).
+        var users = await _db.Users
+            .Select(u => new { u.Id, u.AccessToken })
+            .ToListAsync();
+
+        var matched = users.FirstOrDefault(u =>
+        {
+            if (string.IsNullOrWhiteSpace(u.AccessToken)) return false;
+            try { return _encryption.Decrypt(u.AccessToken) == token; }
+            catch { return false; }
+        });
+
+        if (matched == null) return null;
+        return await _db.Users.FindAsync(matched.Id);
     }
 
     private IActionResult Unauthorized401(string message = "Token inválido o expirado") =>
@@ -314,9 +333,13 @@ public class ApiV1Controller : ControllerBase
         if (project == null || project.UserId != user.Id)
             return NotFound404("Proyecto no encontrado");
 
+        // Capturar IServiceProvider ANTES del Task.Run — HttpContext puede liberarse
+        // después de que el response salga (el request ya terminó).
+        var services = HttpContext.RequestServices;
+
         _ = Task.Run(async () =>
         {
-            using var scope = HttpContext.RequestServices.CreateScope();
+            using var scope = services.CreateScope();
             var generator = scope.ServiceProvider.GetRequiredService<IProjectGeneratorService>();
             await generator.GenerateAsync(id);
         });

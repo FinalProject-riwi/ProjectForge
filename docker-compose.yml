@@ -1,5 +1,5 @@
 services:
-  # ── Aplicación Web (.NET 10) ───────────────────────────────────────────────
+  # ── Aplicación Web (.NET 10 MVC + Wizard) ─────────────────────────────────
   web:
     build:
       context: .
@@ -26,6 +26,37 @@ services:
     depends_on:
       sqlserver:
         condition: service_healthy
+    restart: on-failure
+    networks:
+      - projectforge-net
+
+  # ── API REST con Swagger ──────────────────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.API
+    container_name: projectforge-api
+    ports:
+      - "5001:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:8080
+      - DOTNET_RUNNING_IN_CONTAINER=true
+      # Comparte la misma BD que el servicio web
+      - ConnectionStrings__Default=Server=sqlserver,1433;Database=ProjectForgeDb;User Id=sa;Password=${DB_PASSWORD:-ProjectForge!23};TrustServerCertificate=True;MultipleActiveResultSets=true;Connect Timeout=30
+      - Anthropic__ApiKey=${ANTHROPIC_API_KEY:-PLACEHOLDER}
+      - OpenAI__ApiKey=${OPENAI_API_KEY:-PLACEHOLDER}
+      - Gemini__ApiKey=${GEMINI_API_KEY:-PLACEHOLDER}
+      - Encryption__Key=${ENCRYPTION_KEY:-DefaultKeyChangeThisInProduction32}
+      - Generation__WorkspacePath=/workspaces
+    volumes:
+      - workspaces:/workspaces
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      # Opcional: esperar al web para que aplique migraciones primero
+      web:
+        condition: service_started
     restart: on-failure
     networks:
       - projectforge-net
