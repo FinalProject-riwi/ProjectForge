@@ -30,17 +30,17 @@
 
             <div class="arch-grid">
                 @foreach (var arch in new[] {
-                    ("DotNet", "C# / .NET", "🔷", "ASP.NET Core, Blazor, Minimal API"),
-                    ("Java", "Java", "☕", "Spring Boot, Quarkus, Micronaut"),
-                    ("Python", "Python", "🐍", "FastAPI, Django, Flask"),
-                    ("Php", "PHP", "🐘", "Laravel, Symfony"),
-                    ("JavaScript", "JavaScript", "🟨", "Node.js, Express, NestJS, Next.js"),
-                    ("TypeScript", "TypeScript", "🔷", "NestTS, Next.js, Angular")
+                    ("DotNet",     "C# / .NET",   "/img/logos/languages/csharp.png",     "ASP.NET Core, Blazor, Minimal API"),
+                    ("Java",       "Java",         "/img/logos/languages/java.png",        "Spring Boot, Quarkus, Micronaut"),
+                    ("Python",     "Python",       "/img/logos/languages/python.png",      "FastAPI, Django, Flask"),
+                    ("Php",        "PHP",          "/img/logos/languages/php.png",         "Laravel, Symfony"),
+                    ("JavaScript", "JavaScript",   "/img/logos/languages/javascript.png",  "Node.js, Express, NestJS, Next.js"),
+                    ("TypeScript", "TypeScript",   "/img/logos/languages/typescript.png",  "NestTS, Next.js (TS)")
                 })
                 {
                     <label class="arch-card" data-value="@arch.Item1">
                         <input type="radio" name="architecture" value="@arch.Item1" />
-                        <span class="arch-icon">@arch.Item3</span>
+                        <img src="@arch.Item3" alt="@arch.Item2" class="arch-logo" onerror="this.style.display='none'" />
                         <span class="arch-name">@arch.Item2</span>
                         <span class="arch-desc">@arch.Item4</span>
                     </label>
@@ -68,17 +68,17 @@
                 <label>Base de Datos</label>
                 <div class="db-grid">
                     @foreach (var db in new[] {
-                        ("PostgreSQL", "🐘", "Recomendado"),
-                        ("MySQL", "🐬", "Popular"),
-                        ("SqlServer", "🟦", "Empresarial"),
-                        ("MongoDB", "🍃", "NoSQL"),
-                        ("Redis", "🔴", "Cache/Cola"),
-                        ("SQLite", "📦", "Desarrollo")
+                        ("PostgreSQL", "/img/logos/databases/postgresql.png", "Recomendado"),
+                        ("MySQL",      "/img/logos/databases/mysql.png",      "Popular"),
+                        ("SqlServer",  "/img/logos/databases/sqlserver.png",  "Empresarial"),
+                        ("MongoDB",    "/img/logos/databases/mongodb.png",    "NoSQL"),
+                        ("Redis",      "/img/logos/databases/redis.png",      "Cache/Cola"),
+                        ("SQLite",     "/img/logos/databases/sqlite.png",     "Desarrollo")
                     })
                     {
                         <label class="db-card" data-value="@db.Item1">
                             <input type="radio" name="database" value="@db.Item1" />
-                            <span class="db-icon">@db.Item2</span>
+                            <img src="@db.Item2" alt="@db.Item1" class="db-logo" onerror="this.style.display='none'" />
                             <span class="db-name">@db.Item1</span>
                             <span class="db-badge">@db.Item3</span>
                         </label>
@@ -100,13 +100,13 @@
                 </label>
                 <label class="infra-card" data-value="DockerCompose">
                     <input type="radio" name="infrastructure" value="DockerCompose" />
-                    <span class="infra-icon">🐳</span>
+                    <img src="/img/logos/infra/docker.png" alt="Docker" class="infra-logo" onerror="this.style.display='none'" />
                     <strong>Docker Compose</strong>
                     <span>Ideal para desarrollo local y un solo servidor</span>
                 </label>
                 <label class="infra-card" data-value="Kubernetes">
                     <input type="radio" name="infrastructure" value="Kubernetes" />
-                    <span class="infra-icon">⚙️</span>
+                    <img src="/img/logos/infra/kubernetes.png" alt="Kubernetes" class="infra-logo" onerror="this.style.display='none'" />
                     <strong>Kubernetes</strong>
                     <span>Escalado horizontal, múltiples VPS</span>
                 </label>
@@ -129,6 +129,9 @@
                 <span class="ai-icon">🤖</span>
                 <span id="ai-rationale">Analizando tu configuración con IA...</span>
             </div>
+            <p class="step-description" style="font-size:.82rem;color:var(--text-muted);margin-top:.5rem">
+                Se muestran todos los patrones y librerías disponibles para tu stack. La IA marcará sus sugerencias con ✦.
+            </p>
 
             <div class="two-columns">
                 <div>

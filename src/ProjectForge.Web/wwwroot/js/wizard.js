@@ -1,4 +1,4 @@
-// ── ProjectForge Wizard ───────────────────────────────────────────────────────
+// ── TabBuilder Wizard ─────────────────────────────────────────────────────────
 
 const state = {
   currentStep: 1,
@@ -14,60 +14,60 @@ const state = {
 };
 
 const architectureMeta = {
-  DotNet: { label: 'C# / .NET', icon: '🔷', desc: 'ASP.NET Core, Blazor, Minimal API' },
-  Java: { label: 'Java', icon: '☕', desc: 'Spring Boot, Quarkus, Micronaut' },
-  Python: { label: 'Python', icon: '🐍', desc: 'FastAPI, Django, Flask' },
-  Php: { label: 'PHP', icon: '🐘', desc: 'Laravel, Symfony' },
-  JavaScript: { label: 'JavaScript', icon: '🟨', desc: 'Node.js, Express, NestJS, Next.js' },
-  TypeScript: { label: 'TypeScript', icon: '🔷', desc: 'NestTS, Next.js, Angular' },
+  DotNet:     { label: 'C# / .NET',   logo: '/img/logos/languages/csharp.png',     desc: 'ASP.NET Core, Blazor, Minimal API' },
+  Java:       { label: 'Java',        logo: '/img/logos/languages/java.png',        desc: 'Spring Boot, Quarkus, Micronaut' },
+  Python:     { label: 'Python',      logo: '/img/logos/languages/python.png',      desc: 'FastAPI, Django, Flask' },
+  Php:        { label: 'PHP',         logo: '/img/logos/languages/php.png',         desc: 'Laravel, Symfony' },
+  JavaScript: { label: 'JavaScript',  logo: '/img/logos/languages/javascript.png',  desc: 'Node.js, Express, NestJS, Next.js' },
+  TypeScript: { label: 'TypeScript',  logo: '/img/logos/languages/typescript.png',  desc: 'NestTS, Next.js (TS)' },
 };
 
 const databaseMeta = {
-  PostgreSQL: { icon: '🐘', badge: 'Recomendado' },
-  MySQL: { icon: '🐬', badge: 'Popular' },
-  SqlServer: { icon: '🟦', badge: 'Empresarial' },
-  MongoDB: { icon: '🍃', badge: 'NoSQL' },
-  Redis: { icon: '🔴', badge: 'Cache/Cola' },
-  SQLite: { icon: '📦', badge: 'Desarrollo' },
+  PostgreSQL: { logo: '/img/logos/databases/postgresql.png', badge: 'Recomendado' },
+  MySQL:      { logo: '/img/logos/databases/mysql.png',      badge: 'Popular' },
+  SqlServer:  { logo: '/img/logos/databases/sqlserver.png',  badge: 'Empresarial' },
+  MongoDB:    { logo: '/img/logos/databases/mongodb.png',    badge: 'NoSQL' },
+  Redis:      { logo: '/img/logos/databases/redis.png',      badge: 'Cache/Cola' },
+  SQLite:     { logo: '/img/logos/databases/sqlite.png',     badge: 'Desarrollo' },
 };
 
 const infrastructureMeta = {
-  None: { icon: '💻', label: 'Sin contenedores', desc: 'Solo el código del proyecto' },
-  DockerCompose: { icon: '🐳', label: 'Docker Compose', desc: 'Ideal para desarrollo local y un solo servidor' },
-  Kubernetes: { icon: '⚙️', label: 'Kubernetes', desc: 'Escalado horizontal, múltiples VPS' },
+  None:         { icon: '💻',  logo: null,                               label: 'Sin contenedores', desc: 'Solo el código del proyecto' },
+  DockerCompose:{ icon: '🐳',  logo: '/img/logos/infra/docker.png',      label: 'Docker Compose',   desc: 'Ideal para desarrollo local y un solo servidor' },
+  Kubernetes:   { icon: '⚙️', logo: '/img/logos/infra/kubernetes.png',  label: 'Kubernetes',       desc: 'Escalado horizontal, múltiples VPS' },
 };
 
 const frameworkCatalog = {
   DotNet: [
-    { value: 'AspNetCoreWebApi', label: 'ASP.NET Core Web API', versions: ['10.0', '8.0', '7.0'] },
-    { value: 'AspNetCoreMVC', label: 'ASP.NET Core MVC', versions: ['10.0', '8.0'] },
-    { value: 'BlazorServer', label: 'Blazor Server', versions: ['10.0', '8.0'] },
-    { value: 'BlazorWasm', label: 'Blazor WebAssembly', versions: ['10.0', '8.0'] },
-    { value: 'MinimalApi', label: 'Minimal API', versions: ['10.0', '8.0'] },
+    { value: 'AspNetCoreWebApi', label: 'ASP.NET Core Web API', logo: '/img/logos/frameworks/aspdotnet.png', versions: ['10.0', '8.0', '7.0'] },
+    { value: 'AspNetCoreMVC',    label: 'ASP.NET Core MVC',     logo: '/img/logos/frameworks/aspdotnet.png', versions: ['10.0', '8.0'] },
+    { value: 'BlazorServer',     label: 'Blazor Server',        logo: '/img/logos/frameworks/aspdotnet.png', versions: ['10.0', '8.0'] },
+    { value: 'BlazorWasm',       label: 'Blazor WebAssembly',   logo: '/img/logos/frameworks/aspdotnet.png', versions: ['10.0', '8.0'] },
+    { value: 'MinimalApi',       label: 'Minimal API',          logo: '/img/logos/frameworks/aspdotnet.png', versions: ['10.0', '8.0'] },
   ],
   Java: [
-    { value: 'SpringBoot', label: 'Spring Boot', versions: ['3.3', '3.2', '2.7'] },
-    { value: 'Quarkus', label: 'Quarkus', versions: ['3.x'] },
-    { value: 'Micronaut', label: 'Micronaut', versions: ['4.x'] },
+    { value: 'SpringBoot', label: 'Spring Boot', logo: '/img/logos/frameworks/springboot.png', versions: ['3.3', '3.2', '2.7'] },
+    { value: 'Quarkus',    label: 'Quarkus',     logo: '/img/logos/frameworks/quarkus.png',    versions: ['3.x'] },
+    { value: 'Micronaut',  label: 'Micronaut',   logo: '/img/logos/frameworks/micronaut.png',  versions: ['4.x'] },
   ],
   Python: [
-    { value: 'FastAPI', label: 'FastAPI', versions: ['0.115', '0.110'] },
-    { value: 'Django', label: 'Django', versions: ['5.0', '4.2'] },
-    { value: 'Flask', label: 'Flask', versions: ['3.0', '2.3'] },
+    { value: 'FastAPI', label: 'FastAPI', logo: '/img/logos/frameworks/fastapi.png', versions: ['0.115', '0.110'] },
+    { value: 'Django',  label: 'Django',  logo: '/img/logos/frameworks/django.png',  versions: ['5.0', '4.2'] },
+    { value: 'Flask',   label: 'Flask',   logo: '/img/logos/frameworks/flask.png',   versions: ['3.0', '2.3'] },
   ],
   Php: [
-    { value: 'Laravel', label: 'Laravel', versions: ['11.x', '10.x'] },
-    { value: 'Symfony', label: 'Symfony', versions: ['7.x', '6.x'] },
+    { value: 'Laravel',  label: 'Laravel',  logo: '/img/logos/frameworks/laravel.png',  versions: ['11.x', '10.x'] },
+    { value: 'Symfony',  label: 'Symfony',  logo: '/img/logos/frameworks/symfony.png',  versions: ['7.x', '6.x'] },
   ],
   JavaScript: [
-    { value: 'NodeJs', label: 'Node.js', versions: ['22.x', '20.x'] },
-    { value: 'ExpressJs', label: 'Express.js', versions: ['5.x', '4.x'] },
-    { value: 'NestJs', label: 'NestJS', versions: ['10.x'] },
-    { value: 'NextJs', label: 'Next.js', versions: ['14.x'] },
+    { value: 'NodeJs',    label: 'Node.js',    logo: '/img/logos/frameworks/nodejs.png',    versions: ['22.x', '20.x'] },
+    { value: 'ExpressJs', label: 'Express.js', logo: '/img/logos/frameworks/expressjs.png', versions: ['5.x', '4.x'] },
+    { value: 'NestJs',    label: 'NestJS',     logo: '/img/logos/frameworks/nestjs.png',    versions: ['10.x'] },
+    { value: 'NextJs',    label: 'Next.js',    logo: '/img/logos/frameworks/nextjs.png',    versions: ['14.x'] },
   ],
   TypeScript: [
-    { value: 'NestTs', label: 'NestJS (TypeScript)', versions: ['10.x'] },
-    { value: 'NextTs', label: 'Next.js (TypeScript)', versions: ['14.x'] },
+    { value: 'NestTs', label: 'NestJS (TypeScript)', logo: '/img/logos/frameworks/nestts.png', versions: ['10.x'] },
+    { value: 'NextTs', label: 'Next.js (TypeScript)', logo: '/img/logos/frameworks/nextts.png', versions: ['14.x'] },
   ],
 };
 
@@ -152,62 +152,84 @@ function clearStep4() {
 function initializeArchitectureCards() {
   document.querySelectorAll('.arch-card').forEach(card => {
     card.addEventListener('click', () => {
+      const newArch = card.dataset.value;
+      if (state.architecture !== newArch) {
+        state.framework = null;
+        state.frameworkVersion = null;
+        state.database = null;
+        state.infrastructure = 'None';
+        state.patterns = [];
+        state.libraries = [];
+        resetSelections();
+        clearStep4();
+        renderFrameworkOptions([]);
+      }
       document.querySelectorAll('.arch-card').forEach(c => c.classList.remove('selected'));
       card.classList.add('selected');
       card.querySelector('input').checked = true;
+      state.architecture = newArch;
 
-      state.architecture = card.dataset.value;
-      state.framework = null;
-      state.frameworkVersion = null;
-      state.database = null;
-      state.infrastructure = 'None';
-      state.patterns = [];
-      state.libraries = [];
-
-      const frameworkContainer = document.getElementById('framework-options');
-      const versionSelect = document.getElementById('framework-version-select');
-      if (frameworkContainer) frameworkContainer.innerHTML = '';
-      if (versionSelect) versionSelect.innerHTML = '<option value="">Selecciona un framework primero</option>';
-
-      resetSelections();
-      renderFrameworkOptions(getFrameworkOptionsForArchitecture(state.architecture));
-      clearStep4();
+      if (frameworkCatalog[newArch]) {
+        renderFrameworkOptions(frameworkCatalog[newArch]);
+      }
     });
   });
 }
 
-function getFrameworkOptionsForArchitecture(arch) {
-  return frameworkCatalog[arch] || [];
-}
+// ── Step 2: Framework ─────────────────────────────────────────────────────────
 
 function renderFrameworkOptions(options) {
   const container = document.getElementById('framework-options');
   if (!container) return;
 
-  // Limpiar selección previa
-  state.framework = null;
-  state.frameworkVersion = null;
+  if (!options || options.length === 0) {
+    container.innerHTML = '<p style="color:var(--text-muted)">Selecciona una arquitectura primero.</p>';
+    const versionSelect = document.getElementById('framework-version-select');
+    if (versionSelect) {
+      versionSelect.innerHTML = '<option value="">Selecciona un framework primero</option>';
+    }
+    return;
+  }
 
   container.innerHTML = options.map(opt => `
-    <div class="db-card framework-option" data-value="${opt.value}" data-versions='${JSON.stringify(opt.availableVersions || opt.versions || [])}'>
-      <strong>${opt.label}</strong>
-    </div>
+    <label class="fw-card${state.framework === opt.value ? ' selected' : ''}" data-value="${opt.value}">
+      <input type="radio" name="framework" value="${opt.value}" ${state.framework === opt.value ? 'checked' : ''} />
+      <img src="${opt.logo}" alt="${opt.label}" class="fw-logo" onerror="this.style.display='none'" />
+      <span class="fw-name">${opt.label}</span>
+    </label>
   `).join('');
 
-  // Registrar listeners en los elementos recién creados
-  container.querySelectorAll('.framework-option').forEach(card => {
-    card.addEventListener('click', () => {
-      container.querySelectorAll('.framework-option').forEach(c => c.classList.remove('selected'));
-      card.classList.add('selected');
-      const versions = JSON.parse(card.dataset.versions || '[]');
-      state.framework = card.dataset.value;
-      state.frameworkVersion = versions[0] ?? '';
+  // Set version select
+  const versionSelect = document.getElementById('framework-version-select');
+  if (versionSelect && state.framework) {
+    const cur = options.find(o => o.value === state.framework);
+    if (cur) {
+      versionSelect.innerHTML = cur.versions.map(v => `<option value="${v}">${v}</option>`).join('');
+      state.frameworkVersion = cur.versions[0];
+    }
+  } else if (versionSelect) {
+    versionSelect.innerHTML = '<option value="">Selecciona un framework primero</option>';
+  }
 
-      const sel = document.getElementById('framework-version-select');
-      sel.innerHTML = versions.map(v => `<option value="${v}">${v}</option>`).join('');
+  // Attach click handlers
+  container.querySelectorAll('.fw-card').forEach(card => {
+    card.addEventListener('click', () => {
+      container.querySelectorAll('.fw-card').forEach(c => c.classList.remove('selected'));
+      card.classList.add('selected');
+      card.querySelector('input').checked = true;
+      state.framework = card.dataset.value;
+
+      const selected = options.find(o => o.value === state.framework);
+      if (selected && versionSelect) {
+        versionSelect.innerHTML = selected.versions.map(v => `<option value="${v}">${v}</option>`).join('');
+        state.frameworkVersion = selected.versions[0];
+      }
+      clearStep4();
     });
   });
 }
+
+// ── Step 2: Database ──────────────────────────────────────────────────────────
 
 function initializeDatabaseCards() {
   document.querySelectorAll('.db-card').forEach(card => {
@@ -215,35 +237,24 @@ function initializeDatabaseCards() {
       document.querySelectorAll('.db-card').forEach(c => c.classList.remove('selected'));
       card.classList.add('selected');
       card.querySelector('input').checked = true;
-
       state.database = card.dataset.value;
-      state.infrastructure = 'None';
-      state.patterns = [];
-      state.libraries = [];
-
-      document.querySelectorAll('.infra-card').forEach(c => c.classList.remove('selected'));
-      document.querySelectorAll('.infra-card input').forEach(input => {
-        input.checked = input.value === 'None';
-      });
-      const noneInfra = document.querySelector('.infra-card[data-value="None"]');
-      noneInfra?.classList.add('selected');
-      const vpsSection = document.getElementById('vps-section');
-      if (vpsSection) vpsSection.style.display = 'none';
       clearStep4();
     });
   });
 }
 
+// ── Step 3: Infrastructure ────────────────────────────────────────────────────
+
 function initializeInfrastructureCards() {
   document.querySelectorAll('.infra-card').forEach(card => {
     card.addEventListener('click', () => {
-      document.querySelectorAll('.infra-card').forEach(c => c.classList.remove('selected'));
+      document.querySelectorAll('.infra-card').forEach(c => c.classList.remove('selected'));;
       card.classList.add('selected');
       card.querySelector('input').checked = true;
       state.infrastructure = card.dataset.value;
       document.getElementById('vps-section').style.display =
         state.infrastructure === 'Kubernetes' ? 'block' : 'none';
-      loadStep4Data();
+      clearStep4();
     });
   });
 }
@@ -310,13 +321,13 @@ async function loadStep4Data() {
         suggestedLibraries = data.suggestedLibraries || [];
         rationale = data.rationale || '';
       } else {
-        rationale = 'No se pudieron cargar sugerencias de IA. Selecciona manualmente.';
+        rationale = 'No se pudieron cargar sugerencias de IA. Selecciona manualmente del catálogo.';
       }
     } catch {
-      rationale = 'No se pudieron cargar sugerencias de IA. Selecciona manualmente.';
+      rationale = 'No se pudieron cargar sugerencias de IA. Selecciona manualmente del catálogo.';
     }
 
-    if (banner) banner.textContent = rationale || 'Selecciona manualmente las opciones del catálogo.';
+    if (banner) banner.textContent = rationale || 'Selecciona del catálogo completo. La IA marcará sus sugerencias con ✦.';
     renderPatterns(patternCatalog || [], suggestedPatterns);
     renderLibraries(libraryCatalog || [], suggestedLibraries);
   } catch (e) {
@@ -361,14 +372,18 @@ function renderLibraries(all, suggested) {
   document.getElementById('libraries-list').innerHTML = all.length
     ? all.map(l => {
         const ok = suggestedSet.has(normalizeToken(l.value)) || suggestedSet.has(normalizeToken(l.label));
+        const checked = ok || state.libraries.includes(l.value);
         return `<label class="${ok ? 'suggested' : ''}">
-            <input type="checkbox" value="${l.value}" ${ok ? 'checked' : ''} onchange="toggleSel('libraries','${l.value}',this.checked)" />
+            <input type="checkbox" value="${l.value}" ${checked ? 'checked' : ''} onchange="toggleSel('libraries','${l.value}',this.checked)" />
             ${l.label} ${l.badge ? `<span style="font-size:.7rem;color:#8b5cf6">${l.badge}</span>` : ''} ${ok ? '<span style="font-size:.7rem;color:#8b5cf6">✦ IA</span>' : ''}
           </label>`;
       }).join('')
     : '<p style="color:var(--text-muted);font-size:.95rem">No hay librerías disponibles para esta combinación.</p>';
 
-  state.libraries = all.filter(l => suggestedSet.has(normalizeToken(l.value)) || suggestedSet.has(normalizeToken(l.label))).map(l => l.value);
+  // Seed libraries state from suggested (if nothing already selected)
+  if (state.libraries.length === 0) {
+    state.libraries = all.filter(l => suggestedSet.has(normalizeToken(l.value)) || suggestedSet.has(normalizeToken(l.label))).map(l => l.value);
+  }
 }
 
 function toggleSel(key, value, checked) {
@@ -381,11 +396,20 @@ function toggleSel(key, value, checked) {
 function buildSummary() {
   const el = document.getElementById('config-summary');
   if (!el) return;
+
+  const archMeta = architectureMeta[state.architecture] || {};
+  const dbMeta = databaseMeta[state.database] || {};
+  const infraMeta = infrastructureMeta[state.infrastructure] || {};
+
+  const logoHtml = (src, alt) => src
+    ? `<img src="${src}" alt="${alt}" style="width:20px;height:20px;object-fit:contain;vertical-align:middle;margin-right:6px" onerror="this.style.display='none'" />`
+    : '';
+
   el.innerHTML = [
-    ['Arquitectura', formatArchitecture(state.architecture)],
+    ['Arquitectura', `${logoHtml(archMeta.logo, archMeta.label)}${archMeta.label || state.architecture}`],
     ['Framework',    state.framework + (state.frameworkVersion ? ' ' + state.frameworkVersion : '')],
-    ['Base de Datos', state.database],
-    ['Infraestructura', state.infrastructure],
+    ['Base de Datos', `${logoHtml(dbMeta.logo, state.database)}${state.database}`],
+    ['Infraestructura', `${infraMeta.logo ? logoHtml(infraMeta.logo, infraMeta.label) : infraMeta.icon + ' '}${infraMeta.label || state.infrastructure}`],
     ['Patrones', state.patterns.join(', ') || 'Ninguno'],
     ['Librerías', state.libraries.slice(0, 5).join(', ') + (state.libraries.length > 5 ? '…' : '') || 'Ninguna'],
   ].map(([label, value]) => `
@@ -395,33 +419,18 @@ function buildSummary() {
     </div>`).join('');
 }
 
-function formatArchitecture(value) {
-  return ({
-    DotNet: 'C# / .NET',
-    Java: 'Java',
-    Python: 'Python',
-    Php: 'PHP',
-    JavaScript: 'JavaScript',
-    TypeScript: 'TypeScript',
-  })[value] || value || '—';
-}
-
 // ── Form Submit ───────────────────────────────────────────────────────────────
 
 document.getElementById('wizard-form').addEventListener('submit', function(e) {
   e.preventDefault();
   const name = document.getElementById('project-name')?.value?.trim();
   if (!name) { showError('Ingresa un nombre para el proyecto'); return; }
+  if (!/^[a-zA-Z0-9_-]+$/.test(name)) { showError('El nombre solo puede contener letras, números, guiones y guiones bajos'); return; }
 
   const btn = document.getElementById('btn-submit');
   btn.disabled = true;
   btn.textContent = 'Creando proyecto...';
 
-  // Inyectamos los campos del estado del wizard como hidden inputs y hacemos
-  // un submit nativo del form. Esto garantiza que:
-  //   1. El antiforgery token ya está en el form (puesto por @Html.AntiForgeryToken())
-  //   2. El browser maneja los redirects correctamente (no fetch)
-  //   3. No hay problemas con SameSite cookies ni CORS
   const form = e.target;
   form.method = 'POST';
   form.action = '/wizard/step5';
@@ -469,8 +478,8 @@ function collectVpsData() {
 initializeArchitectureCards();
 initializeDatabaseCards();
 initializeInfrastructureCards();
-// La selección de framework (clase .selected + actualización de estado) se
-// registra dentro de renderFrameworkOptions(), que es donde se crean las
-// tarjetas dinámicamente. No se necesita un segundo listener aquí.
 renderFrameworkOptions([]);
 renderStep();
+
+// Set None as default infrastructure selected
+document.querySelector('.infra-card[data-value="None"]')?.classList.add('selected');

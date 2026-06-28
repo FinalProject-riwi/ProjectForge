@@ -217,6 +217,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllerRoute("default", "{controller=Home}/{action=Index}/{id?}");
+app.MapControllers(); // Maps [ApiController] attribute-based routes (e.g. ApiV1Controller)
 app.MapHub<ProjectForge.Web.Hubs.GenerationHub>("/hubs/generation");
 
 await app.RunAsync();

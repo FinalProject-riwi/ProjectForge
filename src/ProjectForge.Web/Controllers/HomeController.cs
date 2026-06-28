@@ -11,6 +11,9 @@ public class HomeController : Controller
         return View();
     }
 
+    [Route("/api-docs")]
+    public IActionResult ApiDocs() => View();
+
     [Route("/error")]
     public IActionResult Error() => View();
 }

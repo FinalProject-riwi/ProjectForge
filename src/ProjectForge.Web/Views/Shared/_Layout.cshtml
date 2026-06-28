@@ -3,7 +3,8 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@ViewData["Title"] – ProjectForge</title>
+    <title>@ViewData["Title"] – TabBuilder</title>
+    <link rel="icon" type="image/jpeg" href="~/img/logo.jpg" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="~/css/app.css" asp-append-version="true" />
@@ -13,14 +14,15 @@
 <body>
     <nav class="navbar">
         <a class="navbar-brand" asp-controller="Home" asp-action="Index">
-            <span class="brand-icon">⚙</span>
-            <span>Project<strong>Forge</strong></span>
+            <img src="~/img/logo.jpg" alt="TabBuilder" class="brand-logo" />
+            <span>Tab<strong>Builder</strong></span>
         </a>
 
         @if (User.Identity?.IsAuthenticated == true)
         {
             <div class="navbar-links">
                 <a asp-controller="Dashboard" asp-action="Index">Dashboard</a>
+                <a href="/api-docs" class="api-link">API</a>
                 <a asp-controller="Wizard" asp-action="Index" class="btn btn-primary">+ Nuevo Proyecto</a>
                 <div class="user-menu">
                     @{
@@ -57,13 +59,44 @@
         }
     </nav>
 
+    <!-- Global "En implementación" Modal -->
+    <div id="wip-modal" class="wip-modal-backdrop" style="display:none" onclick="closeWipModal(event)">
+        <div class="wip-modal">
+            <div class="wip-modal-icon">🚧</div>
+            <h2>En implementación</h2>
+            <p id="wip-modal-msg">Esta funcionalidad está siendo desarrollada y estará disponible próximamente.</p>
+            <button class="btn btn-primary" onclick="document.getElementById('wip-modal').style.display='none'">Entendido</button>
+        </div>
+    </div>
+
     <main class="main-content">
+        @if (TempData["Error"] != null)
+        {
+            <div class="alert alert-error" id="global-error-alert">
+                <span>⚠️ @TempData["Error"]</span>
+                <button onclick="this.parentElement.remove()">✕</button>
+            </div>
+        }
         @RenderBody()
     </main>
 
     <footer class="footer">
-        <p>ProjectForge &copy; @DateTime.Now.Year — Genera proyectos completos con IA</p>
+        <p>TabBuilder &copy; @DateTime.Now.Year — Genera proyectos completos con IA</p>
     </footer>
+
+    <script>
+    function showWipModal(msg) {
+        const modal = document.getElementById('wip-modal');
+        const msgEl = document.getElementById('wip-modal-msg');
+        if (msgEl && msg) msgEl.textContent = msg;
+        if (modal) modal.style.display = 'flex';
+    }
+    function closeWipModal(e) {
+        if (e.target === document.getElementById('wip-modal')) {
+            document.getElementById('wip-modal').style.display = 'none';
+        }
+    }
+    </script>
 
     @await RenderSectionAsync("Scripts", required: false)
 </body>

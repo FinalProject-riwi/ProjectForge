@@ -39,7 +39,15 @@ else
                         </span>
                     </div>
                     <div class="project-arch-badge">
-                        @GetArchIcon(project.WizardConfig?.Architecture)
+                        @{ var logo = GetArchLogo(project.WizardConfig?.Architecture); }
+                    @if (!string.IsNullOrEmpty(logo))
+                    {
+                        <img src="@logo" alt="arch" style="width:28px;height:28px;object-fit:contain" />
+                    }
+                    else
+                    {
+                        <span>📦</span>
+                    }
                     </div>
                 </div>
 
@@ -80,14 +88,15 @@ else
 }
 
 @functions {
-    string GetArchIcon(ArchitectureType? arch) => arch switch
+    string GetArchLogo(ArchitectureType? arch) => arch switch
     {
-        ArchitectureType.DotNet       => "🔷",
-        ArchitectureType.Python       => "🐍",
-        ArchitectureType.Java         => "☕",
-        ArchitectureType.JavaScript   => "🟨",
-        ArchitectureType.Php           => "🐘",
-        _                             => "📦"
+        ArchitectureType.DotNet       => "/img/logos/languages/csharp.png",
+        ArchitectureType.Python       => "/img/logos/languages/python.png",
+        ArchitectureType.Java         => "/img/logos/languages/java.png",
+        ArchitectureType.JavaScript   => "/img/logos/languages/javascript.png",
+        ArchitectureType.TypeScript   => "/img/logos/languages/typescript.png",
+        ArchitectureType.Php          => "/img/logos/languages/php.png",
+        _                             => ""
     };
 }
 

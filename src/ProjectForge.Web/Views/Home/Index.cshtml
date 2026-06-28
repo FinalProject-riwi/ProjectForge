@@ -1,5 +1,5 @@
 @{
-    ViewData["Title"] = "ProjectForge – Genera proyectos completos con IA";
+    ViewData["Title"] = "TabBuilder – Genera proyectos completos con IA";
     Layout = "_Layout";
 }
 
@@ -8,6 +8,7 @@
         <div class="hero-grid"></div>
     </div>
     <div class="hero-content">
+        <img src="/img/logo.jpg" alt="TabBuilder" style="width:72px;height:72px;border-radius:16px;object-fit:cover;margin-bottom:1rem;box-shadow:0 8px 32px rgba(59,130,246,.25)" />
         <div class="hero-badge">✦ Impulsado por IA · GitHub OAuth · Multi-stack</div>
         <h1 class="hero-title">
             Genera proyectos de software<br/>
@@ -15,7 +16,7 @@
         </h1>
         <p class="hero-subtitle">
             Selecciona tu stack, arquitectura e infraestructura. La IA sugiere patrones y librerías.
-            ProjectForge genera el código, lo sube a GitHub y configura tu CI/CD automáticamente.
+            TabBuilder genera el código, lo sube a GitHub y configura tu CI/CD automáticamente.
         </p>
         <div class="hero-actions">
             @if (User.Identity?.IsAuthenticated == true)
@@ -34,6 +35,7 @@
                     Empezar con GitHub — gratis
                 </a>
                 <span class="hero-note">Sin tarjeta de crédito. Conecta tu cuenta de GitHub.</span>
+                <a href="/api-docs" style="font-size:.82rem;color:var(--text-muted);text-decoration:underline;text-underline-offset:3px">Ver documentación de la API →</a>
             }
         </div>
     </div>
@@ -69,15 +71,24 @@
 <section class="stacks-section">
     <h2 class="section-title">Stacks soportados</h2>
     <div class="stacks-row">
-        @foreach (var stack in new[] {
-            (".NET 8", "🔷"), ("Java / Spring", "☕"), ("Python / FastAPI", "🐍"),
-            ("PHP", "🐘"), ("Node.js", "🟨"), ("TypeScript", "📘"),
-            ("PostgreSQL", "🐘"), ("MySQL", "🐬"), ("MongoDB", "🍃"),
-            ("Docker", "🐳"), ("Kubernetes", "⚙️"), ("GitHub Actions", "🔄")
+        @foreach (var (name, logo, emoji) in new[] {
+            (".NET / C#", "/img/logos/languages/csharp.png", ""),
+            ("Java", "/img/logos/languages/java.png", ""),
+            ("Python", "/img/logos/languages/python.png", ""),
+            ("PHP", "/img/logos/languages/php.png", ""),
+            ("JavaScript", "/img/logos/languages/javascript.png", ""),
+            ("TypeScript", "/img/logos/languages/typescript.png", ""),
+            ("PostgreSQL", "/img/logos/databases/postgresql.png", ""),
+            ("MySQL", "/img/logos/databases/mysql.png", ""),
+            ("MongoDB", "/img/logos/databases/mongodb.png", ""),
+            ("Redis", "/img/logos/databases/redis.png", ""),
+            ("Docker", "/img/logos/infra/docker.png", ""),
+            ("Kubernetes", "/img/logos/infra/kubernetes.png", ""),
         })
         {
             <div class="stack-badge">
-                <span>@stack.Item2</span> @stack.Item1
+                <img src="@logo" alt="@name" style="width:20px;height:20px;object-fit:contain" onerror="this.style.display=\'none\'" />
+                @name
             </div>
         }
     </div>
