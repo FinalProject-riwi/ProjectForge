@@ -70,11 +70,13 @@ public partial class ProjectGeneratorService : IProjectGeneratorService
 
             // 2. Scaffolding según arquitectura
             await ScaffoldProjectAsync(project, cfg, projectPath, ct);
+            await ScaffoldDotNetBaseFilesAsync(project, cfg, projectPath, ct);   // .env, appsettings DB config
             await ScaffoldPhpBaseFilesAsync(project, cfg, projectPath, ct);
             await ScaffoldJavaScriptBaseFilesAsync(project, cfg, projectPath, ct);
             await ScaffoldPythonFilesInternalAsync(project, cfg, projectPath, ct);
+            await ScaffoldPythonBaseFilesAsync(project, cfg, projectPath, ct);   // requirements.txt, .env, database.py, models.py, Dockerfile
             await ScaffoldJavaFilesInternalAsync(project, cfg, projectPath, ct);
-            await ScaffoldJavaBaseFilesAsync(project, cfg, projectPath, ct);  // DB config, pom.xml, Dockerfile
+            await ScaffoldJavaBaseFilesAsync(project, cfg, projectPath, ct);     // DB config, pom.xml, Dockerfile
 
             // 3. Scaffold adicional según patrón de diseño
             await ScaffoldDesignPatternsAsync(project, cfg, projectPath, ct);

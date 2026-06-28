@@ -528,11 +528,53 @@ framework:
 
     private static IEnumerable<string> GetImplicitLibraries(WizardConfig cfg)
     {
-        if (cfg.Architecture != ArchitectureType.Php)
-            return [];
-
         var libraries = new List<string>();
         var selectedPatterns = JsonSerializer.Deserialize<List<string>>(cfg.DesignPatternsJson) ?? [];
+
+        // ── DotNet implicit packages ──────────────────────────────────────────
+        if (cfg.Architecture == ArchitectureType.DotNet)
+        {
+            var needsEfCore = cfg.Database is DatabaseType.PostgreSQL or DatabaseType.MySQL
+                                             or DatabaseType.SqlServer  or DatabaseType.SQLite;
+            if (needsEfCore)
+            {
+                libraries.Add("Microsoft.EntityFrameworkCore");
+                libraries.Add("Microsoft.EntityFrameworkCore.Design");
+            }
+
+            // DB-specific driver
+            switch (cfg.Database)
+            {
+                case DatabaseType.PostgreSQL:
+                    libraries.Add("Npgsql.EntityFrameworkCore.PostgreSQL");
+                    break;
+                case DatabaseType.MySQL:
+                    libraries.Add("Pomelo.EntityFrameworkCore.MySql");
+                    break;
+                case DatabaseType.SqlServer:
+                    libraries.Add("Microsoft.EntityFrameworkCore.SqlServer");
+                    break;
+                case DatabaseType.SQLite:
+                    libraries.Add("Microsoft.EntityFrameworkCore.Sqlite");
+                    break;
+                case DatabaseType.MongoDB:
+                    libraries.Add("MongoDB.Driver");
+                    break;
+                case DatabaseType.Redis:
+                    libraries.Add("StackExchange.Redis");
+                    break;
+            }
+
+            // CQRS uses MediatR
+            if (selectedPatterns.Any(p => NormalizePatternToken(p) == "cqrs"))
+                libraries.Add("MediatR");
+
+            return libraries;
+        }
+
+        // ── PHP implicit packages ─────────────────────────────────────────────
+        if (cfg.Architecture != ArchitectureType.Php)
+            return libraries;
 
         if (cfg.Framework == FrameworkType.Laravel &&
             selectedPatterns.Any(p => p.Contains("EventSourcing", StringComparison.OrdinalIgnoreCase)))
@@ -603,6 +645,8 @@ framework:
 
         await EmitLogAsync(project, "GitHub", "$ git init && git add . && git commit", ct: ct);
         await _shell.RunAsync("git init", path, ct);
+        await _shell.RunAsync("git config user.email \"projectforge@noreply.github.com\"", path, ct);
+        await _shell.RunAsync("git config user.name \"ProjectForge\"", path, ct);
         await _shell.RunAsync("git add .", path, ct);
         await _shell.RunAsync("git commit -m \"chore: initial scaffold by ProjectForge\"", path, ct);
         await _shell.RunAsync($"git remote add origin {repoUrl}", path, ct);

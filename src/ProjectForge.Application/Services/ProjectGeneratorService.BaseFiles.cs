@@ -147,10 +147,9 @@ ENTRYPOINT ["java","-jar","app.jar"]
 
         await EmitLogAsync(project, "Scaffold", "🏗️  Generando archivos base Python...", ct: ct);
 
-        // requirements.txt
+        // requirements.txt — always write the DB-aware version (overrides the basic one)
         var reqPath = Path.Combine(path, "requirements.txt");
-        if (!File.Exists(reqPath))
-            await File.WriteAllTextAsync(reqPath, BuildPythonRequirementsTxt(cfg.Framework, cfg.Database, libs), ct);
+        await File.WriteAllTextAsync(reqPath, BuildPythonRequirementsTxt(cfg.Framework, cfg.Database, libs), ct);
 
         // .env
         await File.WriteAllTextAsync(Path.Combine(path, ".env"), BuildPythonEnvFile(cfg.Database, dbName), ct);
@@ -164,9 +163,8 @@ ENTRYPOINT ["java","-jar","app.jar"]
         if (!File.Exists(dbConfigPath))
             await File.WriteAllTextAsync(dbConfigPath, BuildPythonDatabaseConfig(cfg.Database, dbName), ct);
 
-        // app/main.py (framework entry point)
+        // app/main.py (framework entry point) — always write the DB-aware version
         var mainPath = Path.Combine(appPath, "main.py");
-        if (!File.Exists(mainPath))
         {
             var mainContent = cfg.Framework switch
             {
@@ -350,25 +348,122 @@ def test_placeholder():
     {
         if (cfg.Architecture != ArchitectureType.DotNet) return;
 
-        var dbName = $"{project.Name.ToLower().Replace(" ", "_")}_db";
+        var safeName = project.Name.Replace(" ", "");
+        var dbName   = $"{project.Name.ToLower().Replace(" ", "_")}_db";
 
         await EmitLogAsync(project, "Scaffold", "🏗️  Configurando archivos .NET...", ct: ct);
 
-        // .env (for local override)
+        // ── 1. appsettings.json — inject ConnectionStrings.Default ────────────
+        var appSettingsPath = Path.Combine(path, "appsettings.json");
+        if (File.Exists(appSettingsPath))
+        {
+            var connString = cfg.Database switch
+            {
+                DatabaseType.PostgreSQL => $"Host=db;Database={dbName};Username=postgres;Password=secret",
+                DatabaseType.MySQL      => $"Server=db;Database={dbName};User=root;Password=secret;",
+                DatabaseType.SqlServer  => $"Server=sqlserver;Database={dbName};User Id=sa;Password=YourStrong!Passw0rd;Encrypt=False;TrustServerCertificate=True;",
+                DatabaseType.SQLite     => $"Data Source={dbName}.db",
+                DatabaseType.MongoDB    => $"mongodb://mongo:27017/{dbName}",
+                DatabaseType.Redis      => "localhost:6379",
+                _                       => ""
+            };
+
+            if (!string.IsNullOrEmpty(connString))
+            {
+                var json = await File.ReadAllTextAsync(appSettingsPath, ct);
+                // Inject ConnectionStrings section if missing
+                if (!json.Contains("\"ConnectionStrings\""))
+                {
+                    json = json.TrimEnd();
+                    if (json.EndsWith("}"))
+                        json = json[..^1].TrimEnd().TrimEnd(',') +
+                               $",\n  \"ConnectionStrings\": {{\n    \"Default\": \"{connString}\"\n  }}\n}}";
+                    await File.WriteAllTextAsync(appSettingsPath, json, ct);
+                }
+            }
+        }
+
+        // ── 2. .env (local override) ──────────────────────────────────────────
         var envContent = cfg.Database switch
         {
-            DatabaseType.PostgreSQL  => $"ConnectionStrings__Default=Host=localhost;Database={dbName};Username=postgres;Password=secret\n",
-            DatabaseType.MySQL       => $"ConnectionStrings__Default=Server=localhost;Database={dbName};User=root;Password=secret;\n",
-            DatabaseType.SqlServer   => $"ConnectionStrings__Default=Server=localhost;Database={dbName};User Id=sa;Password=YourStrong!Passw0rd;Encrypt=False;TrustServerCertificate=True;\n",
-            DatabaseType.SQLite      => $"ConnectionStrings__Default=Data Source={dbName}.db\n",
-            DatabaseType.MongoDB     => $"ConnectionStrings__Default=mongodb://localhost:27017/{dbName}\n",
-            DatabaseType.Redis       => "ConnectionStrings__Default=localhost:6379\n",
-            _                        => ""
+            DatabaseType.PostgreSQL => $"ConnectionStrings__Default=Host=localhost;Database={dbName};Username=postgres;Password=secret\n",
+            DatabaseType.MySQL      => $"ConnectionStrings__Default=Server=localhost;Database={dbName};User=root;Password=secret;\n",
+            DatabaseType.SqlServer  => $"ConnectionStrings__Default=Server=localhost;Database={dbName};User Id=sa;Password=YourStrong!Passw0rd;Encrypt=False;TrustServerCertificate=True;\n",
+            DatabaseType.SQLite     => $"ConnectionStrings__Default=Data Source={dbName}.db\n",
+            DatabaseType.MongoDB    => $"ConnectionStrings__Default=mongodb://localhost:27017/{dbName}\n",
+            DatabaseType.Redis      => "ConnectionStrings__Default=localhost:6379\n",
+            _                       => ""
         };
-
         if (!string.IsNullOrEmpty(envContent))
             await File.WriteAllTextAsync(Path.Combine(path, ".env"), envContent, ct);
 
-        await EmitLogAsync(project, "Scaffold", "✅ Archivos .env .NET generados", ct: ct);
+        // ── 3. AppDbContext.cs (only for relational/EF Core targets) ──────────
+        var needsEfCore = cfg.Database is DatabaseType.PostgreSQL or DatabaseType.MySQL
+                                      or DatabaseType.SqlServer  or DatabaseType.SQLite;
+        if (needsEfCore)
+        {
+            var infraDir = Path.Combine(path, "src", "Infrastructure", "Data");
+            // For non-Clean-Arch projects the folder is just 'Data' or 'Infrastructure'
+            // Try to place it relative to where the project already is
+            var projectFiles = Directory.GetFiles(path, "*.csproj", SearchOption.AllDirectories);
+            var projectDir   = projectFiles.Length > 0
+                ? Path.GetDirectoryName(projectFiles[0])!
+                : path;
+
+            var dataDir = Path.Combine(projectDir, "Data");
+            Directory.CreateDirectory(dataDir);
+            var ctxPath = Path.Combine(dataDir, "AppDbContext.cs");
+            if (!File.Exists(ctxPath))
+            {
+                var ns = safeName;
+                await File.WriteAllTextAsync(ctxPath, $$"""
+using Microsoft.EntityFrameworkCore;
+
+namespace {{ns}}.Data;
+
+public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
+{
+    // Add your DbSet<TEntity> properties here
+    // public DbSet<Item> Items { get; set; }
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        base.OnModelCreating(modelBuilder);
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
+    }
+}
+""", ct);
+                await EmitLogAsync(project, "Scaffold", "✅ AppDbContext.cs generado", ct: ct);
+            }
+        }
+
+        // ── 4. Dockerfile ─────────────────────────────────────────────────────
+        var dockerfilePath = Path.Combine(path, "Dockerfile");
+        if (!File.Exists(dockerfilePath))
+        {
+            var projectFiles = Directory.GetFiles(path, "*.csproj", SearchOption.AllDirectories);
+            var csprojRelative = projectFiles.Length > 0
+                ? Path.GetRelativePath(path, projectFiles[0]).Replace("\\", "/")
+                : $"{safeName}/{safeName}.csproj";
+            var projDir = Path.GetDirectoryName(csprojRelative) ?? safeName;
+
+            var dockerfile = $"""
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+WORKDIR /src
+COPY . .
+RUN dotnet restore "{csprojRelative}"
+RUN dotnet publish "{csprojRelative}" -c Release -o /app/publish
+
+FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
+WORKDIR /app
+COPY --from=build /app/publish .
+EXPOSE 8080
+ENTRYPOINT ["dotnet", "{safeName}.dll"]
+""";
+            await File.WriteAllTextAsync(dockerfilePath, dockerfile, ct);
+            await EmitLogAsync(project, "Scaffold", "✅ Dockerfile .NET generado", ct: ct);
+        }
+
+        await EmitLogAsync(project, "Scaffold", "✅ Archivos base .NET generados", ct: ct);
     }
 }

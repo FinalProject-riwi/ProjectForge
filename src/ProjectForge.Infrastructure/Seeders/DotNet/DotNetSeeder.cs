@@ -22,6 +22,39 @@ public static class DotNetSeeder
         await UpsertTemplatesAsync(db, ct);
         await UpsertLibrariesAsync(db, ct);
         await UpsertPatternsAsync(db, ct);
+        await FixSharedLibraryFrameworksAsync(db, ct);
+    }
+
+    /// <summary>
+    /// Sets Framework = NULL for DotNet libraries that are cross-framework
+    /// (EF Core, MediatR, Serilog, etc. work on any ASP.NET Core framework variant).
+    /// </summary>
+    private static async Task FixSharedLibraryFrameworksAsync(AppDbContext db, CancellationToken ct)
+    {
+        // Package names that should NOT be restricted to a specific framework
+        var sharedPackages = new[]
+        {
+            "MediatR",
+            "Microsoft.EntityFrameworkCore",
+            "Serilog.AspNetCore",
+            "AutoMapper",
+            "xunit",
+            "NUnit",
+            "Bogus",
+            "Polly",
+            "Dapper",
+            "StackExchange.Redis",
+            "Npgsql.EntityFrameworkCore.PostgreSQL",
+            "Pomelo.EntityFrameworkCore.MySql",
+            "Hangfire.AspNetCore",
+        };
+
+        foreach (var pkg in sharedPackages)
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                $"UPDATE [Libraries] SET [Framework] = NULL WHERE [Architecture] = N'DotNet' AND [PackageName] = N'{pkg}' AND [Framework] IS NOT NULL",
+                ct);
+        }
     }
 
     private static async Task UpsertTemplatesAsync(AppDbContext db, CancellationToken ct)

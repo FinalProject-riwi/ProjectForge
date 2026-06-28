@@ -45,8 +45,15 @@ public partial class ProjectGeneratorService
                     ($"dotnet new sln -n {safeName}", path),
                     ($"dotnet sln add {safeName}.csproj", path),
                 },
-                FrameworkType.AspNetCoreMVC => new[] { ($"dotnet new mvc -n {safeName} -o {path}", (string?)null) },
-                FrameworkType.BlazorServer => new[] { ($"dotnet new blazorserver -n {safeName} -o {path}", (string?)null) },
+                FrameworkType.AspNetCoreMVC  => new[] { ($"dotnet new mvc -n {safeName} -o {path}", (string?)null) },
+                FrameworkType.BlazorServer   => new[] { ($"dotnet new blazorserver -n {safeName} -o {path}", (string?)null) },
+                FrameworkType.BlazorWasm     => new[] { ($"dotnet new blazorwasm -n {safeName} -o {path}", (string?)null) },
+                FrameworkType.MinimalApi     => new[]
+                {
+                    ($"dotnet new web -n {safeName} -o {path} --no-https false", (string?)null),
+                    ($"dotnet new sln -n {safeName}", path),
+                    ($"dotnet sln add {safeName}.csproj", path),
+                },
                 _ => new[] { ($"dotnet new webapi -n {safeName} -o {path}", (string?)null) }
             },
 

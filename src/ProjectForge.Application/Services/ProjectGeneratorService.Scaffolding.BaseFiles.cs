@@ -38,8 +38,13 @@ public partial class ProjectGeneratorService
     {
         var appDir = Path.Combine(path, "app");
         Directory.CreateDirectory(Path.Combine(appDir, "api", "v1"));
+        Directory.CreateDirectory(Path.Combine(appDir, "domain"));           // for DDD/CleanArch patterns
         Directory.CreateDirectory(Path.Combine(appDir, "models"));
         Directory.CreateDirectory(Path.Combine(appDir, "services"));
+        Directory.CreateDirectory(Path.Combine(appDir, "repositories"));     // for Repository pattern
+        Directory.CreateDirectory(Path.Combine(appDir, "commands"));         // for CQRS pattern
+        Directory.CreateDirectory(Path.Combine(appDir, "queries"));          // for CQRS pattern
+        Directory.CreateDirectory(Path.Combine(appDir, "handlers"));         // for CQRS/Mediator patterns
         Directory.CreateDirectory(Path.Combine(path, "tests"));
 
         await WriteAsync(Path.Combine(path, "requirements.txt"), ct,
@@ -72,6 +77,11 @@ public partial class ProjectGeneratorService
         var projectDir = Path.Combine(path, name);
         Directory.CreateDirectory(projectDir);
         Directory.CreateDirectory(Path.Combine(path, "apps"));
+        Directory.CreateDirectory(Path.Combine(path, "app", "domain"));
+        Directory.CreateDirectory(Path.Combine(path, "app", "repositories"));
+        Directory.CreateDirectory(Path.Combine(path, "app", "commands"));
+        Directory.CreateDirectory(Path.Combine(path, "app", "queries"));
+        Directory.CreateDirectory(Path.Combine(path, "app", "handlers"));
 
         await WriteAsync(Path.Combine(path, "requirements.txt"), ct,
             "Django>=5.0\n" +
@@ -145,6 +155,11 @@ public partial class ProjectGeneratorService
     {
         Directory.CreateDirectory(Path.Combine(path, "app", "routes"));
         Directory.CreateDirectory(Path.Combine(path, "app", "models"));
+        Directory.CreateDirectory(Path.Combine(path, "app", "domain"));
+        Directory.CreateDirectory(Path.Combine(path, "app", "repositories"));
+        Directory.CreateDirectory(Path.Combine(path, "app", "commands"));
+        Directory.CreateDirectory(Path.Combine(path, "app", "queries"));
+        Directory.CreateDirectory(Path.Combine(path, "app", "handlers"));
         Directory.CreateDirectory(Path.Combine(path, "tests"));
 
         await WriteAsync(Path.Combine(path, "requirements.txt"), ct,
