@@ -17,10 +17,51 @@ namespace ProjectForge.Infrastructure.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.8")
+                .HasAnnotation("ProductVersion", "10.0.9")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
+
+            modelBuilder.Entity("ProjectForge.Core.Entities.AiSuggestionCache", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("CacheKey")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("LibrariesJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PatternsJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Rationale")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CacheKey")
+                        .IsUnique();
+
+                    b.ToTable("AiSuggestionCaches");
+                });
 
             modelBuilder.Entity("ProjectForge.Core.Entities.ApplicationUser", b =>
                 {
@@ -116,54 +157,682 @@ namespace ProjectForge.Infrastructure.Migrations
                             Id = 1,
                             Architecture = "DotNet",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Abstrae el acceso a datos detrás de interfaces, facilitando testing y mantenimiento.",
-                            Name = "Repository Pattern",
-                            Pattern = "Repository"
+                            Description = "Abstrae el acceso a datos detrás de interfaces.",
+                            ImplementationNotes = "Crear IRepository<T> en Domain, implementar con EF Core en Infrastructure.",
+                            Name = "Repository Pattern (.NET)",
+                            Pattern = "Repository",
+                            ScaffoldCommandsJson = "[\"mkdir -p src/Domain/Interfaces src/Infrastructure/Repositories\"]"
                         },
                         new
                         {
                             Id = 2,
                             Architecture = "DotNet",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Separa las operaciones de lectura (Queries) de las de escritura (Commands).",
-                            Name = "CQRS",
-                            Pattern = "CQRS"
+                            Description = "Separa comandos y consultas con MediatR.",
+                            ImplementationNotes = "Instalar MediatR. Crear Application/Commands y Application/Queries con handlers.",
+                            Name = "CQRS + MediatR (.NET)",
+                            Pattern = "CQRS",
+                            ScaffoldCommandsJson = "[\"mkdir -p src/Application/Commands src/Application/Queries src/Application/Handlers\"]"
                         },
                         new
                         {
                             Id = 3,
                             Architecture = "DotNet",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Arquitectura en capas concéntricas con dependencias hacia el centro.",
-                            Name = "Clean Architecture",
-                            Pattern = "CleanArchitecture"
+                            Description = "Capas: Domain, Application, Infrastructure, Presentation.",
+                            ImplementationNotes = "Domain no referencia nada. Application referencia Domain. Infrastructure implementa interfaces.",
+                            Name = "Clean Architecture (.NET)",
+                            Pattern = "CleanArchitecture",
+                            ScaffoldCommandsJson = "[\"mkdir -p src/Domain src/Application src/Infrastructure src/Presentation\"]"
                         },
                         new
                         {
                             Id = 4,
                             Architecture = "DotNet",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Reduce el acoplamiento directo entre componentes usando un mediador.",
-                            Name = "Mediator",
-                            Pattern = "Mediator"
+                            Description = "Aggregates, Entities, Value Objects y Domain Events.",
+                            ImplementationNotes = "Modelar el dominio con entidades ricas. Usar eventos de dominio para comunicación entre aggregates.",
+                            Name = "Domain-Driven Design (.NET)",
+                            Pattern = "DomainDrivenDesign",
+                            ScaffoldCommandsJson = "[\"mkdir -p src/Domain/Aggregates src/Domain/Events src/Domain/ValueObjects src/Domain/Services\"]"
+                        },
+                        new
+                        {
+                            Id = 1000,
+                            Architecture = "DotNet",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Ports & Adapters: el core no conoce infraestructura.",
+                            ImplementationNotes = "Definir ports (interfaces) en Core. Implementar adapters en Infrastructure.",
+                            Name = "Hexagonal Architecture (.NET)",
+                            Pattern = "HexagonalArchitecture",
+                            ScaffoldCommandsJson = "[\"mkdir -p src/Core/Ports src/Core/Domain src/Infrastructure/Adapters src/Api\"]"
+                        },
+                        new
+                        {
+                            Id = 1001,
+                            Architecture = "DotNet",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Desacopla componentes con un mediador central (MediatR).",
+                            ImplementationNotes = "Usar IRequest<T> e IRequestHandler<T>. Registrar en DI con AddMediatR.",
+                            Name = "Mediator (.NET)",
+                            Pattern = "Mediator",
+                            ScaffoldCommandsJson = "[\"mkdir -p src/Application/Features\"]"
+                        },
+                        new
+                        {
+                            Id = 1002,
+                            Architecture = "DotNet",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Estado derivado de secuencia de eventos inmutables.",
+                            ImplementationNotes = "Usar EventStore o Marten. Cada cambio se registra como evento.",
+                            Name = "Event Sourcing (.NET)",
+                            Pattern = "EventSourcing",
+                            ScaffoldCommandsJson = "[\"mkdir -p src/Domain/Events src/Infrastructure/EventStore src/Application/EventHandlers\"]"
+                        },
+                        new
+                        {
+                            Id = 1003,
+                            Architecture = "DotNet",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Servicios independientes comunicándose por HTTP o mensajes.",
+                            ImplementationNotes = "Usar Ocelot como API Gateway. RabbitMQ o Azure Service Bus para mensajería.",
+                            Name = "Microservices (.NET)",
+                            Pattern = "Microservices",
+                            ScaffoldCommandsJson = "[\"mkdir -p services/gateway services/orders services/notifications\"]"
+                        },
+                        new
+                        {
+                            Id = 1004,
+                            Architecture = "DotNet",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Coordina transacciones distribuidas con compensación ante fallos.",
+                            ImplementationNotes = "Implementar OrchestrationSaga con MediatR. Cada paso compensa los anteriores en caso de error.",
+                            Name = "Saga (.NET)",
+                            Pattern = "Saga",
+                            ScaffoldCommandsJson = "[\"mkdir -p src/Application/Sagas\"]"
+                        },
+                        new
+                        {
+                            Id = 1005,
+                            Architecture = "DotNet",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Model-View-ViewModel para desacoplar UI de lógica (Blazor, WPF, MAUI).",
+                            ImplementationNotes = "ViewModel implementa INotifyPropertyChanged. Usar RelayCommand para comandos de UI.",
+                            Name = "MVVM (.NET)",
+                            Pattern = "MVVM",
+                            ScaffoldCommandsJson = "[\"mkdir -p src/Presentation/ViewModels src/Presentation/Commands\"]"
                         },
                         new
                         {
                             Id = 5,
                             Architecture = "Python",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Patrón de repositorio adaptado para Python/FastAPI.",
-                            Name = "Repository Pattern",
-                            Pattern = "Repository"
+                            Description = "Aisla acceso a datos detrás de repositorios abstractos.",
+                            ImplementationNotes = "Clase base AbstractRepository. Implementar con SQLAlchemy en infrastructure.",
+                            Name = "Repository Pattern (Python/FastAPI)",
+                            Pattern = "Repository",
+                            ScaffoldCommandsJson = "[\"mkdir -p app/repositories app/domain app/services\"]"
                         },
                         new
                         {
-                            Id = 6,
+                            Id = 800,
+                            Architecture = "Python",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Capas: domain, application, infrastructure y adapters.",
+                            ImplementationNotes = "Domain no importa FastAPI. DI de FastAPI conecta las capas.",
+                            Name = "Clean Architecture (Python/FastAPI)",
+                            Pattern = "CleanArchitecture",
+                            ScaffoldCommandsJson = "[\"mkdir -p app/domain app/application/use_cases app/infrastructure app/adapters/api\"]"
+                        },
+                        new
+                        {
+                            Id = 801,
+                            Architecture = "Python",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Separa comandos y consultas con handlers.",
+                            ImplementationNotes = "Dataclasses para Command/Query. Handlers en application/.",
+                            Name = "CQRS (Python/FastAPI)",
+                            Pattern = "CQRS",
+                            ScaffoldCommandsJson = "[\"mkdir -p app/commands app/queries app/handlers\"]"
+                        },
+                        new
+                        {
+                            Id = 1200,
+                            Architecture = "Python",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Ports como ABCs de Python, adapters como implementaciones concretas.",
+                            ImplementationNotes = "Usar ABC para ports. Inyectar adapters en los servicios de aplicación.",
+                            Name = "Hexagonal Architecture (Python)",
+                            Pattern = "HexagonalArchitecture",
+                            ScaffoldCommandsJson = "[\"mkdir -p app/core/ports app/core/domain app/infrastructure/adapters app/api\"]"
+                        },
+                        new
+                        {
+                            Id = 1201,
+                            Architecture = "Python",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Aggregates, Entities y Value Objects con dataclasses.",
+                            ImplementationNotes = "Usar @dataclass para Value Objects. Domain events con publish/subscribe.",
+                            Name = "Domain-Driven Design (Python)",
+                            Pattern = "DomainDrivenDesign",
+                            ScaffoldCommandsJson = "[\"mkdir -p app/domain/aggregates app/domain/events app/domain/value_objects app/application\"]"
+                        },
+                        new
+                        {
+                            Id = 1202,
+                            Architecture = "Python",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Estado reconstruido desde eventos inmutables.",
+                            ImplementationNotes = "Usar EventStoreDB o PostgreSQL como event store. Proyecciones para read models.",
+                            Name = "Event Sourcing (Python)",
+                            Pattern = "EventSourcing",
+                            ScaffoldCommandsJson = "[\"mkdir -p app/domain/events app/infrastructure/event_store app/application/projections\"]"
+                        },
+                        new
+                        {
+                            Id = 1203,
+                            Architecture = "Python",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Servicios independientes con FastAPI comunicándose por HTTP.",
+                            ImplementationNotes = "Cada servicio tiene su propio main.py y requirements.txt. Usar httpx para comunicación entre servicios.",
+                            Name = "Microservices (Python/FastAPI)",
+                            Pattern = "Microservices",
+                            ScaffoldCommandsJson = "[\"mkdir -p services/items services/notifications services/gateway\"]"
+                        },
+                        new
+                        {
+                            Id = 1204,
+                            Architecture = "Python",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Mediador que desacopla handlers de mensajes en Python.",
+                            ImplementationNotes = "Clase Mediator que registra handlers por tipo. Compatible con FastAPI DI.",
+                            Name = "Mediator (Python)",
+                            Pattern = "Mediator",
+                            ScaffoldCommandsJson = "[\"mkdir -p app/application\"]"
+                        },
+                        new
+                        {
+                            Id = 1205,
+                            Architecture = "Python",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Orquesta transacciones distribuidas con compensación.",
+                            ImplementationNotes = "Clase OrderSaga con pasos async. Cada paso tiene compensación en caso de fallo.",
+                            Name = "Saga (Python/FastAPI)",
+                            Pattern = "Saga",
+                            ScaffoldCommandsJson = "[\"mkdir -p app/application/sagas\"]"
+                        },
+                        new
+                        {
+                            Id = 19,
                             Architecture = "JavaScript",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Arquitectura de microservicios para aplicaciones Node.js.",
+                            Description = "Aisla el acceso a datos detras de un contrato y un repositorio concreto para Node.js.",
+                            ImplementationNotes = "Crear src/domain, src/application, src/ports y src/infrastructure; registrar el repo en el contenedor de la app.",
+                            Name = "Repository Pattern (Node.js)",
+                            Pattern = "Repository",
+                            ScaffoldCommandsJson = "[\"mkdir -p src/domain src/application src/ports src/infrastructure\"]"
+                        },
+                        new
+                        {
+                            Id = 20,
+                            Architecture = "JavaScript",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Organiza Node.js en capas para mantener la logica de negocio fuera del framework.",
+                            ImplementationNotes = "Separar src/domain, src/application, src/interfaces y src/infrastructure; exponer el punto de entrada en src/server.js.",
+                            Name = "Clean Architecture (Node.js)",
+                            Pattern = "CleanArchitecture",
+                            ScaffoldCommandsJson = "[\"mkdir -p src/domain src/application src/interfaces src/infrastructure\"]"
+                        },
+                        new
+                        {
+                            Id = 21,
+                            Architecture = "JavaScript",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Usa puertos y adaptadores para aislar el dominio en aplicaciones Node.js.",
+                            ImplementationNotes = "Modelar puertos en src/ports y adaptadores en src/adapters; dejar el dominio libre de dependencias externas.",
+                            Name = "Hexagonal Architecture (Node.js)",
+                            Pattern = "HexagonalArchitecture",
+                            ScaffoldCommandsJson = "[\"mkdir -p src/domain src/application src/ports src/adapters\"]"
+                        },
+                        new
+                        {
+                            Id = 22,
+                            Architecture = "JavaScript",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Separa comandos y consultas para simplificar la evolucion del backend Node.js.",
+                            ImplementationNotes = "Separar commands, queries y handlers en src/application; usar un bus ligero o funciones puras para coordinarlos.",
+                            Name = "CQRS (JavaScript)",
+                            Pattern = "CQRS",
+                            ScaffoldCommandsJson = "[\"mkdir -p src/application/commands src/application/queries src/application/handlers\"]"
+                        },
+                        new
+                        {
+                            Id = 23,
+                            Architecture = "JavaScript",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Centraliza la orquestacion de mensajes para reducir el acoplamiento entre handlers.",
+                            ImplementationNotes = "Crear un mediador liviano en src/application y separar los mensajes en src/application/messages.",
+                            Name = "Mediator (JavaScript)",
+                            Pattern = "Mediator",
+                            ScaffoldCommandsJson = "[\"mkdir -p src/application src/application/messages src/application/handlers\"]"
+                        },
+                        new
+                        {
+                            Id = 24,
+                            Architecture = "JavaScript",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Divide la solucion en servicios Node.js desacoplados cuando existan limites claros de dominio.",
+                            ImplementationNotes = "Separar src/services, src/events, src/workers y src/integrations; usar HTTP o colas para desacoplar.",
+                            Name = "Microservices (JavaScript)",
+                            Pattern = "Microservices",
+                            ScaffoldCommandsJson = "[\"mkdir -p src/services src/events src/workers src/integrations\"]"
+                        },
+                        new
+                        {
+                            Id = 25,
+                            Architecture = "JavaScript",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Implementa CQRS con el paquete oficial de NestJS usando CommandBus, QueryBus y EventBus.",
+                            ImplementationNotes = "Crear módulos, comandos, consultas, eventos de dominio y handlers; registrar CqrsModule en el modulo raiz.",
+                            Name = "CQRS (NestJS)",
+                            Pattern = "CQRS",
+                            ScaffoldCommandsJson = "[\"npm install @nestjs/cqrs\"]"
+                        },
+                        new
+                        {
+                            Id = 26,
+                            Architecture = "JavaScript",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Estado derivado de una secuencia de eventos inmutables en Node.js.",
+                            ImplementationNotes = "DomainEvent base class, InMemoryEventStore, BaseAggregate con apply/pullEvents.",
+                            Name = "Event Sourcing (JavaScript)",
+                            Pattern = "EventSourcing",
+                            ScaffoldCommandsJson = "[\"mkdir -p src/domain/aggregates src/domain/events src/infrastructure\"]"
+                        },
+                        new
+                        {
+                            Id = 27,
+                            Architecture = "JavaScript",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Aggregates, Entities y Value Objects para Node.js.",
+                            ImplementationNotes = "BaseAggregate con domain events, ValueObject inmutable, DomainEvent con id y occurredAt.",
+                            Name = "Domain-Driven Design (JavaScript)",
+                            Pattern = "DomainDrivenDesign",
+                            ScaffoldCommandsJson = "[\"mkdir -p src/domain/aggregates src/domain/events src/domain/value-objects\"]"
+                        },
+                        new
+                        {
+                            Id = 28,
+                            Architecture = "JavaScript",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Orquesta flujos de trabajo con compensacion en Node.js.",
+                            ImplementationNotes = "OrderSaga con pasos async y compensacion. EventBus simple para subscripcion a eventos.",
+                            Name = "Saga (JavaScript)",
+                            Pattern = "Saga",
+                            ScaffoldCommandsJson = "[\"mkdir -p src/application/sagas\"]"
+                        },
+                        new
+                        {
+                            Id = 29,
+                            Architecture = "JavaScript",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Separacion de UI y logica con custom hooks como ViewModel.",
+                            ImplementationNotes = "Custom hook como ViewModel que expone estado y acciones. Componente View solo renderiza.",
+                            Name = "MVVM (JavaScript/React)",
+                            Pattern = "MVVM",
+                            ScaffoldCommandsJson = "[\"mkdir -p src/presentation/view-models src/presentation/views\"]"
+                        },
+                        new
+                        {
+                            Id = 7,
+                            Architecture = "Php",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Aisla la persistencia detras de un contrato y una implementacion Eloquent en Laravel.",
+                            ImplementationNotes = "Crear app/Repositories/Contracts, app/Repositories, app/Http/Controllers, app/Models y app/Providers; registrar el binding en un provider.",
+                            Name = "Repository Pattern",
+                            Pattern = "Repository",
+                            ScaffoldCommandsJson = "[\"mkdir -p app/Repositories/Contracts app/Repositories app/Http/Controllers app/Models app/Providers database/migrations routes\"]"
+                        },
+                        new
+                        {
+                            Id = 8,
+                            Architecture = "Php",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Organiza Laravel o Symfony en capas para mantener la logica de negocio fuera del framework.",
+                            ImplementationNotes = "Separar app/Domain, app/Application, app/Http/Controllers y app/Infrastructure; exponer un comando o DTO de entrada y registrar el binding en un provider.",
+                            Name = "Clean Architecture",
+                            Pattern = "CleanArchitecture",
+                            ScaffoldCommandsJson = "[\"mkdir -p app/Domain app/Application/DTOs app/Application/Interfaces app/Application/UseCases app/Http/Controllers app/Infrastructure/Persistence app/Models app/Providers database/migrations routes\"]"
+                        },
+                        new
+                        {
+                            Id = 9,
+                            Architecture = "Php",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Usa puertos y adaptadores para que Laravel o Symfony actuen solo como capa de entrada y salida.",
+                            ImplementationNotes = "Modelar puertos de entrada en app/Application/Ports/In y puertos de salida en app/Application/Ports/Out; los controladores consumen los puertos de entrada y los adaptadores Eloquent implementan los de salida.",
+                            Name = "Hexagonal Architecture",
+                            Pattern = "HexagonalArchitecture",
+                            ScaffoldCommandsJson = "[\"mkdir -p app/Domain/Entities app/Application/DTOs app/Application/Ports/In app/Application/Ports/Out app/Application/UseCases app/Http/Controllers app/Infrastructure/Persistence app/Models app/Providers database/migrations routes\"]"
+                        },
+                        new
+                        {
+                            Id = 10,
+                            Architecture = "Php",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Estructura el codigo alrededor del dominio, no de los controladores o de la capa HTTP.",
+                            ImplementationNotes = "Crear aggregate roots, value objects, domain services, domain events, repositorios de dominio, casos de uso, controller HTTP y provider por bounded context.",
+                            Name = "Domain-Driven Design",
+                            Pattern = "DomainDrivenDesign",
+                            ScaffoldCommandsJson = "[\"mkdir -p app/Domain/Aggregates app/Domain/Entities app/Domain/Events app/Domain/Repositories app/Domain/Services app/Domain/ValueObjects app/Application/DTOs app/Application/UseCases app/Infrastructure/Persistence app/Http/Controllers app/Models app/Providers database/migrations routes\"]"
+                        },
+                        new
+                        {
+                            Id = 11,
+                            Architecture = "Php",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Registra los cambios como eventos y reconstruye el agregado por rehidratacion.",
+                            ImplementationNotes = "Crear stored_events, projectors, read models, event store, use cases y controlador HTTP; el agregado debe soportar replay y fromHistory.",
+                            Name = "Event Sourcing",
+                            Pattern = "EventSourcing",
+                            ScaffoldCommandsJson = "[\"mkdir -p app/Domain/Aggregates app/Domain/Events app/Domain/Repositories app/Application/DTOs app/Application/UseCases app/Infrastructure/EventStore app/Infrastructure/Projectors app/Models database/migrations routes\"]"
+                        },
+                        new
+                        {
+                            Id = 12,
+                            Architecture = "Php",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Divide el sistema en un gateway y servicios Laravel separados, con despliegue independiente y mensajeria asincrona.",
+                            ImplementationNotes = "Crear un gateway en la raiz, servicios en services/projects y services/notifications, un broker RabbitMQ y bases separadas por servicio.",
                             Name = "Microservices",
-                            Pattern = "Microservices"
+                            Pattern = "Microservices",
+                            ScaffoldCommandsJson = "[\"mkdir -p services/projects services/notifications shared/contracts\"]"
+                        },
+                        new
+                        {
+                            Id = 13,
+                            Architecture = "Php",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Separa la persistencia del dominio usando controladores, casos de uso y repositorios Doctrine en Symfony.",
+                            ImplementationNotes = "Crear src/Domain, src/Application/DTOs, src/Application/UseCases, src/Controller y src/Infrastructure/Persistence; registrar los bindings en config/services.yaml y exponer las rutas por atributos.",
+                            Name = "Repository Pattern (Symfony)",
+                            Pattern = "Repository",
+                            ScaffoldCommandsJson = "[\"mkdir -p src/Domain/Aggregates src/Domain/Entities src/Domain/Events src/Domain/Repositories src/Domain/Services src/Domain/ValueObjects src/Application/DTOs src/Application/UseCases src/Infrastructure/Persistence src/Controller config/packages config/routes migrations\"]"
+                        },
+                        new
+                        {
+                            Id = 14,
+                            Architecture = "Php",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Organiza Symfony en capas para mantener la logica de negocio fuera de los controladores y de la capa HTTP.",
+                            ImplementationNotes = "Separar src/Domain, src/Application, src/Infrastructure y src/Controller; exponer DTOs, casos de uso y adaptadores de persistencia claramente definidos.",
+                            Name = "Clean Architecture (Symfony)",
+                            Pattern = "CleanArchitecture",
+                            ScaffoldCommandsJson = "[\"mkdir -p src/Domain/Aggregates src/Domain/Entities src/Domain/Events src/Domain/Repositories src/Domain/Services src/Domain/ValueObjects src/Application/DTOs src/Application/UseCases src/Infrastructure/Persistence src/Controller config/packages config/routes migrations\"]"
+                        },
+                        new
+                        {
+                            Id = 15,
+                            Architecture = "Php",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Usa puertos y adaptadores para aislar Symfony del dominio.",
+                            ImplementationNotes = "Modelar puertos de entrada en src/Application/Ports/In y puertos de salida en src/Application/Ports/Out; los controladores consumen los puertos de entrada y Doctrine implementa los de salida.",
+                            Name = "Hexagonal Architecture (Symfony)",
+                            Pattern = "HexagonalArchitecture",
+                            ScaffoldCommandsJson = "[\"mkdir -p src/Application/Ports/In src/Application/Ports/Out src/Application/DTOs src/Application/UseCases src/Domain/Aggregates src/Domain/Entities src/Domain/Repositories src/Infrastructure/Persistence src/Controller config/packages config/routes migrations\"]"
+                        },
+                        new
+                        {
+                            Id = 16,
+                            Architecture = "Php",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Estructura el codigo alrededor del dominio y no alrededor del framework.",
+                            ImplementationNotes = "Crear agregados, value objects, eventos, repositorios de dominio, casos de uso y un controlador por bounded context.",
+                            Name = "Domain-Driven Design (Symfony)",
+                            Pattern = "DomainDrivenDesign",
+                            ScaffoldCommandsJson = "[\"mkdir -p src/Domain/Aggregates src/Domain/Entities src/Domain/Events src/Domain/Repositories src/Domain/Services src/Domain/ValueObjects src/Application/DTOs src/Application/UseCases src/Infrastructure/Persistence src/Controller config/packages config/routes migrations\"]"
+                        },
+                        new
+                        {
+                            Id = 17,
+                            Architecture = "Php",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Conserva el historial de cambios como eventos y reconstruye el agregado al rehidratarlo.",
+                            ImplementationNotes = "Crear stored_events, proyecciones, event store, projectors, casos de uso y controlador HTTP; el agregado debe poder reconstituirse desde el historial.",
+                            Name = "Event Sourcing (Symfony)",
+                            Pattern = "EventSourcing",
+                            ScaffoldCommandsJson = "[\"mkdir -p src/Domain/Aggregates src/Domain/Events src/Domain/Repositories src/Application/DTOs src/Application/UseCases src/Infrastructure/EventStore src/Infrastructure/Projectors src/Entity config/packages config/routes migrations\"]"
+                        },
+                        new
+                        {
+                            Id = 18,
+                            Architecture = "Php",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Divide la aplicacion en un gateway y servicios Symfony separados, con despliegue independiente y mensajeria asincrona.",
+                            ImplementationNotes = "Crear un gateway en la raiz, servicios en services/projects y services/notifications, colas con Redis o RabbitMQ y compose con los servicios de apoyo.",
+                            Name = "Microservices (Symfony)",
+                            Pattern = "Microservices",
+                            ScaffoldCommandsJson = "[\"mkdir -p services/projects services/notifications shared/contracts\"]"
+                        },
+                        new
+                        {
+                            Id = 900,
+                            Architecture = "Java",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "JpaRepository para aislar acceso a datos.",
+                            ImplementationNotes = "Extender JpaRepository<Entity, Id>. Usar @Repository en implementaciones.",
+                            Name = "Repository Pattern (Spring Boot)",
+                            Pattern = "Repository",
+                            ScaffoldCommandsJson = "[\"mkdir -p src/main/java/domain/repository src/main/java/infrastructure/persistence\"]"
+                        },
+                        new
+                        {
+                            Id = 901,
+                            Architecture = "Java",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Capas: domain, application, infrastructure y adapters.",
+                            ImplementationNotes = "Domain sin dependencia de Spring. Usar puertos e interfaces para invertir dependencias.",
+                            Name = "Clean Architecture (Spring Boot)",
+                            Pattern = "CleanArchitecture",
+                            ScaffoldCommandsJson = "[\"mkdir -p src/main/java/domain src/main/java/application/usecase src/main/java/infrastructure src/main/java/adapters/web\"]"
+                        },
+                        new
+                        {
+                            Id = 902,
+                            Architecture = "Java",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Separa comandos y consultas con handlers @Service.",
+                            ImplementationNotes = "Paquetes command/ y query/ con handlers. Usar ApplicationEventPublisher para eventos.",
+                            Name = "CQRS (Spring Boot)",
+                            Pattern = "CQRS",
+                            ScaffoldCommandsJson = "[\"mkdir -p src/main/java/application/command src/main/java/application/query\"]"
+                        },
+                        new
+                        {
+                            Id = 903,
+                            Architecture = "Java",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Ports & Adapters: el negocio no conoce el framework.",
+                            ImplementationNotes = "Ports como interfaces Java en domain. Adapters en infrastructure implementan los ports.",
+                            Name = "Hexagonal Architecture (Spring Boot)",
+                            Pattern = "HexagonalArchitecture",
+                            ScaffoldCommandsJson = "[\"mkdir -p src/main/java/domain/port src/main/java/application/service src/main/java/infrastructure/adapter\"]"
+                        },
+                        new
+                        {
+                            Id = 904,
+                            Architecture = "Java",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Aggregates, Entities y Value Objects en Java.",
+                            ImplementationNotes = "Separar @Entity JPA de Domain Objects. Usar mappers para conversión.",
+                            Name = "Domain-Driven Design (Spring Boot)",
+                            Pattern = "DomainDrivenDesign",
+                            ScaffoldCommandsJson = "[\"mkdir -p src/main/java/domain/model src/main/java/domain/service src/main/java/domain/event src/main/java/application\"]"
+                        },
+                        new
+                        {
+                            Id = 1100,
+                            Architecture = "Java",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Estado derivado de eventos con ApplicationEventPublisher.",
+                            ImplementationNotes = "Usar Spring Events o Axon Framework. Guardar eventos en EventStore.",
+                            Name = "Event Sourcing (Spring Boot)",
+                            Pattern = "EventSourcing",
+                            ScaffoldCommandsJson = "[\"mkdir -p src/main/java/domain/event src/main/java/application/eventhandler src/main/java/infrastructure/eventstore\"]"
+                        },
+                        new
+                        {
+                            Id = 1101,
+                            Architecture = "Java",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Servicios independientes con Spring Cloud.",
+                            ImplementationNotes = "Usar Eureka para discovery, Gateway para routing, Feign para comunicación entre servicios.",
+                            Name = "Microservices (Spring Boot)",
+                            Pattern = "Microservices",
+                            ScaffoldCommandsJson = "[\"mkdir -p services/gateway services/discovery services/orders\"]"
+                        },
+                        new
+                        {
+                            Id = 1102,
+                            Architecture = "Java",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Patrón Mediator con ApplicationEventPublisher o Axon.",
+                            ImplementationNotes = "Usar ApplicationEventPublisher para desacoplar componentes. Handlers anotados con @EventListener.",
+                            Name = "Mediator (Spring Boot)",
+                            Pattern = "Mediator",
+                            ScaffoldCommandsJson = "[\"mkdir -p src/main/java/application/mediator\"]"
+                        },
+                        new
+                        {
+                            Id = 1103,
+                            Architecture = "Java",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Orquesta transacciones distribuidas con compensación.",
+                            ImplementationNotes = "Implementar saga de orquestación con @Service. Cada paso compensa los anteriores en caso de fallo.",
+                            Name = "Saga (Spring Boot)",
+                            Pattern = "Saga",
+                            ScaffoldCommandsJson = "[\"mkdir -p src/main/java/application/saga\"]"
+                        },
+                        new
+                        {
+                            Id = 1104,
+                            Architecture = "Java",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Model-View-ViewModel para JavaFX o frontend desacoplado.",
+                            ImplementationNotes = "ViewModel expone ObservableValue. Usar Property Binding de JavaFX o patrón Observer.",
+                            Name = "MVVM (Spring Boot / JavaFX)",
+                            Pattern = "MVVM",
+                            ScaffoldCommandsJson = "[\"mkdir -p src/main/java/presentation/viewmodel src/main/java/presentation/view\"]"
+                        },
+                        new
+                        {
+                            Id = 500,
+                            Architecture = "TypeScript",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Repositorios tipados con TypeORM o Prisma en NestJS.",
+                            ImplementationNotes = "Crear interfaces de repositorio en domain/. Implementar con TypeORM @InjectRepository o PrismaService.",
+                            Name = "Repository Pattern (NestJS/TypeScript)",
+                            Pattern = "Repository",
+                            ScaffoldCommandsJson = "[\"mkdir -p src/domain/repositories src/infrastructure/repositories src/domain/entities\"]"
+                        },
+                        new
+                        {
+                            Id = 501,
+                            Architecture = "TypeScript",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "CQRS con @nestjs/cqrs: CommandBus, QueryBus, EventBus.",
+                            ImplementationNotes = "Instalar @nestjs/cqrs. Crear commands/, queries/, events/ con handlers.",
+                            Name = "CQRS (NestJS/TypeScript)",
+                            Pattern = "CQRS",
+                            ScaffoldCommandsJson = "[\"mkdir -p src/application/commands src/application/queries src/application/events src/application/handlers\"]"
+                        },
+                        new
+                        {
+                            Id = 502,
+                            Architecture = "TypeScript",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Capas: domain, application, infrastructure, presentation.",
+                            ImplementationNotes = "Domain puro sin dependencias de NestJS. Inyección de dependencias mediante interfaces.",
+                            Name = "Clean Architecture (TypeScript)",
+                            Pattern = "CleanArchitecture",
+                            ScaffoldCommandsJson = "[\"mkdir -p src/domain src/application/use-cases src/infrastructure src/presentation\"]"
+                        },
+                        new
+                        {
+                            Id = 503,
+                            Architecture = "TypeScript",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Ports & Adapters: interfaces TypeScript como ports.",
+                            ImplementationNotes = "Ports como interfaces en core/. Adapters en infrastructure/. NestJS inyecta los adapters.",
+                            Name = "Hexagonal Architecture (TypeScript)",
+                            Pattern = "HexagonalArchitecture",
+                            ScaffoldCommandsJson = "[\"mkdir -p src/core/ports src/core/domain src/infrastructure/adapters src/presentation\"]"
+                        },
+                        new
+                        {
+                            Id = 504,
+                            Architecture = "TypeScript",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Aggregates, Entities y Value Objects con TypeScript.",
+                            ImplementationNotes = "Usar clases inmutables para Value Objects. Domain Events con EventEmitter2 de NestJS.",
+                            Name = "Domain-Driven Design (TypeScript)",
+                            Pattern = "DomainDrivenDesign",
+                            ScaffoldCommandsJson = "[\"mkdir -p src/domain/aggregates src/domain/value-objects src/domain/events src/domain/services src/application\"]"
+                        },
+                        new
+                        {
+                            Id = 505,
+                            Architecture = "TypeScript",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Estado derivado de eventos con @nestjs/cqrs y EventBus.",
+                            ImplementationNotes = "Usar AggregateRoot de @nestjs/cqrs. Guardar eventos en EventStore.",
+                            Name = "Event Sourcing (NestJS/TypeScript)",
+                            Pattern = "EventSourcing",
+                            ScaffoldCommandsJson = "[\"mkdir -p src/domain/events src/infrastructure/event-store src/application/sagas\"]"
+                        },
+                        new
+                        {
+                            Id = 506,
+                            Architecture = "TypeScript",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Microservicios NestJS comunicándose por TCP, Redis o NATS.",
+                            ImplementationNotes = "Usar @nestjs/microservices. ClientProxy para comunicación. API Gateway como entry point.",
+                            Name = "Microservices (NestJS/TypeScript)",
+                            Pattern = "Microservices",
+                            ScaffoldCommandsJson = "[\"mkdir -p services/gateway services/users services/orders\"]"
+                        },
+                        new
+                        {
+                            Id = 507,
+                            Architecture = "TypeScript",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Mediator con @nestjs/cqrs CommandBus y QueryBus.",
+                            ImplementationNotes = "Usar CommandBus y QueryBus de @nestjs/cqrs. Registrar handlers en modulo.",
+                            Name = "Mediator (TypeScript/NestJS)",
+                            Pattern = "Mediator",
+                            ScaffoldCommandsJson = "[\"mkdir -p src/application/commands src/application/queries src/application/handlers\"]"
+                        },
+                        new
+                        {
+                            Id = 508,
+                            Architecture = "TypeScript",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Sagas reactivas con @nestjs/cqrs que orquestan flujos de eventos.",
+                            ImplementationNotes = "Usar @Saga() decorator con RxJS. Escucha eventos y despacha comandos compensatorios.",
+                            Name = "Saga (NestJS/TypeScript)",
+                            Pattern = "Saga",
+                            ScaffoldCommandsJson = "[\"mkdir -p src/application/sagas\"]"
+                        },
+                        new
+                        {
+                            Id = 509,
+                            Architecture = "TypeScript",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Separacion ViewModel-View con hooks o servicios de estado.",
+                            ImplementationNotes = "En React: custom hook como ViewModel. En Angular: servicio observable como ViewModel.",
+                            Name = "MVVM (TypeScript/React o Angular)",
+                            Pattern = "MVVM",
+                            ScaffoldCommandsJson = "[\"mkdir -p src/presentation/view-models src/presentation/views\"]"
                         });
                 });
 
@@ -307,11 +976,120 @@ namespace ProjectForge.Infrastructure.Migrations
                         },
                         new
                         {
+                            Id = 1000,
+                            Architecture = "DotNet",
+                            Category = "ORM",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Micro ORM rápido y ligero para .NET",
+                            InstallCommand = "dotnet add package Dapper",
+                            Name = "Dapper",
+                            PackageName = "Dapper",
+                            PopularityScore = 91
+                        },
+                        new
+                        {
+                            Id = 1001,
+                            Architecture = "DotNet",
+                            Category = "Database",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Provider de PostgreSQL para EF Core",
+                            InstallCommand = "dotnet add package Npgsql.EntityFrameworkCore.PostgreSQL",
+                            Name = "Npgsql EF Core",
+                            PackageName = "Npgsql.EntityFrameworkCore.PostgreSQL",
+                            PopularityScore = 93
+                        },
+                        new
+                        {
+                            Id = 1002,
+                            Architecture = "DotNet",
+                            Category = "Database",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Provider de MySQL para EF Core",
+                            InstallCommand = "dotnet add package Pomelo.EntityFrameworkCore.MySql",
+                            Name = "Pomelo MySQL EF Core",
+                            PackageName = "Pomelo.EntityFrameworkCore.MySql",
+                            PopularityScore = 89
+                        },
+                        new
+                        {
+                            Id = 1003,
+                            Architecture = "DotNet",
+                            Category = "Routing",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Módulos de rutas elegantes para Minimal API",
+                            Framework = "MinimalApi",
+                            InstallCommand = "dotnet add package Carter",
+                            Name = "Carter",
+                            PackageName = "Carter",
+                            PopularityScore = 82
+                        },
+                        new
+                        {
+                            Id = 1004,
+                            Architecture = "DotNet",
+                            Category = "Resilience",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Librería de resiliencia y manejo de fallos transitivos",
+                            InstallCommand = "dotnet add package Polly",
+                            Name = "Polly",
+                            PackageName = "Polly",
+                            PopularityScore = 93
+                        },
+                        new
+                        {
+                            Id = 1005,
+                            Architecture = "DotNet",
+                            Category = "Testing",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Framework de testing alternativo para .NET",
+                            InstallCommand = "dotnet add package NUnit",
+                            Name = "NUnit",
+                            PackageName = "NUnit",
+                            PopularityScore = 88
+                        },
+                        new
+                        {
+                            Id = 1006,
+                            Architecture = "DotNet",
+                            Category = "Testing",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Generador de datos falsos para tests",
+                            InstallCommand = "dotnet add package Bogus",
+                            Name = "Bogus",
+                            PackageName = "Bogus",
+                            PopularityScore = 86
+                        },
+                        new
+                        {
+                            Id = 1007,
+                            Architecture = "DotNet",
+                            Category = "Background Jobs",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Jobs en background con panel de administración",
+                            InstallCommand = "dotnet add package Hangfire.AspNetCore",
+                            Name = "Hangfire",
+                            PackageName = "Hangfire.AspNetCore",
+                            PopularityScore = 90
+                        },
+                        new
+                        {
+                            Id = 1008,
+                            Architecture = "DotNet",
+                            Category = "Cache",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Cliente Redis de alto rendimiento para .NET",
+                            InstallCommand = "dotnet add package StackExchange.Redis",
+                            Name = "StackExchange.Redis",
+                            PackageName = "StackExchange.Redis",
+                            PopularityScore = 92
+                        },
+                        new
+                        {
                             Id = 8,
                             Architecture = "Python",
                             Category = "ORM",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "ORM más popular para Python",
+                            Description = "ORM más popular para Python, soporta sync y async",
                             InstallCommand = "pip install sqlalchemy",
                             Name = "SQLAlchemy",
                             PackageName = "sqlalchemy",
@@ -340,6 +1118,654 @@ namespace ProjectForge.Infrastructure.Migrations
                             Name = "Alembic",
                             PackageName = "alembic",
                             PopularityScore = 90
+                        },
+                        new
+                        {
+                            Id = 800,
+                            Architecture = "Python",
+                            Category = "HTTP Client",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Cliente HTTP moderno con soporte async",
+                            InstallCommand = "pip install httpx",
+                            Name = "httpx",
+                            PackageName = "httpx",
+                            PopularityScore = 89
+                        },
+                        new
+                        {
+                            Id = 801,
+                            Architecture = "Python",
+                            Category = "Background Tasks",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Cola de tareas distribuidas, ideal con Redis",
+                            InstallCommand = "pip install celery",
+                            Name = "Celery",
+                            PackageName = "celery",
+                            PopularityScore = 93
+                        },
+                        new
+                        {
+                            Id = 802,
+                            Architecture = "Python",
+                            Category = "Testing",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Framework de testing más popular de Python",
+                            InstallCommand = "pip install pytest pytest-asyncio",
+                            Name = "pytest",
+                            PackageName = "pytest",
+                            PopularityScore = 99
+                        },
+                        new
+                        {
+                            Id = 1200,
+                            Architecture = "Python",
+                            Category = "Framework",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Framework web moderno y rápido para APIs",
+                            Framework = "FastAPI",
+                            InstallCommand = "pip install fastapi uvicorn[standard]",
+                            Name = "FastAPI",
+                            PackageName = "fastapi",
+                            PopularityScore = 99
+                        },
+                        new
+                        {
+                            Id = 1201,
+                            Architecture = "Python",
+                            Category = "API",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Extensión de Django para crear APIs REST",
+                            Framework = "Django",
+                            InstallCommand = "pip install djangorestframework",
+                            Name = "Django REST Framework",
+                            PackageName = "djangorestframework",
+                            PopularityScore = 96
+                        },
+                        new
+                        {
+                            Id = 1202,
+                            Architecture = "Python",
+                            Category = "ORM",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Integración de SQLAlchemy con Flask",
+                            Framework = "Flask",
+                            InstallCommand = "pip install flask-sqlalchemy",
+                            Name = "Flask-SQLAlchemy",
+                            PackageName = "flask-sqlalchemy",
+                            PopularityScore = 88
+                        },
+                        new
+                        {
+                            Id = 1203,
+                            Architecture = "Python",
+                            Category = "Cache",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Cliente Redis async para Python",
+                            InstallCommand = "pip install redis[asyncio]",
+                            Name = "aioredis",
+                            PackageName = "redis",
+                            PopularityScore = 87
+                        },
+                        new
+                        {
+                            Id = 1204,
+                            Architecture = "Python",
+                            Category = "Autenticación",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Manejo de tokens JWT en Python",
+                            InstallCommand = "pip install pyjwt",
+                            Name = "PyJWT",
+                            PackageName = "pyjwt",
+                            PopularityScore = 92
+                        },
+                        new
+                        {
+                            Id = 1205,
+                            Architecture = "Python",
+                            Category = "Config",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Carga variables de entorno desde .env",
+                            InstallCommand = "pip install python-dotenv",
+                            Name = "Python-dotenv",
+                            PackageName = "python-dotenv",
+                            PopularityScore = 96
+                        },
+                        new
+                        {
+                            Id = 26,
+                            Architecture = "JavaScript",
+                            Category = "Configuration",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Carga variables de entorno desde archivos .env",
+                            InstallCommand = "npm install dotenv",
+                            Name = "dotenv",
+                            PackageName = "dotenv",
+                            PopularityScore = 99
+                        },
+                        new
+                        {
+                            Id = 27,
+                            Architecture = "JavaScript",
+                            Category = "HTTP Framework",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Framework minimalista y flexible para APIs Node.js",
+                            Framework = "ExpressJs",
+                            InstallCommand = "npm install express",
+                            Name = "Express",
+                            PackageName = "express",
+                            PopularityScore = 98
+                        },
+                        new
+                        {
+                            Id = 28,
+                            Architecture = "JavaScript",
+                            Category = "Security",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Cabeceras HTTP seguras para aplicaciones Node.js",
+                            InstallCommand = "npm install helmet",
+                            Name = "Helmet",
+                            PackageName = "helmet",
+                            PopularityScore = 94
+                        },
+                        new
+                        {
+                            Id = 29,
+                            Architecture = "JavaScript",
+                            Category = "Logging",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Logger HTTP simple para Express",
+                            Framework = "ExpressJs",
+                            InstallCommand = "npm install morgan",
+                            Name = "Morgan",
+                            PackageName = "morgan",
+                            PopularityScore = 90
+                        },
+                        new
+                        {
+                            Id = 30,
+                            Architecture = "JavaScript",
+                            Category = "Configuration",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Gestion de configuracion por entorno para NestJS",
+                            Framework = "NestJs",
+                            InstallCommand = "npm install @nestjs/config",
+                            Name = "@nestjs/config",
+                            PackageName = "@nestjs/config",
+                            PopularityScore = 96
+                        },
+                        new
+                        {
+                            Id = 31,
+                            Architecture = "JavaScript",
+                            Category = "Validation",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Validacion declarativa basada en decoradores",
+                            Framework = "NestJs",
+                            InstallCommand = "npm install class-validator",
+                            Name = "class-validator",
+                            PackageName = "class-validator",
+                            PopularityScore = 95
+                        },
+                        new
+                        {
+                            Id = 32,
+                            Architecture = "JavaScript",
+                            Category = "Documentation",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Generacion de OpenAPI y Swagger para NestJS",
+                            Framework = "NestJs",
+                            InstallCommand = "npm install @nestjs/swagger swagger-ui-express",
+                            Name = "@nestjs/swagger",
+                            PackageName = "@nestjs/swagger",
+                            PopularityScore = 93
+                        },
+                        new
+                        {
+                            Id = 33,
+                            Architecture = "JavaScript",
+                            Category = "Authentication",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Autenticacion lista para Next.js",
+                            Framework = "NextJs",
+                            InstallCommand = "npm install next-auth",
+                            Name = "NextAuth",
+                            PackageName = "next-auth",
+                            PopularityScore = 97
+                        },
+                        new
+                        {
+                            Id = 34,
+                            Architecture = "JavaScript",
+                            Category = "Validation",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Esquemas de validacion y parseo para Node y Next",
+                            InstallCommand = "npm install zod",
+                            Name = "Zod",
+                            PackageName = "zod",
+                            PopularityScore = 98
+                        },
+                        new
+                        {
+                            Id = 35,
+                            Architecture = "JavaScript",
+                            Category = "Data Fetching",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Cache y sincronizacion de estado servidor para Next.js",
+                            Framework = "NextJs",
+                            InstallCommand = "npm install @tanstack/react-query",
+                            Name = "React Query",
+                            PackageName = "@tanstack/react-query",
+                            PopularityScore = 92
+                        },
+                        new
+                        {
+                            Id = 36,
+                            Architecture = "JavaScript",
+                            Category = "CQRS",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "CommandBus, QueryBus y EventBus oficiales para NestJS",
+                            Framework = "NestJs",
+                            InstallCommand = "npm install @nestjs/cqrs",
+                            Name = "@nestjs/cqrs",
+                            PackageName = "@nestjs/cqrs",
+                            PopularityScore = 97
+                        },
+                        new
+                        {
+                            Id = 11,
+                            Architecture = "Php",
+                            Category = "Authentication",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Autenticacion ligera para APIs y SPAs en Laravel",
+                            Framework = "Laravel",
+                            InstallCommand = "composer require laravel/sanctum",
+                            Name = "Laravel Sanctum",
+                            PackageName = "laravel/sanctum",
+                            PopularityScore = 96
+                        },
+                        new
+                        {
+                            Id = 12,
+                            Architecture = "Php",
+                            Category = "Authorization",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Roles y permisos robustos para Laravel",
+                            Framework = "Laravel",
+                            InstallCommand = "composer require spatie/laravel-permission",
+                            Name = "Spatie Permission",
+                            PackageName = "spatie/laravel-permission",
+                            PopularityScore = 95
+                        },
+                        new
+                        {
+                            Id = 13,
+                            Architecture = "Php",
+                            Category = "Auditing",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Auditoria y trazabilidad de cambios en modelos",
+                            Framework = "Laravel",
+                            InstallCommand = "composer require spatie/laravel-activitylog",
+                            Name = "Spatie Activitylog",
+                            PackageName = "spatie/laravel-activitylog",
+                            PopularityScore = 92
+                        },
+                        new
+                        {
+                            Id = 14,
+                            Architecture = "Php",
+                            Category = "Queues",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Panel y supervision de colas Redis en Laravel",
+                            Framework = "Laravel",
+                            InstallCommand = "composer require laravel/horizon",
+                            Name = "Laravel Horizon",
+                            PackageName = "laravel/horizon",
+                            PopularityScore = 91
+                        },
+                        new
+                        {
+                            Id = 15,
+                            Architecture = "Php",
+                            Category = "HTTP Client",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Cliente HTTP estandar para integraciones y consumo de APIs",
+                            InstallCommand = "composer require guzzlehttp/guzzle",
+                            Name = "Guzzle HTTP",
+                            PackageName = "guzzlehttp/guzzle",
+                            PopularityScore = 98
+                        },
+                        new
+                        {
+                            Id = 16,
+                            Architecture = "Php",
+                            Category = "Event Sourcing",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Event store, projectors y replay para Laravel",
+                            Framework = "Laravel",
+                            InstallCommand = "composer require spatie/laravel-event-sourcing",
+                            Name = "Laravel Event Sourcing",
+                            PackageName = "spatie/laravel-event-sourcing",
+                            PopularityScore = 94
+                        },
+                        new
+                        {
+                            Id = 17,
+                            Architecture = "Php",
+                            Category = "Database",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Driver oficial para usar MongoDB con Laravel",
+                            Framework = "Laravel",
+                            InstallCommand = "composer require mongodb/laravel-mongodb",
+                            Name = "Laravel MongoDB",
+                            PackageName = "mongodb/laravel-mongodb",
+                            PopularityScore = 93
+                        },
+                        new
+                        {
+                            Id = 21,
+                            Architecture = "Php",
+                            Category = "ORM",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Stack de Doctrine ORM listo para Symfony",
+                            Framework = "Symfony",
+                            InstallCommand = "composer require symfony/orm-pack",
+                            Name = "Symfony ORM Pack",
+                            PackageName = "symfony/orm-pack",
+                            PopularityScore = 97
+                        },
+                        new
+                        {
+                            Id = 22,
+                            Architecture = "Php",
+                            Category = "Validation",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Validacion de objetos y DTOs en Symfony",
+                            Framework = "Symfony",
+                            InstallCommand = "composer require symfony/validator",
+                            Name = "Symfony Validator",
+                            PackageName = "symfony/validator",
+                            PopularityScore = 95
+                        },
+                        new
+                        {
+                            Id = 23,
+                            Architecture = "Php",
+                            Category = "Security",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Autenticacion y autorizacion para Symfony",
+                            Framework = "Symfony",
+                            InstallCommand = "composer require symfony/security-bundle",
+                            Name = "Symfony Security Bundle",
+                            PackageName = "symfony/security-bundle",
+                            PopularityScore = 96
+                        },
+                        new
+                        {
+                            Id = 24,
+                            Architecture = "Php",
+                            Category = "Queues",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Mensajeria y colas para tareas asincronas en Symfony",
+                            Framework = "Symfony",
+                            InstallCommand = "composer require symfony/messenger",
+                            Name = "Symfony Messenger",
+                            PackageName = "symfony/messenger",
+                            PopularityScore = 93
+                        },
+                        new
+                        {
+                            Id = 25,
+                            Architecture = "Php",
+                            Category = "Serialization",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Serializacion y normalizacion de datos en Symfony",
+                            Framework = "Symfony",
+                            InstallCommand = "composer require symfony/serializer-pack",
+                            Name = "Symfony Serializer",
+                            PackageName = "symfony/serializer-pack",
+                            PopularityScore = 94
+                        },
+                        new
+                        {
+                            Id = 900,
+                            Architecture = "Java",
+                            Category = "ORM",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "ORM de Spring basado en JPA/Hibernate",
+                            InstallCommand = "<!-- pom.xml -->\n<dependency>\n  <groupId>org.springframework.boot</groupId>\n  <artifactId>spring-boot-starter-data-jpa</artifactId>\n</dependency>",
+                            Name = "Spring Data JPA",
+                            PackageName = "spring-boot-starter-data-jpa",
+                            PopularityScore = 99
+                        },
+                        new
+                        {
+                            Id = 901,
+                            Architecture = "Java",
+                            Category = "Seguridad",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Autenticación y autorización para Spring",
+                            InstallCommand = "<dependency>\n  <groupId>org.springframework.boot</groupId>\n  <artifactId>spring-boot-starter-security</artifactId>\n</dependency>",
+                            Name = "Spring Security",
+                            PackageName = "spring-boot-starter-security",
+                            PopularityScore = 98
+                        },
+                        new
+                        {
+                            Id = 902,
+                            Architecture = "Java",
+                            Category = "Productividad",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Elimina boilerplate con anotaciones",
+                            InstallCommand = "<dependency>\n  <groupId>org.projectlombok</groupId>\n  <artifactId>lombok</artifactId>\n  <optional>true</optional>\n</dependency>",
+                            Name = "Lombok",
+                            PackageName = "lombok",
+                            PopularityScore = 95
+                        },
+                        new
+                        {
+                            Id = 903,
+                            Architecture = "Java",
+                            Category = "Mapeo",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Mapeo de objetos en tiempo de compilación",
+                            InstallCommand = "<dependency>\n  <groupId>org.mapstruct</groupId>\n  <artifactId>mapstruct</artifactId>\n  <version>1.5.5.Final</version>\n</dependency>",
+                            Name = "MapStruct",
+                            PackageName = "mapstruct",
+                            PopularityScore = 88
+                        },
+                        new
+                        {
+                            Id = 904,
+                            Architecture = "Java",
+                            Category = "Migraciones",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Migraciones de base de datos para Java",
+                            InstallCommand = "<dependency>\n  <groupId>org.flywaydb</groupId>\n  <artifactId>flyway-core</artifactId>\n</dependency>",
+                            Name = "Flyway",
+                            PackageName = "flyway-core",
+                            PopularityScore = 92
+                        },
+                        new
+                        {
+                            Id = 905,
+                            Architecture = "Java",
+                            Category = "Documentación",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Documentación Swagger automática para Spring Boot",
+                            InstallCommand = "<dependency>\n  <groupId>org.springdoc</groupId>\n  <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>\n  <version>2.5.0</version>\n</dependency>",
+                            Name = "SpringDoc OpenAPI",
+                            PackageName = "springdoc-openapi-starter-webmvc-ui",
+                            PopularityScore = 90
+                        },
+                        new
+                        {
+                            Id = 1100,
+                            Architecture = "Java",
+                            Category = "Reactive",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Programación reactiva con Spring WebFlux",
+                            InstallCommand = "<dependency>\n  <groupId>org.springframework.boot</groupId>\n  <artifactId>spring-boot-starter-webflux</artifactId>\n</dependency>",
+                            Name = "Spring WebFlux",
+                            PackageName = "spring-boot-starter-webflux",
+                            PopularityScore = 85
+                        },
+                        new
+                        {
+                            Id = 1101,
+                            Architecture = "Java",
+                            Category = "Mensajería",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Integración con Apache Kafka",
+                            InstallCommand = "<dependency>\n  <groupId>org.springframework.kafka</groupId>\n  <artifactId>spring-kafka</artifactId>\n</dependency>",
+                            Name = "Spring Kafka",
+                            PackageName = "spring-kafka",
+                            PopularityScore = 87
+                        },
+                        new
+                        {
+                            Id = 1102,
+                            Architecture = "Java",
+                            Category = "Cache",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Integración con Redis para caching",
+                            InstallCommand = "<dependency>\n  <groupId>org.springframework.boot</groupId>\n  <artifactId>spring-boot-starter-data-redis</artifactId>\n</dependency>",
+                            Name = "Spring Data Redis",
+                            PackageName = "spring-boot-starter-data-redis",
+                            PopularityScore = 88
+                        },
+                        new
+                        {
+                            Id = 1103,
+                            Architecture = "Java",
+                            Category = "Testing",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Framework de testing moderno para Java",
+                            InstallCommand = "<dependency>\n  <groupId>org.junit.jupiter</groupId>\n  <artifactId>junit-jupiter</artifactId>\n  <scope>test</scope>\n</dependency>",
+                            Name = "JUnit 5",
+                            PackageName = "junit-5",
+                            PopularityScore = 99
+                        },
+                        new
+                        {
+                            Id = 1104,
+                            Architecture = "Java",
+                            Category = "Testing",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Framework de mocking para tests unitarios Java",
+                            InstallCommand = "<dependency>\n  <groupId>org.mockito</groupId>\n  <artifactId>mockito-core</artifactId>\n  <scope>test</scope>\n</dependency>",
+                            Name = "Mockito",
+                            PackageName = "mockito-core",
+                            PopularityScore = 97
+                        },
+                        new
+                        {
+                            Id = 500,
+                            Architecture = "TypeScript",
+                            Category = "ORM",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "ORM para TypeScript con decoradores",
+                            InstallCommand = "npm install typeorm @nestjs/typeorm reflect-metadata",
+                            Name = "TypeORM",
+                            PackageName = "typeorm",
+                            PopularityScore = 91
+                        },
+                        new
+                        {
+                            Id = 501,
+                            Architecture = "TypeScript",
+                            Category = "ORM",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "ORM type-safe de última generación para TypeScript",
+                            InstallCommand = "npm install prisma @prisma/client",
+                            Name = "Prisma",
+                            PackageName = "prisma",
+                            PopularityScore = 97
+                        },
+                        new
+                        {
+                            Id = 502,
+                            Architecture = "TypeScript",
+                            Category = "Validation",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Decoradores de validación para clases TypeScript",
+                            InstallCommand = "npm install class-validator class-transformer",
+                            Name = "class-validator",
+                            PackageName = "class-validator",
+                            PopularityScore = 94
+                        },
+                        new
+                        {
+                            Id = 503,
+                            Architecture = "TypeScript",
+                            Category = "Documentation",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Integración OpenAPI/Swagger para NestJS",
+                            Framework = "NestTs",
+                            InstallCommand = "npm install @nestjs/swagger swagger-ui-express",
+                            Name = "@nestjs/swagger",
+                            PackageName = "@nestjs/swagger",
+                            PopularityScore = 93
+                        },
+                        new
+                        {
+                            Id = 504,
+                            Architecture = "TypeScript",
+                            Category = "Autenticación",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Módulo JWT para NestJS",
+                            Framework = "NestTs",
+                            InstallCommand = "npm install @nestjs/jwt @nestjs/passport passport passport-jwt",
+                            Name = "@nestjs/jwt",
+                            PackageName = "@nestjs/jwt",
+                            PopularityScore = 92
+                        },
+                        new
+                        {
+                            Id = 505,
+                            Architecture = "TypeScript",
+                            Category = "Validation",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Validación de esquemas TypeScript con inferencia de tipos",
+                            InstallCommand = "npm install zod",
+                            Name = "zod",
+                            PackageName = "zod",
+                            PopularityScore = 98
+                        },
+                        new
+                        {
+                            Id = 506,
+                            Architecture = "TypeScript",
+                            Category = "Cache",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Cliente Redis robusto para Node.js/TypeScript",
+                            InstallCommand = "npm install ioredis",
+                            Name = "ioredis",
+                            PackageName = "ioredis",
+                            PopularityScore = 91
+                        },
+                        new
+                        {
+                            Id = 507,
+                            Architecture = "TypeScript",
+                            Category = "Testing",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Testing para TypeScript con cobertura",
+                            InstallCommand = "npm install --save-dev jest ts-jest @types/jest",
+                            Name = "jest + ts-jest",
+                            PackageName = "jest",
+                            PopularityScore = 99
+                        },
+                        new
+                        {
+                            Id = 508,
+                            Architecture = "TypeScript",
+                            Category = "Background Jobs",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Cola de trabajos en background basada en Redis",
+                            InstallCommand = "npm install bullmq @nestjs/bull",
+                            Name = "BullMQ",
+                            PackageName = "bullmq",
+                            PopularityScore = 89
                         });
                 });
 
@@ -513,7 +1939,7 @@ namespace ProjectForge.Infrastructure.Migrations
                         {
                             Id = 2,
                             Architecture = "DotNet",
-                            Content = "version: '3.9'\nservices:\n  app:\n    build: .\n    ports:\n      - \"{{APP_PORT}}:8080\"\n    environment:\n      - ConnectionStrings__Default=Host=db;Database={{DB_NAME}};Username=postgres;Password=secret\n    depends_on:\n      db:\n        condition: service_healthy\n\n  db:\n    image: postgres:16-alpine\n    environment:\n      POSTGRES_DB: {{DB_NAME}}\n      POSTGRES_PASSWORD: secret\n    ports:\n      - \"{{DB_PORT}}:5432\"\n    volumes:\n      - pgdata:/var/lib/postgresql/data\n    healthcheck:\n      test: [\"CMD\",\"pg_isready\",\"-U\",\"postgres\"]\n      interval: 10s\n      timeout: 5s\n      retries: 5\n\nvolumes:\n  pgdata:",
+                            Content = "version: '3.9'\nservices:\n  app:\n    build: .\n    ports:\n      - \"{{APP_PORT}}:8080\"\n    environment:\n      - ConnectionStrings__Default=Host=db;Database={{DB_NAME}};Username=postgres;Password=secret\n    depends_on:\n      db:\n        condition: service_healthy\n  db:\n    image: postgres:16-alpine\n    environment:\n      POSTGRES_DB: {{DB_NAME}}\n      POSTGRES_PASSWORD: secret\n    ports:\n      - \"{{DB_PORT}}:5432\"\n    volumes:\n      - pgdata:/var/lib/postgresql/data\n    healthcheck:\n      test: [\"CMD\",\"pg_isready\",\"-U\",\"postgres\"]\n      interval: 10s\n      timeout: 5s\n      retries: 5\nvolumes:\n  pgdata:",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Database = "PostgreSQL",
                             Description = "Docker Compose para .NET + PostgreSQL",
@@ -527,7 +1953,7 @@ namespace ProjectForge.Infrastructure.Migrations
                         {
                             Id = 3,
                             Architecture = "DotNet",
-                            Content = "version: '3.9'\nservices:\n  app:\n    build: .\n    ports:\n      - \"{{APP_PORT}}:8080\"\n    environment:\n      - ConnectionStrings__Default=Server=db;Database={{DB_NAME}};User=root;Password=secret;\n    depends_on:\n      db:\n        condition: service_healthy\n\n  db:\n    image: mysql:8.0\n    environment:\n      MYSQL_ROOT_PASSWORD: secret\n      MYSQL_DATABASE: {{DB_NAME}}\n    ports:\n      - \"{{DB_PORT}}:3306\"\n    volumes:\n      - mysqldata:/var/lib/mysql\n    healthcheck:\n      test: [\"CMD\",\"mysqladmin\",\"ping\",\"-h\",\"localhost\"]\n      interval: 10s\n      timeout: 5s\n      retries: 5\n\nvolumes:\n  mysqldata:",
+                            Content = "version: '3.9'\nservices:\n  app:\n    build: .\n    ports:\n      - \"{{APP_PORT}}:8080\"\n    environment:\n      - ConnectionStrings__Default=Server=db;Database={{DB_NAME}};Uid=root;Pwd=secret;\n    depends_on:\n      db:\n        condition: service_healthy\n  db:\n    image: mysql:8\n    environment:\n      MYSQL_DATABASE: {{DB_NAME}}\n      MYSQL_ROOT_PASSWORD: secret\n    ports:\n      - \"{{DB_PORT}}:3306\"\n    volumes:\n      - mysqldata:/var/lib/mysql\n    healthcheck:\n      test: [\"CMD\",\"mysqladmin\",\"ping\",\"-h\",\"localhost\"]\n      interval: 10s\n      timeout: 5s\n      retries: 5\nvolumes:\n  mysqldata:",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Database = "MySQL",
                             Description = "Docker Compose para .NET + MySQL",
@@ -541,37 +1967,456 @@ namespace ProjectForge.Infrastructure.Migrations
                         {
                             Id = 4,
                             Architecture = "DotNet",
-                            Content = "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: {{APP_NAME}}\nspec:\n  replicas: 2\n  selector:\n    matchLabels:\n      app: {{APP_NAME}}\n  template:\n    metadata:\n      labels:\n        app: {{APP_NAME}}\n    spec:\n      containers:\n      - name: {{APP_NAME}}\n        image: {{APP_NAME}}:latest\n        ports:\n        - containerPort: 8080\n---\napiVersion: v1\nkind: Service\nmetadata:\n  name: {{APP_NAME}}-svc\nspec:\n  selector:\n    app: {{APP_NAME}}\n  ports:\n  - port: 80\n    targetPort: 8080\n  type: LoadBalancer",
+                            Content = "version: '3.9'\nservices:\n  app:\n    build: .\n    ports:\n      - \"{{APP_PORT}}:8080\"\n    environment:\n      - ConnectionStrings__Default=Server=db,1433;Database={{DB_NAME}};User Id=sa;Password=Secret1234!;\n    depends_on:\n      - db\n  db:\n    image: mcr.microsoft.com/mssql/server:2022-latest\n    environment:\n      ACCEPT_EULA: Y\n      SA_PASSWORD: Secret1234!\n    ports:\n      - \"{{DB_PORT}}:1433\"\n    volumes:\n      - mssqldata:/var/opt/mssql\nvolumes:\n  mssqldata:",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Kubernetes Deployment para la aplicación",
-                            Infrastructure = "Kubernetes",
+                            Database = "SqlServer",
+                            Description = "Docker Compose para .NET + SQL Server",
+                            Infrastructure = "DockerCompose",
                             IsActive = true,
-                            Name = "K8s App Deployment",
-                            TemplateType = "k8s-deployment",
+                            Name = "Compose .NET + SQL Server",
+                            TemplateType = "compose",
                             Version = 1
                         },
                         new
                         {
                             Id = 5,
                             Architecture = "DotNet",
-                            Content = "[Dd]ebug/\n[Rr]elease/\n[Bb]in/\n[Oo]bj/\n*.user\n*.suo\n*.vs/\n.vscode/\n.env\n.env.*\n*.pfx\npackages/",
+                            Content = "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: {{APP_NAME}}\nspec:\n  replicas: 2\n  selector:\n    matchLabels:\n      app: {{APP_NAME}}\n  template:\n    metadata:\n      labels:\n        app: {{APP_NAME}}\n    spec:\n      containers:\n        - name: {{APP_NAME}}\n          image: {{APP_NAME}}:latest\n          ports:\n            - containerPort: 8080\n---\napiVersion: v1\nkind: Service\nmetadata:\n  name: {{APP_NAME}}-svc\nspec:\n  selector:\n    app: {{APP_NAME}}\n  ports:\n    - port: 80\n      targetPort: 8080\n  type: LoadBalancer",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Gitignore para proyectos .NET",
+                            Description = "Kubernetes Deployment para .NET",
+                            Infrastructure = "Kubernetes",
                             IsActive = true,
-                            Name = ".gitignore .NET",
-                            TemplateType = "gitignore",
+                            Name = "K8s .NET Deployment",
+                            TemplateType = "k8s-deployment",
                             Version = 1
                         },
                         new
                         {
                             Id = 6,
                             Architecture = "DotNet",
-                            Content = "name: CI/CD\non:\n  push:\n    branches: [main]\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n    - uses: actions/checkout@v4\n    - uses: actions/setup-dotnet@v4\n      with:\n        dotnet-version: '10.0.x'\n    - run: dotnet restore\n    - run: dotnet build --no-restore\n    - run: dotnet test --no-build",
+                            Content = "name: CI\non:\n  push:\n    branches: [main]\n  pull_request:\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-dotnet@v4\n        with:\n          dotnet-version: '10.0.x'\n      - run: dotnet restore\n      - run: dotnet build --no-restore\n      - run: dotnet test --no-build --verbosity normal",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Pipeline CI/CD para .NET con GitHub Actions",
+                            Description = "Pipeline CI para .NET",
                             IsActive = true,
                             Name = "CI .NET GitHub Actions",
                             TemplateType = "ci",
+                            Version = 1
+                        },
+                        new
+                        {
+                            Id = 800,
+                            Architecture = "Python",
+                            Content = "FROM python:3.12-slim\nWORKDIR /app\nCOPY requirements.txt .\nRUN pip install --no-cache-dir -r requirements.txt\nCOPY . .\nEXPOSE 8000\nCMD [\"uvicorn\", \"app.main:app\", \"--host\", \"0.0.0.0\", \"--port\", \"8000\"]",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Dockerfile para FastAPI con uvicorn",
+                            IsActive = true,
+                            Name = "Dockerfile Python / FastAPI",
+                            TemplateType = "dockerfile",
+                            Version = 1
+                        },
+                        new
+                        {
+                            Id = 801,
+                            Architecture = "Python",
+                            Content = "version: '3.9'\nservices:\n  app:\n    build: .\n    ports:\n      - \"{{APP_PORT}}:8000\"\n    environment:\n      DATABASE_URL: postgresql://postgres:secret@db:5432/{{DB_NAME}}\n    depends_on:\n      db:\n        condition: service_healthy\n  db:\n    image: postgres:16-alpine\n    environment:\n      POSTGRES_DB: {{DB_NAME}}\n      POSTGRES_PASSWORD: secret\n    ports:\n      - \"{{DB_PORT}}:5432\"\n    volumes:\n      - pgdata:/var/lib/postgresql/data\n    healthcheck:\n      test: [\"CMD\",\"pg_isready\",\"-U\",\"postgres\"]\n      interval: 10s\n      timeout: 5s\n      retries: 5\nvolumes:\n  pgdata:",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Database = "PostgreSQL",
+                            Description = "Docker Compose para FastAPI/Django + PostgreSQL",
+                            Infrastructure = "DockerCompose",
+                            IsActive = true,
+                            Name = "Compose Python + PostgreSQL",
+                            TemplateType = "compose",
+                            Version = 1
+                        },
+                        new
+                        {
+                            Id = 802,
+                            Architecture = "Python",
+                            Content = "version: '3.9'\nservices:\n  app:\n    build: .\n    ports:\n      - \"{{APP_PORT}}:8000\"\n    environment:\n      DATABASE_URL: mysql+pymysql://root:secret@db:3306/{{DB_NAME}}\n    depends_on:\n      db:\n        condition: service_healthy\n  db:\n    image: mysql:8\n    environment:\n      MYSQL_DATABASE: {{DB_NAME}}\n      MYSQL_ROOT_PASSWORD: secret\n    ports:\n      - \"{{DB_PORT}}:3306\"\n    volumes:\n      - mysqldata:/var/lib/mysql\n    healthcheck:\n      test: [\"CMD\",\"mysqladmin\",\"ping\",\"-h\",\"localhost\"]\n      interval: 10s\n      timeout: 5s\n      retries: 5\nvolumes:\n  mysqldata:",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Database = "MySQL",
+                            Description = "Docker Compose para Python + MySQL",
+                            Infrastructure = "DockerCompose",
+                            IsActive = true,
+                            Name = "Compose Python + MySQL",
+                            TemplateType = "compose",
+                            Version = 1
+                        },
+                        new
+                        {
+                            Id = 1200,
+                            Architecture = "Python",
+                            Content = "name: CI\non:\n  push:\n    branches: [main]\n  pull_request:\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-python@v5\n        with:\n          python-version: '3.12'\n      - run: pip install -r requirements.txt\n      - run: pytest --tb=short",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Pipeline CI para Python con pytest",
+                            IsActive = true,
+                            Name = "CI Python GitHub Actions",
+                            TemplateType = "ci",
+                            Version = 1
+                        },
+                        new
+                        {
+                            Id = 200,
+                            Architecture = "JavaScript",
+                            Content = "FROM node:22-alpine\n\nWORKDIR /app\n\nCOPY package*.json ./\nRUN if [ -f package-lock.json ]; then npm ci --omit=dev; else npm install --omit=dev; fi\n\nCOPY . .\n\nEXPOSE 3000\n\nCMD [\"npm\", \"start\"]",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Dockerfile generico para Node.js, Express, NestJS y Next.js",
+                            IsActive = true,
+                            Name = "Dockerfile JavaScript",
+                            TemplateType = "dockerfile",
+                            Version = 1
+                        },
+                        new
+                        {
+                            Id = 201,
+                            Architecture = "JavaScript",
+                            Content = "version: '3.9'\nservices:\n  app:\n    build: .\n    ports:\n      - \"{{APP_PORT}}:3000\"\n    environment:\n      NODE_ENV: development\n      PORT: 3000\n      DATABASE_URL: postgres://postgres:secret@db:5432/{{DB_NAME}}\n    depends_on:\n      db:\n        condition: service_healthy\n\n  db:\n    image: postgres:16-alpine\n    environment:\n      POSTGRES_DB: {{DB_NAME}}\n      POSTGRES_PASSWORD: secret\n    ports:\n      - \"{{DB_PORT}}:5432\"\n    volumes:\n      - pgdata:/var/lib/postgresql/data\n    healthcheck:\n      test: [\"CMD\", \"pg_isready\", \"-U\", \"postgres\"]\n      interval: 10s\n      timeout: 5s\n      retries: 5\n\nvolumes:\n  pgdata:",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Database = "PostgreSQL",
+                            Description = "Docker Compose para Node.js con PostgreSQL",
+                            Infrastructure = "DockerCompose",
+                            IsActive = true,
+                            Name = "Compose JavaScript + PostgreSQL",
+                            TemplateType = "compose",
+                            Version = 1
+                        },
+                        new
+                        {
+                            Id = 202,
+                            Architecture = "JavaScript",
+                            Content = "version: '3.9'\nservices:\n  app:\n    build: .\n    ports:\n      - \"{{APP_PORT}}:3000\"\n    environment:\n      NODE_ENV: development\n      PORT: 3000\n      DATABASE_URL: mysql://root:secret@db:3306/{{DB_NAME}}\n    depends_on:\n      db:\n        condition: service_healthy\n\n  db:\n    image: mysql:8.0\n    environment:\n      MYSQL_ROOT_PASSWORD: secret\n      MYSQL_DATABASE: {{DB_NAME}}\n    ports:\n      - \"{{DB_PORT}}:3306\"\n    volumes:\n      - mysqldata:/var/lib/mysql\n    healthcheck:\n      test: [\"CMD\", \"mysqladmin\", \"ping\", \"-h\", \"localhost\"]\n      interval: 10s\n      timeout: 5s\n      retries: 5\n\nvolumes:\n  mysqldata:",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Database = "MySQL",
+                            Description = "Docker Compose para Node.js con MySQL",
+                            Infrastructure = "DockerCompose",
+                            IsActive = true,
+                            Name = "Compose JavaScript + MySQL",
+                            TemplateType = "compose",
+                            Version = 1
+                        },
+                        new
+                        {
+                            Id = 203,
+                            Architecture = "JavaScript",
+                            Content = "version: '3.9'\nservices:\n  app:\n    build: .\n    ports:\n      - \"{{APP_PORT}}:3000\"\n    environment:\n      NODE_ENV: development\n      PORT: 3000\n      DATABASE_URL: sqlite:///app/data/app.sqlite\n    volumes:\n      - sqlite-data:/app/data\n\nvolumes:\n  sqlite-data:",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Database = "SQLite",
+                            Description = "Docker Compose para Node.js usando SQLite",
+                            Infrastructure = "DockerCompose",
+                            IsActive = true,
+                            Name = "Compose JavaScript + SQLite",
+                            TemplateType = "compose",
+                            Version = 1
+                        },
+                        new
+                        {
+                            Id = 204,
+                            Architecture = "JavaScript",
+                            Content = "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: {{APP_NAME}}\nspec:\n  replicas: 2\n  selector:\n    matchLabels:\n      app: {{APP_NAME}}\n  template:\n    metadata:\n      labels:\n        app: {{APP_NAME}}\n    spec:\n      containers:\n        - name: {{APP_NAME}}\n          image: {{APP_NAME}}:latest\n          ports:\n            - containerPort: 3000\n          env:\n            - name: NODE_ENV\n              value: production\n---\napiVersion: v1\nkind: Service\nmetadata:\n  name: {{APP_NAME}}-svc\nspec:\n  selector:\n    app: {{APP_NAME}}\n  ports:\n    - port: 80\n      targetPort: 3000\n  type: LoadBalancer",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Kubernetes Deployment y Service para Node.js",
+                            Infrastructure = "Kubernetes",
+                            IsActive = true,
+                            Name = "K8s JavaScript Deployment",
+                            TemplateType = "k8s-deployment",
+                            Version = 1
+                        },
+                        new
+                        {
+                            Id = 205,
+                            Architecture = "JavaScript",
+                            Content = "name: CI\non:\n  push:\n    branches: [main]\n  pull_request:\n\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - name: Setup Node\n        uses: actions/setup-node@v4\n        with:\n          node-version: '22'\n          cache: npm\n      - name: Install dependencies\n        run: npm ci\n      - name: Build\n        run: npm run build --if-present\n      - name: Test\n        run: npm test --if-present",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Pipeline CI/CD para Node.js, NestJS y Next.js",
+                            IsActive = true,
+                            Name = "CI JavaScript GitHub Actions",
+                            TemplateType = "ci",
+                            Version = 1
+                        },
+                        new
+                        {
+                            Id = 206,
+                            Architecture = "JavaScript",
+                            Content = "/node_modules/\n/dist/\n/.next/\n/.turbo/\n/coverage/\n/.env\n/.env.*\n/npm-debug.log*\n/yarn-debug.log*\n/pnpm-debug.log*",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Gitignore base para proyectos Node.js modernos",
+                            IsActive = true,
+                            Name = "JavaScript .gitignore",
+                            TemplateType = "gitignore",
+                            Version = 1
+                        },
+                        new
+                        {
+                            Id = 7,
+                            Architecture = "Php",
+                            Content = "FROM php:8.3-cli\n\nWORKDIR /var/www/html\n\nRUN apt-get update && apt-get install -y --no-install-recommends \\\n    git curl unzip libzip-dev libpng-dev libicu-dev libonig-dev libxml2-dev \\\n    && docker-php-ext-install pdo pdo_mysql pdo_pgsql pdo_sqlite mbstring zip intl bcmath \\\n    && rm -rf /var/lib/apt/lists/*\n\nCOPY --from=composer:2 /usr/bin/composer /usr/bin/composer\n\nCOPY . .\n\nRUN if [ -f composer.json ]; then composer install --no-interaction --prefer-dist --optimize-autoloader; fi \\\n    && mkdir -p storage bootstrap/cache database \\\n    && touch database/database.sqlite \\\n    && chmod -R 775 storage bootstrap/cache database\n\nRUN printf '%s\\n' \\\n    '<?php' \\\n    'if (php_sapi_name() === '\"'\"'\\'\"'\"''\"'\"'cli-server'\"'\"'\\'\"'\"''\"'\"') {' \\\n    '    $path = parse_url($_SERVER['\"'\"'\\'\"'\"''\"'\"'REQUEST_URI'\"'\"'\\'\"'\"''\"'\"'], PHP_URL_PATH);' \\\n    '    $file = __DIR__ . '\"'\"'\\'\"'\"''\"'\"'/public'\"'\"'\\'\"'\"''\"'\"' . $path;' \\\n    '    if ($path !== '\"'\"'\\'\"'\"''\"'\"'/'\\'\"'\"''\"'\"' && is_file($file)) {' \\\n    '        return false;' \\\n    '    }' \\\n    '}' \\\n    'require __DIR__ . '\"'\"'\\'\"'\"''\"'\"'/public/index.php'\"'\"'\\'\"'\"''\"'\"';' \\\n    > /usr/local/bin/router.php\n\nEXPOSE 8080\n\nCMD [\"php\", \"-S\", \"0.0.0.0:8080\", \"-t\", \"public\", \"/usr/local/bin/router.php\"]",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Dockerfile generico para apps PHP modernas como Laravel y Symfony",
+                            IsActive = true,
+                            Name = "Dockerfile PHP",
+                            TemplateType = "dockerfile",
+                            Version = 1
+                        },
+                        new
+                        {
+                            Id = 8,
+                            Architecture = "Php",
+                            Content = "version: '3.9'\nservices:\n  app:\n    build: .\n    ports:\n      - \"{{APP_PORT}}:8080\"\n    environment:\n      APP_ENV: local\n      APP_DEBUG: \"true\"\n      APP_URL: http://localhost:{{APP_PORT}}\n      DB_CONNECTION: mysql\n      DB_HOST: db\n      DB_PORT: 3306\n      DB_DATABASE: {{DB_NAME}}\n      DB_USERNAME: root\n      DB_PASSWORD: secret\n      DATABASE_URL: mysql://root:secret@db:3306/{{DB_NAME}}\n    depends_on:\n      db:\n        condition: service_healthy\n\n  db:\n    image: mysql:8.0\n    environment:\n      MYSQL_ROOT_PASSWORD: secret\n      MYSQL_DATABASE: {{DB_NAME}}\n    ports:\n      - \"{{DB_PORT}}:3306\"\n    volumes:\n      - mysqldata:/var/lib/mysql\n    healthcheck:\n      test: [\"CMD\", \"mysqladmin\", \"ping\", \"-h\", \"localhost\"]\n      interval: 10s\n      timeout: 5s\n      retries: 5\n\nvolumes:\n  mysqldata:",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Database = "MySQL",
+                            Description = "Docker Compose para PHP/Laravel o Symfony con MySQL",
+                            Infrastructure = "DockerCompose",
+                            IsActive = true,
+                            Name = "Compose PHP + MySQL",
+                            TemplateType = "compose",
+                            Version = 1
+                        },
+                        new
+                        {
+                            Id = 9,
+                            Architecture = "Php",
+                            Content = "version: '3.9'\nservices:\n  app:\n    build: .\n    ports:\n      - \"{{APP_PORT}}:8080\"\n    environment:\n      APP_ENV: local\n      APP_DEBUG: \"true\"\n      APP_URL: http://localhost:{{APP_PORT}}\n      DB_CONNECTION: pgsql\n      DB_HOST: db\n      DB_PORT: 5432\n      DB_DATABASE: {{DB_NAME}}\n      DB_USERNAME: postgres\n      DB_PASSWORD: secret\n      DATABASE_URL: pgsql://postgres:secret@db:5432/{{DB_NAME}}\n    depends_on:\n      db:\n        condition: service_healthy\n\n  db:\n    image: postgres:16-alpine\n    environment:\n      POSTGRES_DB: {{DB_NAME}}\n      POSTGRES_PASSWORD: secret\n    ports:\n      - \"{{DB_PORT}}:5432\"\n    volumes:\n      - pgdata:/var/lib/postgresql/data\n    healthcheck:\n      test: [\"CMD\", \"pg_isready\", \"-U\", \"postgres\"]\n      interval: 10s\n      timeout: 5s\n      retries: 5\n\nvolumes:\n  pgdata:",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Database = "PostgreSQL",
+                            Description = "Docker Compose para PHP/Laravel o Symfony con PostgreSQL",
+                            Infrastructure = "DockerCompose",
+                            IsActive = true,
+                            Name = "Compose PHP + PostgreSQL",
+                            TemplateType = "compose",
+                            Version = 1
+                        },
+                        new
+                        {
+                            Id = 10,
+                            Architecture = "Php",
+                            Content = "version: '3.9'\nservices:\n  app:\n    build: .\n    ports:\n      - \"{{APP_PORT}}:8080\"\n    environment:\n      APP_ENV: local\n      APP_DEBUG: \"true\"\n      APP_URL: http://localhost:{{APP_PORT}}\n      DB_CONNECTION: sqlite\n      DB_DATABASE: /var/www/html/database/database.sqlite\n      DATABASE_URL: sqlite:///var/www/html/database/database.sqlite\n    volumes:\n      - sqlite-data:/var/www/html/database\n\nvolumes:\n  sqlite-data:",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Database = "SQLite",
+                            Description = "Docker Compose para PHP/Laravel o Symfony usando SQLite",
+                            Infrastructure = "DockerCompose",
+                            IsActive = true,
+                            Name = "Compose PHP + SQLite",
+                            TemplateType = "compose",
+                            Version = 1
+                        },
+                        new
+                        {
+                            Id = 14,
+                            Architecture = "Php",
+                            Content = "FROM php:8.3-cli\n\nWORKDIR /var/www/html\n\nRUN apt-get update && apt-get install -y --no-install-recommends \\\n    git curl unzip libzip-dev libpng-dev libicu-dev libonig-dev libxml2-dev libssl-dev pkg-config \\\n    && pecl install mongodb \\\n    && docker-php-ext-enable mongodb \\\n    && docker-php-ext-install pdo mbstring zip intl bcmath \\\n    && rm -rf /var/lib/apt/lists/*\n\nCOPY --from=composer:2 /usr/bin/composer /usr/bin/composer\n\nCOPY . .\n\nRUN if [ -f composer.json ]; then composer install --no-interaction --prefer-dist --optimize-autoloader; fi \\\n    && mkdir -p storage bootstrap/cache \\\n    && chmod -R 775 storage bootstrap/cache\n\nRUN printf '%s\\n' \\\n    '<?php' \\\n    'if (php_sapi_name() === '\"'\"'\"'\"'\"'\"'cli-server'\"'\"'\"'\"'\"'\"') {' \\\n    '    $path = parse_url($_SERVER['\"'\"'\"'\"'\"'\"'REQUEST_URI'\"'\"'\"'\"'\"'\"'], PHP_URL_PATH);' \\\n    '    $file = __DIR__ . '\"'\"'\"'\"'\"'\"'/public'\"'\"'\"'\"'\"'\"' . $path;' \\\n    '    if ($path !== '\"'\"'\"'\"'\"'\"'/'\"'\"'\"'\"'\"'\"' && is_file($file)) {' \\\n    '        return false;' \\\n    '    }' \\\n    '}' \\\n    'require __DIR__ . '\"'\"'\"'\"'\"'\"'/public/index.php'\"'\"'\"'\"'\"'\"';' \\\n    > /usr/local/bin/router.php\n\nEXPOSE 8080\n\nCMD [\"php\", \"-S\", \"0.0.0.0:8080\", \"-t\", \"public\", \"/usr/local/bin/router.php\"]",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Database = "MongoDB",
+                            Description = "Dockerfile para PHP/Laravel o Symfony con soporte MongoDB",
+                            IsActive = true,
+                            Name = "Dockerfile PHP + MongoDB",
+                            TemplateType = "dockerfile",
+                            Version = 1
+                        },
+                        new
+                        {
+                            Id = 15,
+                            Architecture = "Php",
+                            Content = "version: '3.9'\nservices:\n  app:\n    build: .\n    ports:\n      - \"{{APP_PORT}}:8080\"\n    environment:\n      APP_ENV: local\n      APP_DEBUG: \"true\"\n      APP_URL: http://localhost:{{APP_PORT}}\n      DB_CONNECTION: mongodb\n      DB_HOST: mongo\n      DB_PORT: 27017\n      DB_DATABASE: {{DB_NAME}}\n      MONGODB_URI: mongodb://mongo:27017/{{DB_NAME}}\n    depends_on:\n      - mongo\n\n  mongo:\n    image: mongo:7\n    ports:\n      - \"{{DB_PORT}}:27017\"\n    volumes:\n      - mongodb-data:/data/db\n\nvolumes:\n  mongodb-data:",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Database = "MongoDB",
+                            Description = "Docker Compose para PHP/Laravel o Symfony con MongoDB",
+                            Infrastructure = "DockerCompose",
+                            IsActive = true,
+                            Name = "Compose PHP + MongoDB",
+                            TemplateType = "compose",
+                            Version = 1
+                        },
+                        new
+                        {
+                            Id = 16,
+                            Architecture = "Php",
+                            Content = "FROM php:8.3-cli\n\nWORKDIR /var/www/html\n\nRUN apt-get update && apt-get install -y --no-install-recommends \\\n    git curl unzip libzip-dev libpng-dev libicu-dev libonig-dev libxml2-dev libssl-dev pkg-config \\\n    && pecl install redis \\\n    && docker-php-ext-enable redis \\\n    && docker-php-ext-install pdo mbstring zip intl bcmath \\\n    && rm -rf /var/lib/apt/lists/*\n\nCOPY --from=composer:2 /usr/bin/composer /usr/bin/composer\n\nCOPY . .\n\nRUN if [ -f composer.json ]; then composer install --no-interaction --prefer-dist --optimize-autoloader; fi \\\n    && mkdir -p storage bootstrap/cache \\\n    && chmod -R 775 storage bootstrap/cache\n\nRUN printf '%s\\n' \\\n    '<?php' \\\n    'if (php_sapi_name() === '\"'\"'\"'\"'\"'\"'cli-server'\"'\"'\"'\"'\"'\"') {' \\\n    '    $path = parse_url($_SERVER['\"'\"'\"'\"'\"'\"'REQUEST_URI'\"'\"'\"'\"'\"'\"'], PHP_URL_PATH);' \\\n    '    $file = __DIR__ . '\"'\"'\"'\"'\"'\"'/public'\"'\"'\"'\"'\"'\"' . $path;' \\\n    '    if ($path !== '\"'\"'\"'\"'\"'\"'/'\"'\"'\"'\"'\"'\"' && is_file($file)) {' \\\n    '        return false;' \\\n    '    }' \\\n    '}' \\\n    'require __DIR__ . '\"'\"'\"'\"'\"'\"'/public/index.php'\"'\"'\"'\"'\"';' \\\n    > /usr/local/bin/router.php\n\nEXPOSE 8080\n\nCMD [\"php\", \"-S\", \"0.0.0.0:8080\", \"-t\", \"public\", \"/usr/local/bin/router.php\"]",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Database = "Redis",
+                            Description = "Dockerfile para PHP/Laravel o Symfony con soporte Redis",
+                            IsActive = true,
+                            Name = "Dockerfile PHP + Redis",
+                            TemplateType = "dockerfile",
+                            Version = 1
+                        },
+                        new
+                        {
+                            Id = 17,
+                            Architecture = "Php",
+                            Content = "version: '3.9'\nservices:\n  app:\n    build: .\n    ports:\n      - \"{{APP_PORT}}:8080\"\n    environment:\n      APP_ENV: local\n      APP_DEBUG: \"true\"\n      APP_URL: http://localhost:{{APP_PORT}}\n      DB_CONNECTION: redis\n      DB_HOST: redis\n      DB_PORT: 6379\n      DB_DATABASE: {{DB_NAME}}\n      CACHE_STORE: redis\n      CACHE_DRIVER: redis\n      QUEUE_CONNECTION: redis\n      SESSION_DRIVER: redis\n      REDIS_CLIENT: phpredis\n      REDIS_HOST: redis\n      REDIS_PORT: 6379\n      REDIS_PASSWORD: null\n    depends_on:\n      - redis\n\n  redis:\n    image: redis:7-alpine\n    ports:\n      - \"{{DB_PORT}}:6379\"\n    volumes:\n      - redis-data:/data\n\nvolumes:\n  redis-data:",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Database = "Redis",
+                            Description = "Docker Compose para PHP/Laravel o Symfony con Redis",
+                            Infrastructure = "DockerCompose",
+                            IsActive = true,
+                            Name = "Compose PHP + Redis",
+                            TemplateType = "compose",
+                            Version = 1
+                        },
+                        new
+                        {
+                            Id = 18,
+                            Architecture = "Php",
+                            Content = "FROM php:8.3-cli-bookworm\n\nWORKDIR /var/www/html\n\nRUN apt-get update && apt-get install -y --no-install-recommends \\\n    curl gnupg unixodbc-dev libgssapi-krb5-2 libicu-dev libzip-dev libpng-dev libonig-dev libxml2-dev libssl-dev pkg-config $PHPIZE_DEPS \\\n    && curl -sSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor | tee /usr/share/keyrings/microsoft.gpg >/dev/null \\\n    && echo \"deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft.gpg] https://packages.microsoft.com/debian/12/prod bookworm main\" > /etc/apt/sources.list.d/microsoft-prod.list \\\n    && apt-get update \\\n    && ACCEPT_EULA=Y apt-get install -y msodbcsql18 \\\n    && pecl install sqlsrv pdo_sqlsrv \\\n    && docker-php-ext-enable sqlsrv pdo_sqlsrv \\\n    && docker-php-ext-install pdo mbstring zip intl bcmath \\\n    && rm -rf /var/lib/apt/lists/*\n\nCOPY --from=composer:2 /usr/bin/composer /usr/bin/composer\n\nCOPY . .\n\nRUN if [ -f composer.json ]; then composer install --no-interaction --prefer-dist --optimize-autoloader; fi \\\n    && mkdir -p storage bootstrap/cache \\\n    && chmod -R 775 storage bootstrap/cache\n\nRUN printf '%s\\n' \\\n    '<?php' \\\n    'if (php_sapi_name() === '\"'\"'\"'\"'\"'\"'cli-server'\"'\"'\"'\"'\"'\"') {' \\\n    '    $path = parse_url($_SERVER['\"'\"'\"'\"'\"'\"'REQUEST_URI'\"'\"'\"'\"'\"'\"'], PHP_URL_PATH);' \\\n    '    $file = __DIR__ . '\"'\"'\"'\"'\"'\"'/public'\"'\"'\"'\"'\"'\"' . $path;' \\\n    '    if ($path !== '\"'\"'\"'\"'\"'\"'/'\"'\"'\"'\"'\"'\"' && is_file($file)) {' \\\n    '        return false;' \\\n    '    }' \\\n    '}' \\\n    'require __DIR__ . '\"'\"'\"'\"'\"'\"'/public/index.php'\"'\"'\"'\"'\"';' \\\n    > /usr/local/bin/router.php\n\nEXPOSE 8080\n\nCMD [\"php\", \"-S\", \"0.0.0.0:8080\", \"-t\", \"public\", \"/usr/local/bin/router.php\"]",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Database = "SqlServer",
+                            Description = "Dockerfile para PHP/Laravel o Symfony con soporte SQL Server",
+                            IsActive = true,
+                            Name = "Dockerfile PHP + SQL Server",
+                            TemplateType = "dockerfile",
+                            Version = 1
+                        },
+                        new
+                        {
+                            Id = 19,
+                            Architecture = "Php",
+                            Content = "version: '3.9'\nservices:\n  app:\n    build: .\n    ports:\n      - \"{{APP_PORT}}:8080\"\n    environment:\n      APP_ENV: local\n      APP_DEBUG: \"true\"\n      APP_URL: http://localhost:{{APP_PORT}}\n      DB_CONNECTION: sqlsrv\n      DB_HOST: sqlserver\n      DB_PORT: 1433\n      DB_DATABASE: {{DB_NAME}}\n      DB_USERNAME: sa\n      DB_PASSWORD: YourStrong!Passw0rd\n      DB_ENCRYPT: \"false\"\n      DB_TRUST_SERVER_CERTIFICATE: \"true\"\n      DATABASE_URL: sqlsrv://sa:YourStrong!Passw0rd@sqlserver:1433/{{DB_NAME}}\n    depends_on:\n      sqlserver:\n        condition: service_started\n\n  sqlserver:\n    image: mcr.microsoft.com/mssql/server:2022-latest\n    environment:\n      ACCEPT_EULA: Y\n      MSSQL_PID: Developer\n      MSSQL_SA_PASSWORD: YourStrong!Passw0rd\n    ports:\n      - \"{{DB_PORT}}:1433\"\n    volumes:\n      - mssql-data:/var/opt/mssql\n\nvolumes:\n  mssql-data:",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Database = "SqlServer",
+                            Description = "Docker Compose para PHP/Laravel o Symfony con SQL Server",
+                            Infrastructure = "DockerCompose",
+                            IsActive = true,
+                            Name = "Compose PHP + SQL Server",
+                            TemplateType = "compose",
+                            Version = 1
+                        },
+                        new
+                        {
+                            Id = 11,
+                            Architecture = "Php",
+                            Content = "/vendor/\n/node_modules/\n/.env\n/.env.*\n/.phpunit.result.cache\n/public/build/\n/bootstrap/cache/*.php\n/storage/app/*.sqlite\n/storage/framework/cache/*\n/storage/framework/sessions/*\n/storage/framework/testing/*\n/storage/framework/views/*\n/storage/logs/*\n/var/",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Gitignore base para proyectos PHP modernos",
+                            IsActive = true,
+                            Name = "PHP .gitignore",
+                            TemplateType = "gitignore",
+                            Version = 1
+                        },
+                        new
+                        {
+                            Id = 12,
+                            Architecture = "Php",
+                            Content = "name: CI\non:\n  push:\n    branches: [main]\n  pull_request:\n\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - name: Setup PHP\n        uses: shivammathur/setup-php@v2\n        with:\n          php-version: '8.3'\n          extensions: mbstring, xml, curl, zip, intl, pdo_sqlite\n          coverage: none\n      - name: Install dependencies\n        run: composer install --no-interaction --prefer-dist --no-progress\n      - name: Run tests\n        run: |\n          if [ -f artisan ]; then\n            php artisan test\n          elif [ -f bin/console ]; then\n            if [ -f vendor/bin/phpunit ]; then\n              vendor/bin/phpunit\n            elif [ -f bin/phpunit ]; then\n              php bin/phpunit\n            fi\n          elif [ -f vendor/bin/phpunit ]; then\n            vendor/bin/phpunit\n          fi",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Pipeline CI/CD para PHP con Composer y GitHub Actions",
+                            IsActive = true,
+                            Name = "CI PHP GitHub Actions",
+                            TemplateType = "ci",
+                            Version = 1
+                        },
+                        new
+                        {
+                            Id = 13,
+                            Architecture = "Php",
+                            Content = "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: {{APP_NAME}}\nspec:\n  replicas: 2\n  selector:\n    matchLabels:\n      app: {{APP_NAME}}\n  template:\n    metadata:\n      labels:\n        app: {{APP_NAME}}\n    spec:\n      containers:\n        - name: {{APP_NAME}}\n          image: {{APP_NAME}}:latest\n          ports:\n            - containerPort: 8080\n          env:\n            - name: APP_ENV\n              value: production\n            - name: APP_DEBUG\n              value: \"false\"\n---\napiVersion: v1\nkind: Service\nmetadata:\n  name: {{APP_NAME}}-svc\nspec:\n  selector:\n    app: {{APP_NAME}}\n  ports:\n    - port: 80\n      targetPort: 8080\n  type: LoadBalancer",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Kubernetes Deployment y Service para apps PHP",
+                            Infrastructure = "Kubernetes",
+                            IsActive = true,
+                            Name = "K8s PHP Deployment",
+                            TemplateType = "k8s-deployment",
+                            Version = 1
+                        },
+                        new
+                        {
+                            Id = 900,
+                            Architecture = "Java",
+                            Content = "FROM maven:3.9-eclipse-temurin-21 AS build\nWORKDIR /app\nCOPY . .\nRUN mvn -q package -DskipTests\n\nFROM eclipse-temurin:21-jre-alpine AS final\nWORKDIR /app\nCOPY --from=build /app/target/*.jar app.jar\nEXPOSE 8080\nENTRYPOINT [\"java\",\"-jar\",\"app.jar\"]",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Multi-stage Dockerfile para Spring Boot con Maven",
+                            IsActive = true,
+                            Name = "Dockerfile Java / Spring Boot",
+                            TemplateType = "dockerfile",
+                            Version = 1
+                        },
+                        new
+                        {
+                            Id = 901,
+                            Architecture = "Java",
+                            Content = "version: '3.9'\nservices:\n  app:\n    build: .\n    ports:\n      - \"{{APP_PORT}}:8080\"\n    environment:\n      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/{{DB_NAME}}\n      SPRING_DATASOURCE_USERNAME: postgres\n      SPRING_DATASOURCE_PASSWORD: secret\n    depends_on:\n      db:\n        condition: service_healthy\n  db:\n    image: postgres:16-alpine\n    environment:\n      POSTGRES_DB: {{DB_NAME}}\n      POSTGRES_PASSWORD: secret\n    ports:\n      - \"{{DB_PORT}}:5432\"\n    volumes:\n      - pgdata:/var/lib/postgresql/data\n    healthcheck:\n      test: [\"CMD\",\"pg_isready\",\"-U\",\"postgres\"]\n      interval: 10s\n      timeout: 5s\n      retries: 5\nvolumes:\n  pgdata:",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Database = "PostgreSQL",
+                            Description = "Docker Compose para Spring Boot + PostgreSQL",
+                            Infrastructure = "DockerCompose",
+                            IsActive = true,
+                            Name = "Compose Java + PostgreSQL",
+                            TemplateType = "compose",
+                            Version = 1
+                        },
+                        new
+                        {
+                            Id = 902,
+                            Architecture = "Java",
+                            Content = "version: '3.9'\nservices:\n  app:\n    build: .\n    ports:\n      - \"{{APP_PORT}}:8080\"\n    environment:\n      SPRING_DATASOURCE_URL: jdbc:mysql://db:3306/{{DB_NAME}}\n      SPRING_DATASOURCE_USERNAME: root\n      SPRING_DATASOURCE_PASSWORD: secret\n    depends_on:\n      db:\n        condition: service_healthy\n  db:\n    image: mysql:8\n    environment:\n      MYSQL_DATABASE: {{DB_NAME}}\n      MYSQL_ROOT_PASSWORD: secret\n    ports:\n      - \"{{DB_PORT}}:3306\"\n    volumes:\n      - mysqldata:/var/lib/mysql\n    healthcheck:\n      test: [\"CMD\",\"mysqladmin\",\"ping\",\"-h\",\"localhost\"]\n      interval: 10s\n      timeout: 5s\n      retries: 5\nvolumes:\n  mysqldata:",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Database = "MySQL",
+                            Description = "Docker Compose para Spring Boot + MySQL",
+                            Infrastructure = "DockerCompose",
+                            IsActive = true,
+                            Name = "Compose Java + MySQL",
+                            TemplateType = "compose",
+                            Version = 1
+                        },
+                        new
+                        {
+                            Id = 1100,
+                            Architecture = "Java",
+                            Content = "name: CI\non:\n  push:\n    branches: [main]\n  pull_request:\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-java@v4\n        with:\n          java-version: '21'\n          distribution: temurin\n          cache: maven\n      - run: mvn -B package --no-transfer-progress",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Pipeline CI para Maven/Spring Boot",
+                            IsActive = true,
+                            Name = "CI Java GitHub Actions",
+                            TemplateType = "ci",
+                            Version = 1
+                        },
+                        new
+                        {
+                            Id = 500,
+                            Architecture = "TypeScript",
+                            Content = "FROM node:22-alpine AS build\nWORKDIR /app\nCOPY package*.json .\nRUN npm ci\nCOPY . .\nRUN npm run build\n\nFROM node:22-alpine AS final\nWORKDIR /app\nCOPY --from=build /app/dist ./dist\nCOPY --from=build /app/node_modules ./node_modules\nEXPOSE 3000\nCMD [\"node\", \"dist/main\"]",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Dockerfile multi-stage para NestJS con TypeScript",
+                            IsActive = true,
+                            Name = "Dockerfile NestJS TypeScript",
+                            TemplateType = "dockerfile",
+                            Version = 1
+                        },
+                        new
+                        {
+                            Id = 501,
+                            Architecture = "TypeScript",
+                            Content = "version: '3.9'\nservices:\n  app:\n    build: .\n    ports:\n      - \"{{APP_PORT}}:3000\"\n    environment:\n      DATABASE_URL: postgresql://postgres:secret@db:5432/{{DB_NAME}}\n    depends_on:\n      db:\n        condition: service_healthy\n  db:\n    image: postgres:16-alpine\n    environment:\n      POSTGRES_DB: {{DB_NAME}}\n      POSTGRES_PASSWORD: secret\n    ports:\n      - \"{{DB_PORT}}:5432\"\n    healthcheck:\n      test: [\"CMD\",\"pg_isready\",\"-U\",\"postgres\"]\n      interval: 10s\n      retries: 5\n    volumes:\n      - pgdata:/var/lib/postgresql/data\nvolumes:\n  pgdata:",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Database = "PostgreSQL",
+                            Description = "Docker Compose para NestJS TypeScript + PostgreSQL",
+                            Infrastructure = "DockerCompose",
+                            IsActive = true,
+                            Name = "Compose NestTS + PostgreSQL",
+                            TemplateType = "compose",
+                            Version = 1
+                        },
+                        new
+                        {
+                            Id = 502,
+                            Architecture = "TypeScript",
+                            Content = "name: CI\non:\n  push:\n    branches: [main]\n  pull_request:\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-node@v4\n        with:\n          node-version: '22'\n          cache: npm\n      - run: npm ci\n      - run: npm run build\n      - run: npm test",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Pipeline CI para NestJS/NextJS TypeScript",
+                            IsActive = true,
+                            Name = "CI TypeScript GitHub Actions",
+                            TemplateType = "ci",
+                            Version = 1
+                        },
+                        new
+                        {
+                            Id = 503,
+                            Architecture = "TypeScript",
+                            Content = "node_modules/\ndist/\n.next/\nbuild/\n.env\n.env.*\n*.log\ncoverage/\n.DS_Store",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = ".gitignore para proyectos TypeScript",
+                            IsActive = true,
+                            Name = "TypeScript .gitignore",
+                            TemplateType = "gitignore",
                             Version = 1
                         });
                 });
@@ -749,48 +2594,6 @@ namespace ProjectForge.Infrastructure.Migrations
                 {
                     b.Navigation("VpsCredentials");
                 });
-
-            modelBuilder.Entity("ProjectForge.Core.Entities.AiSuggestionCache", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("CacheKey")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<string>("PatternsJson")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("LibrariesJson")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Rationale")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime>("ExpiresAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CacheKey")
-                        .IsUnique();
-
-                    b.ToTable("AiSuggestionCaches");
-                });
-
 #pragma warning restore 612, 618
         }
     }

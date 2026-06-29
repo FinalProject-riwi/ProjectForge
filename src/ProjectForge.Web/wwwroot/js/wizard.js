@@ -1,4 +1,4 @@
-// ── ProjectForge Wizard ───────────────────────────────────────────────────────
+// ── TabBuilder Wizard ─────────────────────────────────────────────────────────
 
 const state = {
   currentStep: 1,
@@ -13,12 +13,82 @@ const state = {
   vpsRows: 0,
 };
 
+const architectureMeta = {
+  DotNet:     { label: 'C# / .NET',   logo: '/img/logos/languages/csharp.png',     desc: 'ASP.NET Core, Blazor, Minimal API' },
+  Java:       { label: 'Java',        logo: '/img/logos/languages/java.png',        desc: 'Spring Boot, Quarkus, Micronaut' },
+  Python:     { label: 'Python',      logo: '/img/logos/languages/python.png',      desc: 'FastAPI, Django, Flask' },
+  Php:        { label: 'PHP',         logo: '/img/logos/languages/php.png',         desc: 'Laravel, Symfony' },
+  JavaScript: { label: 'JavaScript',  logo: '/img/logos/languages/javascript.png',  desc: 'Node.js, Express, NestJS, Next.js' },
+  TypeScript: { label: 'TypeScript',  logo: '/img/logos/languages/typescript.png',  desc: 'NestTS, Next.js (TS)' },
+};
+
+const databaseMeta = {
+  PostgreSQL: { logo: '/img/logos/databases/postgresql.png', badge: 'Recomendado' },
+  MySQL:      { logo: '/img/logos/databases/mysql.png',      badge: 'Popular' },
+  SqlServer:  { logo: '/img/logos/databases/sqlserver.png',  badge: 'Empresarial' },
+  MongoDB:    { logo: '/img/logos/databases/mongodb.png',    badge: 'NoSQL' },
+  Redis:      { logo: '/img/logos/databases/redis.png',      badge: 'Cache/Cola' },
+  SQLite:     { logo: '/img/logos/databases/sqlite.png',     badge: 'Desarrollo' },
+};
+
+const infrastructureMeta = {
+  None:         { icon: '💻',  logo: null,                               label: 'Sin contenedores', desc: 'Solo el código del proyecto' },
+  DockerCompose:{ icon: '🐳',  logo: '/img/logos/infra/docker.png',      label: 'Docker Compose',   desc: 'Ideal para desarrollo local y un solo servidor' },
+  Kubernetes:   { icon: '⚙️', logo: '/img/logos/infra/kubernetes.png',  label: 'Kubernetes',       desc: 'Escalado horizontal, múltiples VPS' },
+};
+
+const frameworkCatalog = {
+  DotNet: [
+    { value: 'AspNetCoreWebApi', label: 'ASP.NET Core Web API', logo: '/img/logos/frameworks/aspdotnet.png', versions: ['10.0', '8.0', '7.0'] },
+    { value: 'AspNetCoreMVC',    label: 'ASP.NET Core MVC',     logo: '/img/logos/frameworks/aspdotnet.png', versions: ['10.0', '8.0'] },
+    { value: 'BlazorServer',     label: 'Blazor Server',        logo: '/img/logos/frameworks/aspdotnet.png', versions: ['10.0', '8.0'] },
+    { value: 'BlazorWasm',       label: 'Blazor WebAssembly',   logo: '/img/logos/frameworks/aspdotnet.png', versions: ['10.0', '8.0'] },
+    { value: 'MinimalApi',       label: 'Minimal API',          logo: '/img/logos/frameworks/aspdotnet.png', versions: ['10.0', '8.0'] },
+  ],
+  Java: [
+    { value: 'SpringBoot', label: 'Spring Boot', logo: '/img/logos/frameworks/springboot.png', versions: ['3.3', '3.2', '2.7'] },
+    { value: 'Quarkus',    label: 'Quarkus',     logo: '/img/logos/frameworks/quarkus.png',    versions: ['3.x'] },
+    { value: 'Micronaut',  label: 'Micronaut',   logo: '/img/logos/frameworks/micronaut.png',  versions: ['4.x'] },
+  ],
+  Python: [
+    { value: 'FastAPI', label: 'FastAPI', logo: '/img/logos/frameworks/fastapi.png', versions: ['0.115', '0.110'] },
+    { value: 'Django',  label: 'Django',  logo: '/img/logos/frameworks/django.png',  versions: ['5.0', '4.2'] },
+    { value: 'Flask',   label: 'Flask',   logo: '/img/logos/frameworks/flask.png',   versions: ['3.0', '2.3'] },
+  ],
+  Php: [
+    { value: 'Laravel',  label: 'Laravel',  logo: '/img/logos/frameworks/laravel.png',  versions: ['11.x', '10.x'] },
+    { value: 'Symfony',  label: 'Symfony',  logo: '/img/logos/frameworks/symfony.png',  versions: ['7.x', '6.x'] },
+  ],
+  JavaScript: [
+    { value: 'NodeJs',    label: 'Node.js',    logo: '/img/logos/frameworks/nodejs.png',    versions: ['22.x', '20.x'] },
+    { value: 'ExpressJs', label: 'Express.js', logo: '/img/logos/frameworks/expressjs.png', versions: ['5.x', '4.x'] },
+    { value: 'NestJs',    label: 'NestJS',     logo: '/img/logos/frameworks/nestjs.png',    versions: ['10.x'] },
+    { value: 'NextJs',    label: 'Next.js',    logo: '/img/logos/frameworks/nextjs.png',    versions: ['14.x'] },
+  ],
+  TypeScript: [
+    { value: 'NestTs', label: 'NestJS (TypeScript)', logo: '/img/logos/frameworks/nestts.png', versions: ['10.x'] },
+    { value: 'NextTs', label: 'Next.js (TypeScript)', logo: '/img/logos/frameworks/nextts.png', versions: ['14.x'] },
+  ],
+};
+
+function normalizeToken(value) {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
 // ── Navigation ────────────────────────────────────────────────────────────────
 
 async function nextStep() {
   if (!validateStep(state.currentStep)) return;
-  if (state.currentStep === 2) await loadStep4Data();
-  if (state.currentStep === 4) buildSummary();
+  if (state.currentStep === 3) await loadStep4Data();
+  if (state.currentStep === 4) {
+    buildSummary();
+    // Verificar prerrequisitos al entrar al paso 5 (resumen final)
+    await showPrereqModalIfNeeded(state.architecture, () => {
+      state.currentStep++;
+      renderStep();
+    });
+    return;
+  }
   state.currentStep++;
   renderStep();
 }
@@ -68,87 +138,137 @@ function showError(msg) {
   setTimeout(() => t.remove(), 3500);
 }
 
+function resetSelections() {
+  document.querySelectorAll('.db-card, .infra-card').forEach(card => card.classList.remove('selected'));
+  document.querySelectorAll('.db-card input, .infra-card input').forEach(input => {
+    input.checked = input.name === 'infrastructure' && input.value === 'None';
+  });
+  document.querySelector('.infra-card[data-value="None"]')?.classList.add('selected');
+  const vpsSection = document.getElementById('vps-section');
+  if (vpsSection) vpsSection.style.display = 'none';
+}
+
+function clearStep4() {
+  const patterns = document.getElementById('patterns-list');
+  const libraries = document.getElementById('libraries-list');
+  if (patterns) patterns.innerHTML = '';
+  if (libraries) libraries.innerHTML = '';
+}
+
 // ── Step 1: Architecture ──────────────────────────────────────────────────────
 
-document.querySelectorAll('.arch-card').forEach(card => {
-  card.addEventListener('click', () => {
-    document.querySelectorAll('.arch-card').forEach(c => c.classList.remove('selected'));
-    card.classList.add('selected');
-    card.querySelector('input').checked = true;
-    state.architecture = card.dataset.value;
-    // Cargar frameworks para el step 2 en anticipación
-    loadFrameworks(state.architecture);
+function initializeArchitectureCards() {
+  document.querySelectorAll('.arch-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const newArch = card.dataset.value;
+      if (state.architecture !== newArch) {
+        state.framework = null;
+        state.frameworkVersion = null;
+        state.database = null;
+        state.infrastructure = 'None';
+        state.patterns = [];
+        state.libraries = [];
+        resetSelections();
+        clearStep4();
+        renderFrameworkOptions([]);
+      }
+      document.querySelectorAll('.arch-card').forEach(c => c.classList.remove('selected'));
+      card.classList.add('selected');
+      card.querySelector('input').checked = true;
+      state.architecture = newArch;
+
+      if (frameworkCatalog[newArch]) {
+        renderFrameworkOptions(frameworkCatalog[newArch]);
+      }
+    });
   });
-});
+}
 
 // ── Step 2: Framework ─────────────────────────────────────────────────────────
-
-async function loadFrameworks(arch) {
-  if (!arch) return;
-  try {
-    const resp = await fetch(`/wizard/api/frameworks/${arch}`);
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    const options = await resp.json();
-    renderFrameworkOptions(options);
-  } catch (e) {
-    console.error('Error cargando frameworks:', e);
-  }
-}
 
 function renderFrameworkOptions(options) {
   const container = document.getElementById('framework-options');
   if (!container) return;
 
-  // Limpiar selección previa
-  state.framework = null;
-  state.frameworkVersion = null;
+  if (!options || options.length === 0) {
+    container.innerHTML = '<p style="color:var(--text-muted)">Selecciona una arquitectura primero.</p>';
+    const versionSelect = document.getElementById('framework-version-select');
+    if (versionSelect) {
+      versionSelect.innerHTML = '<option value="">Selecciona un framework primero</option>';
+    }
+    return;
+  }
 
   container.innerHTML = options.map(opt => `
-    <div class="db-card framework-option" data-value="${opt.value}" data-versions='${JSON.stringify(opt.availableVersions)}'>
-      <strong>${opt.label}</strong>
-    </div>
+    <label class="fw-card${state.framework === opt.value ? ' selected' : ''}" data-value="${opt.value}">
+      <input type="radio" name="framework" value="${opt.value}" ${state.framework === opt.value ? 'checked' : ''} />
+      <img src="${opt.logo}" alt="${opt.label}" class="fw-logo" onerror="this.style.display='none'" />
+      <span class="fw-name">${opt.label}</span>
+    </label>
   `).join('');
 
-  // Registrar listeners en los elementos recién creados
-  container.querySelectorAll('.framework-option').forEach(card => {
-    card.addEventListener('click', () => {
-      container.querySelectorAll('.framework-option').forEach(c => c.classList.remove('selected'));
-      card.classList.add('selected');
-      const versions = JSON.parse(card.dataset.versions || '[]');
-      state.framework = card.dataset.value;
-      state.frameworkVersion = versions[0] ?? '';
+  // Set version select
+  const versionSelect = document.getElementById('framework-version-select');
+  if (versionSelect && state.framework) {
+    const cur = options.find(o => o.value === state.framework);
+    if (cur) {
+      versionSelect.innerHTML = cur.versions.map(v => `<option value="${v}">${v}</option>`).join('');
+      state.frameworkVersion = cur.versions[0];
+    }
+  } else if (versionSelect) {
+    versionSelect.innerHTML = '<option value="">Selecciona un framework primero</option>';
+  }
 
-      const sel = document.getElementById('framework-version-select');
-      sel.innerHTML = versions.map(v => `<option value="${v}">${v}</option>`).join('');
+  // Attach click handlers
+  container.querySelectorAll('.fw-card').forEach(card => {
+    card.addEventListener('click', () => {
+      container.querySelectorAll('.fw-card').forEach(c => c.classList.remove('selected'));
+      card.classList.add('selected');
+      card.querySelector('input').checked = true;
+      state.framework = card.dataset.value;
+
+      const selected = options.find(o => o.value === state.framework);
+      if (selected && versionSelect) {
+        versionSelect.innerHTML = selected.versions.map(v => `<option value="${v}">${v}</option>`).join('');
+        state.frameworkVersion = selected.versions[0];
+      }
+      clearStep4();
+    });
+  });
+}
+
+// ── Step 2: Database ──────────────────────────────────────────────────────────
+
+function initializeDatabaseCards() {
+  document.querySelectorAll('.db-card').forEach(card => {
+    card.addEventListener('click', () => {
+      document.querySelectorAll('.db-card').forEach(c => c.classList.remove('selected'));
+      card.classList.add('selected');
+      card.querySelector('input').checked = true;
+      state.database = card.dataset.value;
+      clearStep4();
+    });
+  });
+}
+
+// ── Step 3: Infrastructure ────────────────────────────────────────────────────
+
+function initializeInfrastructureCards() {
+  document.querySelectorAll('.infra-card').forEach(card => {
+    card.addEventListener('click', () => {
+      document.querySelectorAll('.infra-card').forEach(c => c.classList.remove('selected'));;
+      card.classList.add('selected');
+      card.querySelector('input').checked = true;
+      state.infrastructure = card.dataset.value;
+      document.getElementById('vps-section').style.display =
+        state.infrastructure === 'Kubernetes' ? 'block' : 'none';
+      clearStep4();
     });
   });
 }
 
 document.getElementById('framework-version-select')?.addEventListener('change', e => {
   state.frameworkVersion = e.target.value;
-});
-
-// ── Step 2: Database ──────────────────────────────────────────────────────────
-
-// Delegación de eventos en el contenedor padre — funciona aunque el DOM cambie
-document.querySelector('.db-grid')?.addEventListener('click', e => {
-  const card = e.target.closest('.db-card');
-  if (!card || card.closest('#framework-options')) return; // ignorar clicks en frameworks
-  document.querySelectorAll('.db-grid .db-card').forEach(c => c.classList.remove('selected'));
-  card.classList.add('selected');
-  state.database = card.dataset.value;
-});
-
-// ── Step 3: Infrastructure ────────────────────────────────────────────────────
-
-document.querySelectorAll('.infra-card').forEach(card => {
-  card.addEventListener('click', () => {
-    document.querySelectorAll('.infra-card').forEach(c => c.classList.remove('selected'));
-    card.classList.add('selected');
-    state.infrastructure = card.dataset.value;
-    document.getElementById('vps-section').style.display =
-      state.infrastructure === 'Kubernetes' ? 'block' : 'none';
-  });
 });
 
 function addVpsRow() {
@@ -176,53 +296,102 @@ function addVpsRow() {
 async function loadStep4Data() {
   if (!state.architecture || !state.framework) return;
   const banner = document.getElementById('ai-rationale');
-  if (banner) banner.textContent = 'Consultando IA para sugerencias personalizadas...';
+  if (banner) banner.textContent = 'Cargando catálogo y consultando IA...';
 
   try {
-    const resp = await fetch('/wizard/api/suggest', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        architecture: state.architecture,
-        framework: state.framework,
-        database: state.database,
-        infrastructure: state.infrastructure,
-        alreadySelectedPatterns: []
-      })
-    });
-    const data = await resp.json();
-    if (banner) banner.textContent = data.rationale || '';
-    renderPatterns(data.suggestedPatterns || []);
-    renderLibraries(data.suggestedLibraries || []);
-  } catch {
-    if (banner) banner.textContent = 'No se pudieron cargar sugerencias de IA. Selecciona manualmente.';
-    renderPatterns([]);
-    renderLibraries([]);
+    const [patternsResp, librariesResp] = await Promise.all([
+      fetch(`/wizard/api/patterns/${state.architecture}/${state.framework}`),
+      fetch(`/wizard/api/libraries/${state.architecture}/${state.framework}`),
+    ]);
+
+    const patternCatalog = patternsResp.ok ? await patternsResp.json() : [];
+    const libraryCatalog = librariesResp.ok ? await librariesResp.json() : [];
+
+    let suggestedPatterns = [];
+    let suggestedLibraries = [];
+    let rationale = '';
+
+    try {
+      const suggestResp = await fetch('/wizard/api/suggest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          architecture: state.architecture,
+          framework: state.framework,
+          database: state.database,
+          infrastructure: state.infrastructure,
+          alreadySelectedPatterns: state.patterns
+        })
+      });
+      if (suggestResp.ok) {
+        const data = await suggestResp.json();
+        suggestedPatterns = data.suggestedPatterns || [];
+        suggestedLibraries = data.suggestedLibraries || [];
+        rationale = data.rationale || '';
+      } else {
+        rationale = 'No se pudieron cargar sugerencias de IA. Selecciona manualmente del catálogo.';
+      }
+    } catch {
+      rationale = 'No se pudieron cargar sugerencias de IA. Selecciona manualmente del catálogo.';
+    }
+
+    if (banner) banner.textContent = rationale || 'Selecciona del catálogo completo. La IA marcará sus sugerencias con ✦.';
+    renderPatterns(patternCatalog || [], suggestedPatterns);
+    renderLibraries(libraryCatalog || [], suggestedLibraries);
+  } catch (e) {
+    console.error('Error cargando catálogos de patrones y librerías:', e);
+    if (banner) banner.textContent = 'No se pudieron cargar los catálogos. Recarga el wizard.';
+    renderPatterns([], []);
+    renderLibraries([], []);
   }
 }
 
-function renderPatterns(suggested) {
-  const all = ['Repository', 'CQRS', 'Clean Architecture', 'Mediator', 'DDD', 'Hexagonal Architecture', 'Microservices', 'Event Sourcing', 'Saga'];
-  document.getElementById('patterns-list').innerHTML = all.map(p => {
-    const ok = suggested.includes(p);
-    return `<label class="${ok ? 'suggested' : ''}">
-      <input type="checkbox" value="${p}" ${ok ? 'checked' : ''}
-             onchange="toggleSel('patterns','${p}',this.checked)" />
-      ${p} ${ok ? '<span style="font-size:.7rem;color:#8b5cf6">✦ IA</span>' : ''}
-    </label>`;
-  }).join('');
-  state.patterns = [...suggested];
+function renderPatterns(all, suggested) {
+  const selected = state.patterns[0] ?? (suggested[0] ?? null);
+  const suggestedSet = new Set((suggested || []).map(normalizeToken));
+
+  document.getElementById('patterns-list').innerHTML = all.length
+    ? all.map(p => {
+        const ok = suggestedSet.has(normalizeToken(p.value)) || suggestedSet.has(normalizeToken(p.label));
+        const isSelected = selected && normalizeToken(selected) === normalizeToken(p.value);
+        return `<label class="${[ok ? 'suggested' : '', isSelected ? 'selected' : ''].filter(Boolean).join(' ')}">
+          <input type="radio" name="pattern-choice" value="${p.value}" ${isSelected ? 'checked' : ''} />
+          ${p.label} ${ok ? '<span style="font-size:.7rem;color:#8b5cf6">✦ IA</span>' : ''}
+        </label>`;
+      }).join('')
+    : '<p style="color:var(--text-muted);font-size:.95rem">No hay patrones disponibles para esta combinación.</p>';
+
+  state.patterns = selected ? [selected] : [];
+
+  document.querySelectorAll('input[name="pattern-choice"]').forEach(input => {
+    input.addEventListener('change', () => {
+      if (!input.checked) return;
+      state.patterns = [input.value];
+      document.querySelectorAll('#patterns-list label').forEach(label => {
+        const radio = label.querySelector('input[name="pattern-choice"]');
+        label.classList.toggle('selected', !!radio?.checked);
+      });
+    });
+  });
 }
 
-function renderLibraries(suggested) {
-  const libs = [...new Set(suggested)];
-  document.getElementById('libraries-list').innerHTML = libs.length
-    ? libs.map(l => `<label class="suggested">
-        <input type="checkbox" value="${l}" checked onchange="toggleSel('libraries','${l}',this.checked)" />
-        ${l} <span style="font-size:.7rem;color:#8b5cf6">✦ IA</span>
-      </label>`).join('')
-    : '<p style="color:var(--text-muted);font-size:.85rem">Sin sugerencias de librerías disponibles.</p>';
-  state.libraries = [...libs];
+function renderLibraries(all, suggested) {
+  const suggestedSet = new Set((suggested || []).map(normalizeToken));
+  document.getElementById('libraries-list').innerHTML = all.length
+    ? all.map(l => {
+        const ok = suggestedSet.has(normalizeToken(l.value)) || suggestedSet.has(normalizeToken(l.label));
+        const checked = ok || state.libraries.includes(l.value);
+        return `<label class="${ok ? 'suggested' : ''}">
+            <input type="checkbox" value="${l.value}" ${checked ? 'checked' : ''} onchange="toggleSel('libraries','${l.value}',this.checked)" />
+            ${l.label} ${l.badge ? `<span style="font-size:.7rem;color:#8b5cf6">${l.badge}</span>` : ''} ${ok ? '<span style="font-size:.7rem;color:#8b5cf6">✦ IA</span>' : ''}
+          </label>`;
+      }).join('')
+    : '<p style="color:var(--text-muted);font-size:.95rem">No hay librerías disponibles para esta combinación.</p>';
+
+  // Seed libraries state from suggested (if nothing already selected)
+  if (state.libraries.length === 0) {
+    state.libraries = all.filter(l => suggestedSet.has(normalizeToken(l.value)) || suggestedSet.has(normalizeToken(l.label))).map(l => l.value);
+  }
 }
 
 function toggleSel(key, value, checked) {
@@ -235,11 +404,20 @@ function toggleSel(key, value, checked) {
 function buildSummary() {
   const el = document.getElementById('config-summary');
   if (!el) return;
+
+  const archMeta = architectureMeta[state.architecture] || {};
+  const dbMeta = databaseMeta[state.database] || {};
+  const infraMeta = infrastructureMeta[state.infrastructure] || {};
+
+  const logoHtml = (src, alt) => src
+    ? `<img src="${src}" alt="${alt}" style="width:20px;height:20px;object-fit:contain;vertical-align:middle;margin-right:6px" onerror="this.style.display='none'" />`
+    : '';
+
   el.innerHTML = [
-    ['Arquitectura', state.architecture],
+    ['Arquitectura', `${logoHtml(archMeta.logo, archMeta.label)}${archMeta.label || state.architecture}`],
     ['Framework',    state.framework + (state.frameworkVersion ? ' ' + state.frameworkVersion : '')],
-    ['Base de Datos', state.database],
-    ['Infraestructura', state.infrastructure],
+    ['Base de Datos', `${logoHtml(dbMeta.logo, state.database)}${state.database}`],
+    ['Infraestructura', `${infraMeta.logo ? logoHtml(infraMeta.logo, infraMeta.label) : infraMeta.icon + ' '}${infraMeta.label || state.infrastructure}`],
     ['Patrones', state.patterns.join(', ') || 'Ninguno'],
     ['Librerías', state.libraries.slice(0, 5).join(', ') + (state.libraries.length > 5 ? '…' : '') || 'Ninguna'],
   ].map(([label, value]) => `
@@ -255,16 +433,12 @@ document.getElementById('wizard-form').addEventListener('submit', function(e) {
   e.preventDefault();
   const name = document.getElementById('project-name')?.value?.trim();
   if (!name) { showError('Ingresa un nombre para el proyecto'); return; }
+  if (!/^[a-zA-Z0-9_-]+$/.test(name)) { showError('El nombre solo puede contener letras, números, guiones y guiones bajos'); return; }
 
   const btn = document.getElementById('btn-submit');
   btn.disabled = true;
   btn.textContent = 'Creando proyecto...';
 
-  // Inyectamos los campos del estado del wizard como hidden inputs y hacemos
-  // un submit nativo del form. Esto garantiza que:
-  //   1. El antiforgery token ya está en el form (puesto por @Html.AntiForgeryToken())
-  //   2. El browser maneja los redirects correctamente (no fetch)
-  //   3. No hay problemas con SameSite cookies ni CORS
   const form = e.target;
   form.method = 'POST';
   form.action = '/wizard/step5';
@@ -309,4 +483,115 @@ function collectVpsData() {
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
+initializeArchitectureCards();
+initializeDatabaseCards();
+initializeInfrastructureCards();
+renderFrameworkOptions([]);
 renderStep();
+
+// Set None as default infrastructure selected
+document.querySelector('.infra-card[data-value="None"]')?.classList.add('selected');
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PREREQUISITE CHECK — detecta herramientas instaladas antes de generar
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/** Llama al endpoint que verifica qué herramientas están instaladas en el servidor. */
+// ═══════════════════════════════════════════════════════════════════════════════
+// PREREQUISITE CHECK — SOLO AVISO (NO BLOQUEA)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+async function checkPrerequisites(architecture) {
+  try {
+    const res = await fetch(`/api/v1/tools/check-prerequisites?architecture=${encodeURIComponent(architecture)}`, {
+      headers: { 'Accept': 'application/json' }
+    });
+    if (!res.ok) return { allInstalled: true, tools: [] };
+    return await res.json();
+  } catch {
+    return { allInstalled: true, tools: [] };
+  }
+}
+
+/**
+ * SOLO AVISO — nunca bloquea navegación
+ */
+async function showPrereqModalIfNeeded(architecture, onProceed) {
+  const data = await checkPrerequisites(architecture);
+
+  const missing = (data.tools ?? []).filter(t => !t.installed);
+
+  // 👉 SI NO HAY FALTANTES: no hacer nada especial
+  if (missing.length === 0) {
+    onProceed?.();
+    return;
+  }
+
+  // 🟡 SI HAY FALTANTES: mostrar aviso pero NO bloquear
+  const archLabels = {
+    DotNet: 'C# / .NET', Java: 'Java', Python: 'Python',
+    Php: 'PHP', JavaScript: 'JavaScript', TypeScript: 'TypeScript'
+  };
+
+  const labelEl = document.getElementById('prereq-arch-label');
+  if (labelEl) {
+    labelEl.textContent = archLabels[architecture] ?? architecture;
+  }
+
+  const list = document.getElementById('prereq-tools-list');
+  if (list) {
+    list.innerHTML = missing.map(t => `
+      <li class="prereq-tool-item">
+        <span class="prereq-tool-status">⚠️</span>
+        <span class="prereq-tool-info">
+          <span class="prereq-tool-name">${escapeHtml(t.name)}</span>
+          <span class="prereq-tool-desc">${escapeHtml(t.description)}</span>
+        </span>
+        <a href="${escapeHtml(t.installUrl)}" target="_blank" rel="noopener noreferrer" class="prereq-tool-link">
+          Instalar ↗
+        </a>
+      </li>
+    `).join('');
+  }
+
+  const backdrop = document.getElementById('prereq-modal-backdrop');
+  if (backdrop) {
+    backdrop.style.display = 'flex';
+    backdrop.setAttribute('aria-hidden', 'false');
+  }
+
+  // ⚠️ NO guardar callback, NO bloquear flujo
+  onProceed?.();
+}
+
+/** Cierra modal */
+function closePrereqModal() {
+  const backdrop = document.getElementById('prereq-modal-backdrop');
+  if (!backdrop) return;
+
+  backdrop.style.display = 'none';
+  backdrop.setAttribute('aria-hidden', 'true');
+}
+
+/** Botón "continuar" ahora solo cierra */
+function proceedAnywayPrereq() {
+  closePrereqModal();
+}
+
+function escapeHtml(str) {
+  const d = document.createElement('div');
+  d.textContent = String(str ?? '');
+  return d.innerHTML;
+}
+
+// Cerrar modal con Escape
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.getElementById('prereq-modal-backdrop')?.style.display === 'flex') {
+    closePrereqModal();
+  }
+});
+
+// Cerrar modal al hacer clic en el backdrop (fuera del box)
+document.getElementById('prereq-modal-backdrop')?.addEventListener('click', function(e) {
+  if (e.target === this) closePrereqModal();
+});

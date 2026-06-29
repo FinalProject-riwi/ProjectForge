@@ -1,0 +1,36 @@
+# ─── Stage 1: Build ───────────────────────────────────────────────────────────
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /src
+
+COPY src/ProjectForge.API/ProjectForge.API.csproj              src/ProjectForge.API/
+COPY src/ProjectForge.Application/ProjectForge.Application.csproj src/ProjectForge.Application/
+COPY src/ProjectForge.Core/ProjectForge.Core.csproj            src/ProjectForge.Core/
+COPY src/ProjectForge.Infrastructure/ProjectForge.Infrastructure.csproj src/ProjectForge.Infrastructure/
+
+RUN dotnet restore src/ProjectForge.API/ProjectForge.API.csproj -m:1
+
+ARG BUILD_DATE=20260628_api_v1
+RUN echo "Build API: ${BUILD_DATE}"
+COPY src/ src/
+
+RUN dotnet publish src/ProjectForge.API/ProjectForge.API.csproj \
+    -c Release -o /app/publish /p:UseAppHost=false -m:1
+
+# ─── Stage 2: Runtime ─────────────────────────────────────────────────────────
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN git config --global user.name "ProjectForge Bot" \
+    && git config --global user.email "bot@projectforge.dev" \
+    && git config --global init.defaultBranch main \
+    && git config --global credential.helper store
+
+COPY --from=build /app/publish .
+RUN mkdir -p /workspaces && chmod 777 /workspaces
+
+EXPOSE 8080
+ENTRYPOINT ["dotnet", "ProjectForge.API.dll"]

@@ -26,7 +26,7 @@
             @if (Model.WizardConfig?.DeploymentTarget != DeploymentTarget.Local
                  && Model.WizardConfig?.VpsCredentials?.Any() == true)
             {
-                <button class="btn btn-primary" onclick="deployToVps(@Model.Id)">
+                <button class="btn btn-primary" onclick="showWipModal('El despliegue directo a VPS está en implementación. Por ahora puedes generar el proyecto y subirlo a GitHub.')">
                     🚀 Deploy VPS
                 </button>
             }

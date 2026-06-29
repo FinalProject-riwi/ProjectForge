@@ -1,0 +1,153 @@
+@{
+    ViewData["Title"] = "API v1 – TabBuilder";
+    Layout = "_Layout";
+    var baseUrl = $"{Context.Request.Scheme}://{Context.Request.Host}";
+}
+
+<div style="max-width:900px;margin:0 auto">
+    <div style="margin-bottom:2rem">
+        <h1 style="font-size:1.8rem;margin-bottom:.5rem">TabBuilder REST API <span style="font-size:.9rem;background:rgba(59,130,246,.15);border:1px solid rgba(59,130,246,.3);color:#93c5fd;padding:.2rem .6rem;border-radius:999px;font-family:var(--font-mono)">v1</span></h1>
+        <p style="color:var(--text-muted)">API diseñada para ser consumida por la app Flutter de TabBuilder. Todos los endpoints retornan JSON.</p>
+    </div>
+
+    <!-- Auth -->
+    <div class="api-section">
+        <h2>🔐 Autenticación</h2>
+        <p>Incluye el token de GitHub del usuario en cada request:</p>
+        <div class="code-block">Authorization: Bearer &lt;github_access_token&gt;</div>
+    </div>
+
+    <!-- Base URL -->
+    <div class="api-section">
+        <h2>🌐 Base URL</h2>
+        <div class="code-block">@baseUrl/api/v1</div>
+    </div>
+
+    <!-- Endpoints -->
+    <div class="api-section">
+        <h2>📋 Endpoints</h2>
+
+        @foreach (var group in new[] {
+            ("Auth", new[] {
+                ("GET", "/auth/me", "Información del usuario autenticado", "✅ Auth requerida"),
+            }),
+            ("Catálogo", new[] {
+                ("GET", "/catalog/architectures",                 "Arquitecturas disponibles (C#, Java, Python…)", "🌐 Público"),
+                ("GET", "/catalog/frameworks/{architecture}",    "Frameworks para una arquitectura", "🌐 Público"),
+                ("GET", "/catalog/databases",                     "Bases de datos disponibles", "🌐 Público"),
+                ("GET", "/catalog/infrastructure",               "Opciones de infraestructura", "🌐 Público"),
+                ("GET", "/catalog/patterns/{arch}/{framework}",  "Patrones de diseño para el stack", "🌐 Público"),
+                ("GET", "/catalog/libraries/{arch}/{framework}", "Librerías para el stack", "🌐 Público"),
+            }),
+            ("IA", new[] {
+                ("POST", "/ai/suggest", "Sugerencias de IA para un stack dado", "✅ Auth requerida"),
+            }),
+            ("Proyectos", new[] {
+                ("GET",    "/projects",              "Lista proyectos del usuario", "✅ Auth requerida"),
+                ("POST",   "/projects",              "Crea un nuevo proyecto",      "✅ Auth requerida"),
+                ("GET",    "/projects/{id}",         "Detalle completo del proyecto", "✅ Auth requerida"),
+                ("GET",    "/projects/{id}/logs",    "Logs de generación",          "✅ Auth requerida"),
+                ("POST",   "/projects/{id}/generate","Inicia la generación",        "✅ Auth requerida"),
+                ("DELETE", "/projects/{id}",         "Elimina un proyecto",         "✅ Auth requerida"),
+            }),
+        })
+        {
+            <h3 style="margin:1.5rem 0 .75rem">@group.Item1</h3>
+            <div style="display:flex;flex-direction:column;gap:.5rem">
+                @foreach (var ep in group.Item2)
+                {
+                    <div class="endpoint-row">
+                        <span class="method method-@ep.Item1.ToLower()">@ep.Item1</span>
+                        <code class="endpoint-path">/api/v1@ep.Item2</code>
+                        <span style="color:var(--text-dim);font-size:.82rem;flex:1">@ep.Item3</span>
+                        <span style="font-size:.75rem;color:var(--text-muted)">@ep.Item4</span>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    <!-- POST /projects example -->
+    <div class="api-section">
+        <h2>📦 Ejemplo: Crear proyecto</h2>
+        <p style="margin-bottom:.75rem;color:var(--text-muted)">POST /api/v1/projects</p>
+        <div class="code-block">{
+  "projectName": "mi-api-backend",
+  "description": "API REST con FastAPI y PostgreSQL",
+  "architecture": "Python",
+  "framework": "FastAPI",
+  "frameworkVersion": "0.115",
+  "database": "PostgreSQL",
+  "infrastructure": "DockerCompose",
+  "patterns": ["CleanArchitecture"],
+  "libraries": ["sqlalchemy", "alembic", "pydantic"],
+  "createPrivateRepo": false
+}</div>
+    </div>
+
+    <!-- Flutter snippet -->
+    <div class="api-section">
+        <h2>📱 Snippet Flutter</h2>
+        <div class="code-block">import 'dart:convert';
+import 'package:http/http.dart' as http;
+
+const baseUrl = '@baseUrl/api/v1';
+
+Future&lt;List&lt;dynamic&gt;&gt; getArchitectures() async {
+  final res = await http.get(Uri.parse('$baseUrl/catalog/architectures'));
+  return jsonDecode(res.body) as List;
+}
+
+Future&lt;Map&lt;String, dynamic&gt;&gt; createProject(
+    String token, Map&lt;String, dynamic&gt; body) async {
+  final res = await http.post(
+    Uri.parse('$baseUrl/projects'),
+    headers: {
+      'Authorization': 'Bearer $token',
+      'Content-Type': 'application/json',
+    },
+    body: jsonEncode(body),
+  );
+  return jsonDecode(res.body) as Map&lt;String, dynamic&gt;;
+}</div>
+    </div>
+
+    <!-- SignalR note -->
+    <div class="api-section">
+        <h2>📡 Tiempo real (SignalR)</h2>
+        <p style="color:var(--text-muted)">La generación de proyectos emite eventos en tiempo real vía SignalR. Hub URL:</p>
+        <div class="code-block">@baseUrl/hubs/generation</div>
+        <p style="margin-top:.75rem;color:var(--text-muted);font-size:.875rem">Eventos disponibles: <code>ReceiveLog</code>, <code>StatusChanged</code></p>
+    </div>
+</div>
+
+@section Scripts {
+<style>
+.api-section {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1.5rem; margin-bottom: 1.25rem;
+}
+.api-section h2 { font-size: 1.1rem; margin-bottom: 1rem; }
+.api-section h3 { font-size: .95rem; color: var(--text-dim); }
+.code-block {
+    background: #0d0f1a; border: 1px solid var(--border);
+    border-radius: 8px; padding: 1rem 1.25rem;
+    font-family: var(--font-mono); font-size: .8rem;
+    color: #94d1be; line-height: 1.7; white-space: pre-wrap;
+}
+.endpoint-row {
+    display: flex; align-items: center; gap: .75rem;
+    padding: .6rem 1rem; border-radius: 8px;
+    background: var(--bg-elevated); border: 1px solid var(--border);
+    flex-wrap: wrap;
+}
+.method {
+    font-family: var(--font-mono); font-size: .75rem; font-weight: 700;
+    padding: .2rem .6rem; border-radius: 4px; min-width: 56px; text-align: center;
+}
+.method-get    { background: rgba(16,185,129,.15); color: #34d399; }
+.method-post   { background: rgba(59,130,246,.15);  color: #60a5fa; }
+.method-delete { background: rgba(239,68,68,.15);   color: #f87171; }
+.endpoint-path { color: var(--text); font-size: .82rem; }
+</style>
+}

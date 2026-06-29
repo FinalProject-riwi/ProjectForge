@@ -38,7 +38,16 @@ public class MultiProviderAiSuggestionService : IAiSuggestionService
     {
         // ── 1. Cache-first: no gastar tokens si ya existe resultado ────────────
         var cacheKey = BuildCacheKey(request);
-        var cached = await _cacheRepo.GetByCacheKeyAsync(cacheKey);
+        AiSuggestionCache? cached = null;
+        try
+        {
+            cached = await _cacheRepo.GetByCacheKeyAsync(cacheKey);
+        }
+        catch
+        {
+            // La caché es opcional: si la tabla aún no existe, seguimos sin ella.
+        }
+
         if (cached != null)
         {
             return new AiSuggestionResult(

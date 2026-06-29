@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using System.Text.Json;
 using ProjectForge.Application.DTOs;
+using ProjectForge.Application.UseCases.Projects;
 using ProjectForge.Core.Entities;
 using ProjectForge.Core.Enums;
 using ProjectForge.Core.Interfaces;
@@ -20,17 +21,15 @@ public class WizardController : Controller
 {
     private readonly AppDbContext _db;
     private readonly IAiSuggestionService _ai;
+    private readonly ICreateProjectUseCase _createProject;
     private readonly IProjectGeneratorService _generator;
-    private readonly ILibraryRepository _libraries;
-    private readonly IDesignPatternRepository _patterns;
 
     public WizardController(
         AppDbContext db, IAiSuggestionService ai,
-        IProjectGeneratorService generator,
-        ILibraryRepository libraries, IDesignPatternRepository patterns)
+        ICreateProjectUseCase createProject,
+        IProjectGeneratorService generator)
     {
-        _db = db; _ai = ai; _generator = generator;
-        _libraries = libraries; _patterns = patterns;
+        _db = db; _ai = ai; _createProject = createProject; _generator = generator;
     }
 
     // ── GET /wizard ────────────────────────────────────────────────────────────
@@ -58,6 +57,18 @@ public class WizardController : Controller
             return RedirectToAction("Index");
         }
 
+        // Sanitizar el nombre para que sea válido como nombre de carpeta y repo Git.
+        // Reemplaza cualquier carácter que no sea letra, dígito o guión.
+        var safeProjectName = System.Text.RegularExpressions.Regex.Replace(
+            projectName.Trim(), @"[^\w\-]", "-");
+        if (safeProjectName.Length < 2)
+        {
+            TempData["Error"] = "El nombre del proyecto contiene solo caracteres inválidos. Usa letras, números o guiones.";
+            return RedirectToAction("Index");
+        }
+        // Usar el nombre sanitizado de aquí en adelante
+        projectName = safeProjectName;
+
         // Validar que el userId del claim existe en BD.
         // Si la cookie se firmó con claves Data Protection rotadas (ej: reinicio de contenedor
         // sin volumen persistente), el claim puede traer un ID que ya no existe → FK violation.
@@ -77,13 +88,31 @@ public class WizardController : Controller
         }
 
         // Parsear enums con fallback seguro
-        var architecture     = Enum.TryParse<ArchitectureType>(arch, out var a)        ? a : ArchitectureType.DotNet;
+        var architecture     = TryParseArchitecture(arch, out var a)                   ? a : ArchitectureType.DotNet;
         var framework        = Enum.TryParse<FrameworkType>(fw, out var f)              ? f : FrameworkType.AspNetCoreWebApi;
         var database         = Enum.TryParse<DatabaseType>(db, out var d)               ? d : DatabaseType.PostgreSQL;
         var infrastructure   = Enum.TryParse<InfrastructureType>(infra, out var i)      ? i : InfrastructureType.None;
 
-        var patterns = TryParseJson<List<string>>(patternsJson) ?? new List<string>();
+        var patterns = (TryParseJson<List<string>>(patternsJson) ?? new List<string>())
+            .Take(1)
+            .ToList();
         var libs     = TryParseJson<List<string>>(libsJson)     ?? new List<string>();
+
+        // Validaciones async para evitar bloquear el pool de conexiones
+        // (GetPatternOptions y GetLibraryOptions consultan la BD)
+        var patternOptions = await GetPatternOptionsAsync(architecture, framework);
+        var libraryOptions = await GetLibraryOptionsAsync(architecture, framework);
+
+        if (!IsValidArchitecture(architecture) ||
+            !IsValidFramework(architecture, framework) ||
+            !IsValidDatabase(architecture, framework, database) ||
+            !IsValidInfrastructure(architecture, framework, database, infrastructure) ||
+            patterns.Any(p => !patternOptions.Any(o => o.Value.Equals(NormalizePatternValue(p), StringComparison.OrdinalIgnoreCase))) ||
+            libs.Any(l => !libraryOptions.Any(o => o.Value.Equals(l, StringComparison.OrdinalIgnoreCase))))
+        {
+            TempData["Error"] = "La configuración seleccionada ya no es válida. Recarga el wizard y selecciona una opción disponible.";
+            return RedirectToAction("Index");
+        }
 
         var config = new WizardConfig
         {
@@ -95,24 +124,18 @@ public class WizardController : Controller
             DeploymentTarget   = DeploymentTarget.Local,
             DesignPatternsJson = JsonSerializer.Serialize(patterns),
             LibrariesJson      = JsonSerializer.Serialize(libs),
+            AdditionalOptionsJson = JsonSerializer.Serialize(new { createPrivateRepo }),
             CreatedAt          = DateTime.UtcNow,
         };
 
         _db.WizardConfigs.Add(config);
         await _db.SaveChangesAsync();
 
-        var project = new Project
-        {
-            Name          = projectName.Trim(),
-            Description   = description?.Trim() ?? "",
-            UserId        = userId,
-            WizardConfigId = config.Id,
-            Status        = ProjectStatus.Draft,
-            CreatedAt     = DateTime.UtcNow,
-        };
-
-        _db.Projects.Add(project);
-        await _db.SaveChangesAsync();
+        var project = await _createProject.ExecuteAsync(new CreateProjectRequest(
+            userId,
+            config.Id,
+            projectName.Trim(),
+            description?.Trim()), HttpContext.RequestAborted);
 
         return RedirectToAction("Generate", new { id = project.Id });
     }
@@ -129,11 +152,14 @@ public class WizardController : Controller
     [IgnoreAntiforgeryToken]
     public IActionResult StartGeneration(int id)
     {
-        // Lanzar en background para que el HTTP response vuelva inmediatamente.
-        // Los logs y el estado final llegan al browser por SignalR.
+        // Capturar IServiceProvider ANTES de entrar al Task.Run.
+        // HttpContext puede haber sido liberado cuando el task ejecute
+        // (el request ya terminó), causando ObjectDisposedException.
+        var services = HttpContext.RequestServices;
+
         _ = Task.Run(async () =>
         {
-            using var scope = HttpContext.RequestServices.CreateScope();
+            using var scope = services.CreateScope();
             var generator = scope.ServiceProvider.GetRequiredService<IProjectGeneratorService>();
             await generator.GenerateAsync(id);
         });
@@ -145,16 +171,56 @@ public class WizardController : Controller
     [HttpGet("api/frameworks/{architecture}")]
     public IActionResult GetFrameworks(string architecture)
     {
-        if (!Enum.TryParse<ArchitectureType>(architecture, out var arch))
+        if (!TryParseArchitecture(architecture, out var arch))
             return Ok(Array.Empty<object>());
 
         return Ok(GetFrameworkOptions(arch));
     }
 
+    [HttpGet("api/databases/{architecture}/{framework}")]
+    public IActionResult GetDatabases(string architecture, string framework)
+    {
+        if (!TryParseArchitecture(architecture, out var arch) || !Enum.TryParse<FrameworkType>(framework, out var fw))
+            return Ok(Array.Empty<object>());
+
+        return Ok(GetDatabaseOptions(arch, fw));
+    }
+
+    [HttpGet("api/infrastructure/{architecture}/{framework}/{database}")]
+    public IActionResult GetInfrastructure(string architecture, string framework, string database)
+    {
+        if (!TryParseArchitecture(architecture, out var arch) ||
+            !Enum.TryParse<FrameworkType>(framework, out var fw) ||
+            !Enum.TryParse<DatabaseType>(database, out var db))
+        {
+            return Ok(Array.Empty<object>());
+        }
+
+        return Ok(GetInfrastructureOptions(arch, fw, db));
+    }
+
+    [HttpGet("api/patterns/{architecture}/{framework}")]
+    public IActionResult GetPatterns(string architecture, string framework)
+    {
+        if (!TryParseArchitecture(architecture, out var arch) || !Enum.TryParse<FrameworkType>(framework, out var fw))
+            return Ok(Array.Empty<object>());
+
+        return Ok(GetPatternOptions(arch, fw));
+    }
+
+    [HttpGet("api/libraries/{architecture}/{framework}")]
+    public IActionResult GetLibraries(string architecture, string framework)
+    {
+        if (!TryParseArchitecture(architecture, out var arch) || !Enum.TryParse<FrameworkType>(framework, out var fw))
+            return Ok(Array.Empty<object>());
+
+        return Ok(GetLibraryOptions(arch, fw));
+    }
+
     [HttpPost("api/suggest")]
     public async Task<IActionResult> GetSuggestions([FromBody] WizardSuggestionRequestDto req)
     {
-        if (!Enum.TryParse<ArchitectureType>(req.Architecture, out var arch))
+        if (!TryParseArchitecture(req.Architecture, out var arch))
             arch = ArchitectureType.DotNet;
         if (!Enum.TryParse<FrameworkType>(req.Framework, out var fw))
             fw = FrameworkType.AspNetCoreWebApi;
@@ -183,43 +249,236 @@ public class WizardController : Controller
         catch { return default; }
     }
 
+    private static List<OptionDto> GetArchitectureOptions() => new()
+    {
+        new OptionDto(ArchitectureType.DotNet.ToString(), GetArchitectureLabel(ArchitectureType.DotNet)),
+        new OptionDto(ArchitectureType.Java.ToString(), GetArchitectureLabel(ArchitectureType.Java)),
+        new OptionDto(ArchitectureType.Python.ToString(), GetArchitectureLabel(ArchitectureType.Python)),
+        new OptionDto(ArchitectureType.Php.ToString(), GetArchitectureLabel(ArchitectureType.Php)),
+        new OptionDto(ArchitectureType.JavaScript.ToString(), GetArchitectureLabel(ArchitectureType.JavaScript)),
+        new OptionDto(ArchitectureType.TypeScript.ToString(), GetArchitectureLabel(ArchitectureType.TypeScript)),
+    };
+
     private static List<FrameworkOptionDto> GetFrameworkOptions(ArchitectureType arch) => arch switch
     {
         ArchitectureType.DotNet => new()
         {
-            new() { Value = "AspNetCoreWebApi", Label = "ASP.NET Core Web API",  AvailableVersions = ["10.0", "8.0", "7.0"] },
-            new() { Value = "AspNetCoreMVC",    Label = "ASP.NET Core MVC",      AvailableVersions = ["10.0", "8.0"] },
-            new() { Value = "BlazorServer",     Label = "Blazor Server",         AvailableVersions = ["10.0", "8.0"] },
-            new() { Value = "MinimalApi",       Label = "Minimal API",           AvailableVersions = ["10.0", "8.0"] },
+            new() { Value = "AspNetCoreWebApi", Label = "ASP.NET Core Web API", AvailableVersions = ["10.0", "8.0", "7.0"] },
+            new() { Value = "AspNetCoreMVC", Label = "ASP.NET Core MVC", AvailableVersions = ["10.0", "8.0"] },
+            new() { Value = "BlazorServer", Label = "Blazor Server", AvailableVersions = ["10.0", "8.0"] },
+            new() { Value = "BlazorWasm", Label = "Blazor WebAssembly", AvailableVersions = ["10.0", "8.0"] },
+            new() { Value = "MinimalApi", Label = "Minimal API", AvailableVersions = ["10.0", "8.0"] },
+        },
+        ArchitectureType.Java => new()
+        {
+            new() { Value = "SpringBoot", Label = "Spring Boot", AvailableVersions = ["3.3", "3.2", "2.7"] },
+            new() { Value = "Quarkus", Label = "Quarkus", AvailableVersions = ["3.x"] },
+            new() { Value = "Micronaut", Label = "Micronaut", AvailableVersions = ["4.x"] },
         },
         ArchitectureType.Python => new()
         {
             new() { Value = "FastAPI", Label = "FastAPI", AvailableVersions = ["0.115", "0.110"] },
-            new() { Value = "Django",  Label = "Django",  AvailableVersions = ["5.0", "4.2"] },
-            new() { Value = "Flask",   Label = "Flask",   AvailableVersions = ["3.0", "2.3"] },
+            new() { Value = "Django", Label = "Django", AvailableVersions = ["5.0", "4.2"] },
+            new() { Value = "Flask", Label = "Flask", AvailableVersions = ["3.0", "2.3"] },
         },
         ArchitectureType.JavaScript => new()
         {
-            new() { Value = "ExpressJs", Label = "Express.js", AvailableVersions = ["4.x", "5.x"] },
-            new() { Value = "NestJs",    Label = "NestJS",     AvailableVersions = ["10.x"] },
-            new() { Value = "NextJs",    Label = "Next.js",    AvailableVersions = ["14.x"] },
+            new() { Value = "NodeJs", Label = "Node.js", AvailableVersions = ["22.x", "20.x"] },
+            new() { Value = "ExpressJs", Label = "Express.js", AvailableVersions = ["5.x", "4.x"] },
+            new() { Value = "NestJs", Label = "NestJS", AvailableVersions = ["10.x"] },
+            new() { Value = "NextJs", Label = "Next.js", AvailableVersions = ["14.x"] },
         },
         ArchitectureType.TypeScript => new()
         {
             new() { Value = "NestTs", Label = "NestJS (TypeScript)", AvailableVersions = ["10.x"] },
             new() { Value = "NextTs", Label = "Next.js (TypeScript)", AvailableVersions = ["14.x"] },
         },
-        ArchitectureType.Java => new()
-        {
-            new() { Value = "SpringBoot", Label = "Spring Boot", AvailableVersions = ["3.3", "3.2", "2.7"] },
-            new() { Value = "Quarkus",    Label = "Quarkus",     AvailableVersions = ["3.x"] },
-        },
-        ArchitectureType.Laravel => new()
+        ArchitectureType.Php => new()
         {
             new() { Value = "Laravel", Label = "Laravel", AvailableVersions = ["11.x", "10.x"] },
+            new() { Value = "Symfony", Label = "Symfony", AvailableVersions = ["7.x", "6.x"] },
         },
         _ => new()
     };
+
+    private static List<OptionDto> GetDatabaseOptions(ArchitectureType arch, FrameworkType framework) => new()
+    {
+        new OptionDto(DatabaseType.PostgreSQL.ToString(), "PostgreSQL", "Recomendado"),
+        new OptionDto(DatabaseType.MySQL.ToString(), "MySQL", "Popular"),
+        new OptionDto(DatabaseType.SqlServer.ToString(), "SQL Server", "Empresarial"),
+        new OptionDto(DatabaseType.MongoDB.ToString(), "MongoDB", "NoSQL"),
+        new OptionDto(DatabaseType.Redis.ToString(), "Redis", "Cache/Cola"),
+        new OptionDto(DatabaseType.SQLite.ToString(), "SQLite", "Desarrollo"),
+    };
+
+    private static List<OptionDto> GetInfrastructureOptions(ArchitectureType arch, FrameworkType framework, DatabaseType db) => new()
+    {
+        new OptionDto(InfrastructureType.None.ToString(), "Sin contenedores", null, "Solo el código del proyecto"),
+        new OptionDto(InfrastructureType.DockerCompose.ToString(), "Docker Compose", null, "Ideal para desarrollo local y un solo servidor"),
+        new OptionDto(InfrastructureType.Kubernetes.ToString(), "Kubernetes", null, "Escalado horizontal, múltiples VPS"),
+    };
+
+    private List<OptionDto> GetPatternOptions(ArchitectureType arch, FrameworkType framework)
+    {
+        var patterns = _db.DesignPatterns
+            .Where(p => p.Architecture == arch)
+            .OrderBy(p => p.Name)
+            .ToList();
+
+        return patterns
+            .GroupBy(p => NormalizePatternValue(p.Pattern))
+            .Select(g => SelectPatternForFramework(g.ToList(), arch, framework))
+            .Where(p => p != null)
+            .Select(p => p!)
+            .Select(p => new OptionDto(NormalizePatternValue(p.Pattern), p.Name))
+            .ToList();
+    }
+
+    // Versión async para validaciones en Step5Post (evita bloquear el pool de conexiones)
+    private async Task<List<OptionDto>> GetPatternOptionsAsync(ArchitectureType arch, FrameworkType framework)
+    {
+        var patterns = await _db.DesignPatterns
+            .Where(p => p.Architecture == arch)
+            .OrderBy(p => p.Name)
+            .ToListAsync();
+
+        return patterns
+            .GroupBy(p => NormalizePatternValue(p.Pattern))
+            .Select(g => SelectPatternForFramework(g.ToList(), arch, framework))
+            .Where(p => p != null)
+            .Select(p => p!)
+            .Select(p => new OptionDto(NormalizePatternValue(p.Pattern), p.Name))
+            .ToList();
+    }
+
+    private static DesignPatternEntry? SelectPatternForFramework(
+        IReadOnlyList<DesignPatternEntry> patterns,
+        ArchitectureType arch,
+        FrameworkType framework)
+    {
+        if (patterns.Count == 0)
+            return null;
+
+        if (arch == ArchitectureType.Php)
+        {
+            return framework == FrameworkType.Symfony
+                ? patterns.FirstOrDefault(p => p.Name.Contains("Symfony", StringComparison.OrdinalIgnoreCase))
+                : patterns.FirstOrDefault(p => !p.Name.Contains("Symfony", StringComparison.OrdinalIgnoreCase))
+                  ?? patterns.First();
+        }
+
+        if (framework is FrameworkType.NestJs or FrameworkType.NestTs)
+        {
+            return patterns.FirstOrDefault(p =>
+                p.Name.Contains("NestJS", StringComparison.OrdinalIgnoreCase) ||
+                p.Name.Contains("NestJs", StringComparison.OrdinalIgnoreCase) ||
+                p.Name.Contains("Nest", StringComparison.OrdinalIgnoreCase))
+                ?? patterns.First();
+        }
+
+        return patterns.FirstOrDefault(p =>
+                !p.Name.Contains("NestJS", StringComparison.OrdinalIgnoreCase) &&
+                !p.Name.Contains("NestJs", StringComparison.OrdinalIgnoreCase) &&
+                !p.Name.Contains("Nest", StringComparison.OrdinalIgnoreCase))
+            ?? patterns.First();
+    }
+
+    private List<OptionDto> GetLibraryOptions(ArchitectureType arch, FrameworkType framework)
+    {
+        var libraries = _db.Libraries
+            .Where(l => l.Architecture == arch && (l.Framework == null || l.Framework == framework))
+            .OrderByDescending(l => l.PopularityScore)
+            .ThenBy(l => l.Name)
+            .ToList();
+
+        return libraries
+            .Select(l => new OptionDto(l.PackageName, l.Name, l.Category))
+            .ToList();
+    }
+
+    // Versión async para validaciones en Step5Post
+    private async Task<List<OptionDto>> GetLibraryOptionsAsync(ArchitectureType arch, FrameworkType framework)
+    {
+        var libraries = await _db.Libraries
+            .Where(l => l.Architecture == arch && (l.Framework == null || l.Framework == framework))
+            .OrderByDescending(l => l.PopularityScore)
+            .ThenBy(l => l.Name)
+            .ToListAsync();
+
+        return libraries
+            .Select(l => new OptionDto(l.PackageName, l.Name, l.Category))
+            .ToList();
+    }
+
+    private bool IsValidArchitecture(ArchitectureType architecture) =>
+        GetArchitectureOptions().Any(o => string.Equals(o.Value, architecture.ToString(), StringComparison.OrdinalIgnoreCase));
+
+    private bool IsValidFramework(ArchitectureType architecture, FrameworkType framework) =>
+        GetFrameworkOptions(architecture).Any(o => string.Equals(o.Value, framework.ToString(), StringComparison.OrdinalIgnoreCase));
+
+    private bool IsValidDatabase(ArchitectureType architecture, FrameworkType framework, DatabaseType database) =>
+        GetDatabaseOptions(architecture, framework).Any(o => string.Equals(o.Value, database.ToString(), StringComparison.OrdinalIgnoreCase));
+
+    private bool IsValidInfrastructure(ArchitectureType architecture, FrameworkType framework, DatabaseType database, InfrastructureType infrastructure) =>
+        GetInfrastructureOptions(architecture, framework, database).Any(o => string.Equals(o.Value, infrastructure.ToString(), StringComparison.OrdinalIgnoreCase));
+
+    private bool IsValidPattern(ArchitectureType architecture, FrameworkType framework, string pattern)
+    {
+        var normalized = NormalizePatternValue(pattern);
+        return GetPatternOptions(architecture, framework).Any(o => string.Equals(o.Value, normalized, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private bool IsValidLibrary(ArchitectureType architecture, FrameworkType framework, string library) =>
+        GetLibraryOptions(architecture, framework).Any(o => string.Equals(o.Value, library, StringComparison.OrdinalIgnoreCase));
+
+    private static string NormalizePatternValue(DesignPattern pattern) => pattern switch
+    {
+        DesignPattern.DomainDrivenDesign => "DomainDrivenDesign",
+        DesignPattern.CleanArchitecture => "CleanArchitecture",
+        DesignPattern.HexagonalArchitecture => "HexagonalArchitecture",
+        DesignPattern.EventSourcing => "EventSourcing",
+        DesignPattern.Microservices => "Microservices",
+        DesignPattern.CQRS => "CQRS",
+        DesignPattern.Mediator => "Mediator",
+        DesignPattern.Saga => "Saga",
+        DesignPattern.Repository => "Repository",
+        _ => pattern.ToString()
+    };
+
+    private static string NormalizePatternValue(string pattern) =>
+        new string((pattern ?? string.Empty)
+            .Trim()
+            .Where(char.IsLetterOrDigit)
+            .ToArray());
+
+    private static string GetArchitectureLabel(ArchitectureType arch) => arch switch
+    {
+        ArchitectureType.DotNet => "C# / .NET",
+        ArchitectureType.Java => "Java",
+        ArchitectureType.Python => "Python",
+        ArchitectureType.Php => "PHP",
+        ArchitectureType.JavaScript => "JavaScript",
+        ArchitectureType.TypeScript => "TypeScript",
+        _ => arch.ToString()
+    };
+
+    private static bool TryParseArchitecture(string? value, out ArchitectureType architecture)
+    {
+        if (Enum.TryParse(value, ignoreCase: true, out architecture))
+            return true;
+
+        if (string.Equals(value, "Laravel", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(value, "PHP", StringComparison.OrdinalIgnoreCase))
+        {
+            architecture = ArchitectureType.Php;
+            return true;
+        }
+
+        architecture = ArchitectureType.DotNet;
+        return false;
+    }
+
+    private sealed record OptionDto(string Value, string Label, string? Badge = null, string? Description = null);
 }
 
 // DTO para el endpoint de sugerencias (recibe strings del JS)

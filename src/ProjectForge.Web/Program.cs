@@ -1,20 +1,36 @@
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.OAuth;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using ProjectForge.Application.AI;
 using ProjectForge.Application.Services;
+using ProjectForge.Application.UseCases.Projects;
 using ProjectForge.Core.Interfaces;
 using ProjectForge.Infrastructure;
 using ProjectForge.Infrastructure.Data;
 using ProjectForge.Infrastructure.Repositories;
+using ProjectForge.Infrastructure.Seeders.DotNet;
+using ProjectForge.Infrastructure.Seeders.TypeScript;
+using ProjectForge.Infrastructure.Seeders.Java;
+using ProjectForge.Infrastructure.Seeders.JavaScript;
+using ProjectForge.Infrastructure.Seeders.Python;
+using ProjectForge.Infrastructure.Seeders.Php;
 using ProjectForge.Web.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // ─── Base de datos ────────────────────────────────────────────────────────────
 builder.Services.AddDbContext<AppDbContext>(opts =>
-    opts.UseSqlServer(builder.Configuration.GetConnectionString("Default")));
+    opts.UseSqlServer(
+        builder.Configuration.GetConnectionString("Default"),
+        sql => sql.EnableRetryOnFailure(
+            maxRetryCount: 10,
+            maxRetryDelay: TimeSpan.FromSeconds(15),
+            errorNumbersToAdd: null))
+    .ConfigureWarnings(w =>
+        w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning)));
 
 // ─── Data Protection (persistir claves entre reinicios de contenedor) ─────────
 // La ruta se inyecta via env var ASPNETCORE_DataProtection__KeysPath desde docker-compose.
@@ -47,6 +63,7 @@ builder.Services.AddScoped<IShellExecutor, ShellExecutor>();
 builder.Services.AddScoped<IGitHubService, GitHubService>();
 builder.Services.AddScoped<IEncryptionService, AesEncryptionService>();
 builder.Services.AddScoped<IAiSuggestionService, MultiProviderAiSuggestionService>();
+builder.Services.AddScoped<ICreateProjectUseCase, CreateProjectUseCase>();
 builder.Services.AddScoped<IProjectGeneratorService, ProjectGeneratorService>();
 builder.Services.AddScoped<IVpsDeploymentService, VpsDeploymentService>();
 
@@ -77,6 +94,13 @@ builder.Services.AddSession(opts =>
     opts.Cookie.SameSite = SameSiteMode.Lax;
 });
 
+builder.Services.AddAntiforgery(options =>
+{
+    options.Cookie.Name = "ProjectForge.Antiforgery.v2";
+    options.Cookie.HttpOnly = true;
+    options.Cookie.SameSite = SameSiteMode.Lax;
+});
+
 // ─── Autenticación GitHub OAuth ───────────────────────────────────────────────
 // NOTA: No hacemos throw si los valores no están — la app arranca igualmente
 // y muestra error solo si el usuario intenta hacer login sin configurar las credenciales.
@@ -88,26 +112,50 @@ builder.Services.AddAuthentication(options =>
     options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
     options.DefaultChallengeScheme = "GitHub";
 })
-.AddCookie(options =>
+// Cookie principal de la aplicación
+.AddCookie(CookieAuthenticationDefaults.AuthenticationScheme, options =>
 {
     options.LoginPath = "/auth/login";
     options.LogoutPath = "/auth/logout";
     options.AccessDeniedPath = "/auth/denied";
-    options.Cookie.Name = "ProjectForge.Auth";
+    options.Cookie.Name = "ProjectForge.Auth.v2";
     options.Cookie.SameSite = SameSiteMode.Lax;
     options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
     options.ExpireTimeSpan = TimeSpan.FromDays(30);
     options.SlidingExpiration = true;
 })
+// Cookie temporal para el ticket externo de GitHub OAuth
+// (scheme separado para evitar colisión con la cookie de app)
+.AddCookie("ExternalCookies", options =>
+{
+    options.Cookie.Name = "ProjectForge.External";
+    options.Cookie.SameSite = SameSiteMode.Lax;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+    options.ExpireTimeSpan = TimeSpan.FromMinutes(10);
+})
 .AddGitHub("GitHub", options =>
 {
     options.ClientId = githubClientId;
     options.ClientSecret = githubClientSecret;
+    // El ticket externo se almacena en la cookie "ExternalCookies",
+    // no en la cookie principal de la app — evita el redirect loop.
+    options.SignInScheme = "ExternalCookies";
     options.Scope.Add("repo");
     options.Scope.Add("workflow");
     options.Scope.Add("user:email");
     options.SaveTokens = true;
     options.CallbackPath = "/auth/github/callback";
+    options.ClaimActions.MapJsonKey("avatar_url", "avatar_url");
+    options.ClaimActions.MapJsonKey("github_login", "login");
+    options.Events.OnRemoteFailure = context =>
+    {
+        context.HandleResponse();
+        var reason = string.IsNullOrWhiteSpace(context.Failure?.Message)
+            ? "No se pudo completar la autenticación con GitHub."
+            : "Has cancelado o denegado el acceso con GitHub.";
+        context.Response.Redirect($"/auth/denied?message={Uri.EscapeDataString(reason)}");
+        return Task.CompletedTask;
+    };
 });
 
 builder.Services.AddAuthorization();
@@ -117,19 +165,60 @@ builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
-// ─── Migraciones automáticas ──────────────────────────────────────────────────
-try
+// ─── Migraciones automáticas (con reintentos para esperar SQL Server) ─────────
 {
-    using var scope = app.Services.CreateScope();
-    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    await db.Database.MigrateAsync();
-    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-    logger.LogInformation("Migraciones aplicadas correctamente.");
-}
-catch (Exception ex)
-{
-    var logger = app.Services.GetRequiredService<ILogger<Program>>();
-    logger.LogError(ex, "Error al aplicar migraciones. La app continuará pero la BD puede no estar lista.");
+    var startupLogger = app.Services.GetRequiredService<ILogger<Program>>();
+    const int maxAttempts = 15;
+    const int delaySeconds = 5;
+
+    for (int attempt = 1; attempt <= maxAttempts; attempt++)
+    {
+        try
+        {
+            using var scope = app.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+            startupLogger.LogInformation("Intento {Attempt}/{Max}: conectando a SQL Server...", attempt, maxAttempts);
+
+            // Esperar a que el servidor acepte conexiones
+            await db.Database.CanConnectAsync();
+
+            await db.Database.MigrateAsync();
+
+            // Ejecutar cada seeder individualmente — un fallo no bloquea los demás
+            foreach (var (name, seeder) in new (string, Func<Task>)[]
+            {
+                ("DotNet",     () => DotNetSeeder.SeedAsync(db)),
+                ("TypeScript", () => TypeScriptSeeder.SeedAsync(db)),
+                ("Php",        () => PhpSeeder.SeedAsync(db)),
+                ("Python",     () => PythonSeeder.SeedAsync(db)),
+                ("Java",       () => JavaSeeder.SeedAsync(db)),
+                ("JavaScript", () => JavaScriptSeeder.SeedAsync(db)),
+            })
+            {
+                try   { await seeder(); }
+                catch (Exception seedEx)
+                {
+                    startupLogger.LogError(seedEx,
+                        "⚠️  Seeder {Seeder} falló: {Msg}", name, seedEx.Message);
+                }
+            }
+
+            startupLogger.LogInformation("✅ Migraciones y seeders completados.");
+            break;
+        }
+        catch (Exception ex) when (attempt < maxAttempts)
+        {
+            startupLogger.LogWarning(
+                "⏳ SQL Server aún no disponible (intento {Attempt}/{Max}): {Message}. Reintentando en {Delay}s...",
+                attempt, maxAttempts, ex.Message, delaySeconds);
+            await Task.Delay(TimeSpan.FromSeconds(delaySeconds));
+        }
+        catch (Exception ex)
+        {
+            startupLogger.LogError(ex, "❌ Error fatal al aplicar migraciones tras {Max} intentos.", maxAttempts);
+        }
+    }
 }
 
 if (!app.Environment.IsDevelopment())
@@ -141,7 +230,12 @@ if (!app.Environment.IsDevelopment())
 if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 
-app.UseHttpsRedirection();
+var httpsPort = app.Configuration["ASPNETCORE_HTTPS_PORT"]
+    ?? Environment.GetEnvironmentVariable("ASPNETCORE_HTTPS_PORT");
+if (!string.IsNullOrWhiteSpace(httpsPort))
+{
+    app.UseHttpsRedirection();
+}
 app.UseStaticFiles();
 app.UseRouting();
 app.UseSession();
@@ -149,6 +243,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllerRoute("default", "{controller=Home}/{action=Index}/{id?}");
+app.MapControllers(); // Maps [ApiController] attribute-based routes (e.g. ApiV1Controller)
 app.MapHub<ProjectForge.Web.Hubs.GenerationHub>("/hubs/generation");
 
 await app.RunAsync();

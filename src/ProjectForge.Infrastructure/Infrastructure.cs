@@ -80,7 +80,17 @@ public class GitHubService : IGitHubService
         };
 
         var existing = await TryGetRepoAsync(client, repoName);
-        if (existing != null) return existing.CloneUrl;
+        if (existing != null)
+        {
+            await client.Repository.Edit(existing.Id, new RepositoryUpdate
+            {
+                Name = repoName,
+                Description = description,
+                Private = isPrivate
+            });
+
+            return existing.CloneUrl;
+        }
 
         var repo = await client.Repository.Create(new NewRepository(repoName)
         {
