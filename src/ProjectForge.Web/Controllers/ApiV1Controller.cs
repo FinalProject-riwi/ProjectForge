@@ -13,7 +13,7 @@ using ProjectForge.Infrastructure.Data;
 namespace ProjectForge.Web.Controllers;
 
 /// <summary>
-/// API v1 — diseñada para ser consumida por la app Flutter de TabBuilder.
+/// API v1 — diseñada para ser consumida por la app Flutter de ProjectForge.
 /// Autenticación: Bearer token (GitHub access_token del usuario almacenado en BD).
 /// Todos los endpoints retornan JSON.
 /// </summary>

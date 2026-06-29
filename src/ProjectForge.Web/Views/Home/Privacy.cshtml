@@ -1,0 +1,130 @@
+@{
+    ViewData["Title"] = "Política de Privacidad – TabBuilder";
+    Layout = "_Layout";
+}
+
+<div class="legal-page">
+    <nav class="legal-nav" aria-label="Documentos legales">
+        <a href="/privacy" style="border-color:var(--primary);color:var(--primary)">Política de Privacidad</a>
+        <a href="/terms">Términos y Condiciones</a>
+    </nav>
+
+    <div class="legal-header">
+        <h1>Política de Privacidad</h1>
+        <p>Última actualización: 29 de junio de 2026</p>
+    </div>
+
+    <div class="legal-section">
+        <h2>1. Quiénes somos</h2>
+        <p>TabBuilder es una aplicación web que genera estructuras de proyectos de software utilizando inteligencia artificial y se integra con GitHub mediante OAuth. Esta política describe cómo recopilamos, usamos y protegemos la información de los usuarios.</p>
+    </div>
+
+    <div class="legal-section">
+        <h2>2. Información que recopilamos</h2>
+        <h3>2.1 Datos de cuenta de GitHub</h3>
+        <p>Cuando inicias sesión con GitHub, recibimos y almacenamos la siguiente información de tu perfil:</p>
+        <ul>
+            <li>Nombre de usuario de GitHub</li>
+            <li>Dirección de correo electrónico asociada a tu cuenta</li>
+            <li>URL de tu foto de perfil (avatar)</li>
+            <li>Identificador único de cuenta de GitHub</li>
+        </ul>
+        <h3>2.2 Token de acceso de GitHub</h3>
+        <p>Almacenamos un token de acceso de OAuth de GitHub cifrado en nuestra base de datos. Este token es necesario para crear repositorios y hacer push de código en tu nombre. El token se cifra en reposo mediante AES y nunca se transmite en texto plano.</p>
+        <h3>2.3 Datos de proyectos</h3>
+        <p>Almacenamos la configuración y los logs de los proyectos que generas, incluyendo el nombre del proyecto, descripción, arquitectura seleccionada, frameworks, base de datos e infraestructura elegida.</p>
+        <h3>2.4 Datos de uso</h3>
+        <p>Podemos registrar datos técnicos de uso como el tipo de stack seleccionado y el estado de la generación, con el fin de mejorar el servicio. No recopilamos datos de navegación más allá de lo necesario para el funcionamiento de la aplicación.</p>
+    </div>
+
+    <div class="legal-section">
+        <h2>3. Cómo usamos la información</h2>
+        <p>Usamos la información recopilada exclusivamente para:</p>
+        <ul>
+            <li>Autenticar tu sesión en la plataforma</li>
+            <li>Crear repositorios en GitHub en tu nombre cuando lo solicitas</li>
+            <li>Guardar y mostrar el historial de proyectos generados</li>
+            <li>Mejorar la experiencia y funcionalidades del servicio</li>
+            <li>Resolver problemas técnicos y prevenir abusos</li>
+        </ul>
+        <p>No vendemos, alquilamos ni compartimos tu información personal con terceros con fines comerciales o publicitarios.</p>
+    </div>
+
+    <div class="legal-section">
+        <h2>4. Permisos de GitHub</h2>
+        <p>Durante el proceso de autenticación, TabBuilder solicita los siguientes permisos de GitHub:</p>
+        <ul>
+            <li><strong>read:user</strong> — para acceder a tu nombre de usuario y avatar</li>
+            <li><strong>user:email</strong> — para leer tu dirección de correo electrónico</li>
+            <li><strong>repo</strong> — para crear repositorios y hacer push de código generado</li>
+            <li><strong>workflow</strong> — para agregar archivos de GitHub Actions a los repositorios generados</li>
+        </ul>
+        <p>Puedes revocar estos permisos en cualquier momento desde la configuración de aplicaciones autorizadas de tu cuenta de GitHub.</p>
+    </div>
+
+    <div class="legal-section">
+        <h2>5. Seguridad de los datos</h2>
+        <p>Implementamos medidas de seguridad técnicas y organizativas para proteger tu información:</p>
+        <ul>
+            <li>Los tokens de acceso se almacenan cifrados mediante AES-256</li>
+            <li>Las conexiones a la plataforma se realizan mediante HTTPS/TLS</li>
+            <li>El acceso a la base de datos está restringido y auditado</li>
+            <li>Los secretos de configuración se gestionan mediante variables de entorno, nunca en código fuente</li>
+        </ul>
+        <p>Sin embargo, ningún sistema es completamente seguro. Si detectas una vulnerabilidad de seguridad, te pedimos que la reportes de forma responsable contactándonos directamente.</p>
+    </div>
+
+    <div class="legal-section">
+        <h2>6. Retención de datos</h2>
+        <p>Conservamos tu información mientras tu cuenta esté activa en la plataforma. Si decides eliminar tu cuenta, eliminaremos tus datos personales en un plazo máximo de 30 días, excepto aquellos que debamos conservar por obligaciones legales.</p>
+        <p>Los proyectos que hayas generado y subido a GitHub permanecerán en tu cuenta de GitHub, ya que son de tu propiedad. TabBuilder no tiene control sobre los repositorios una vez creados en tu cuenta.</p>
+    </div>
+
+    <div class="legal-section">
+        <h2>7. Servicios de terceros</h2>
+        <p>TabBuilder se integra con los siguientes servicios de terceros:</p>
+        <ul>
+            <li><strong>GitHub</strong> — para autenticación y gestión de repositorios. Su política de privacidad aplica para el manejo de datos en su plataforma.</li>
+            <li><strong>Anthropic Claude / OpenAI / Google Gemini</strong> — para generar sugerencias de código y documentación. Las consultas de IA no incluyen información personal identificable.</li>
+        </ul>
+    </div>
+
+    <div class="legal-section">
+        <h2>8. Tus derechos</h2>
+        <p>Tienes derecho a:</p>
+        <ul>
+            <li>Acceder a la información personal que tenemos sobre ti</li>
+            <li>Solicitar la corrección de datos incorrectos</li>
+            <li>Solicitar la eliminación de tu cuenta y datos asociados</li>
+            <li>Oponerte al procesamiento de tus datos en ciertos casos</li>
+            <li>Revocar en cualquier momento el acceso de TabBuilder a tu cuenta de GitHub</li>
+        </ul>
+        <p>Para ejercer cualquiera de estos derechos, puedes contactarnos mediante el repositorio del proyecto en GitHub.</p>
+    </div>
+
+    <div class="legal-section">
+        <h2>9. Cookies</h2>
+        <p>TabBuilder utiliza únicamente cookies estrictamente necesarias para el funcionamiento de la aplicación:</p>
+        <ul>
+            <li>Cookie de sesión de autenticación (TabBuilder.Auth)</li>
+            <li>Cookie de token CSRF para protección de formularios</li>
+            <li>Cookie de preferencia de tema visual (almacenada en localStorage)</li>
+        </ul>
+        <p>No utilizamos cookies de rastreo publicitario ni analítica de terceros.</p>
+    </div>
+
+    <div class="legal-section">
+        <h2>10. Cambios a esta política</h2>
+        <p>Podemos actualizar esta política de privacidad ocasionalmente. Si realizamos cambios significativos, lo notificaremos en la plataforma. El uso continuado del servicio después de dichos cambios constituye tu aceptación de la política actualizada.</p>
+    </div>
+
+    <div class="legal-section">
+        <h2>11. Contacto</h2>
+        <p>Si tienes preguntas sobre esta política de privacidad o sobre el manejo de tus datos, puedes contactarnos abriendo un issue en el repositorio público de TabBuilder en GitHub.</p>
+    </div>
+
+    <div style="margin-top:3rem;padding-top:2rem;border-top:1px solid var(--border);display:flex;gap:1rem;flex-wrap:wrap">
+        <a href="/terms" class="btn btn-ghost">Términos y Condiciones</a>
+        <a href="/" class="btn btn-ghost">Volver al inicio</a>
+    </div>
+</div>

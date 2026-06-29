@@ -1,0 +1,27 @@
+{
+  "name": "ProjectForge",
+  "short_name": "ProjectForge",
+  "description": "Genera proyectos de software listos para producción con IA y GitHub.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#080b14",
+  "theme_color": "#0a0d14",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/img/logo.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/img/logo.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["developer", "productivity", "utilities"],
+  "lang": "es",
+  "dir": "ltr"
+}

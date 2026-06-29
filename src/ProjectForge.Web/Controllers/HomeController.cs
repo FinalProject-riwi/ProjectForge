@@ -14,6 +14,15 @@ public class HomeController : Controller
     [Route("/api-docs")]
     public IActionResult ApiDocs() => View();
 
+    [Route("/privacy")]
+    public IActionResult Privacy() => View();
+
+    [Route("/terms")]
+    public IActionResult Terms() => View();
+
+    [Route("/download")]
+    public IActionResult Download() => View();
+
     [Route("/error")]
     public IActionResult Error() => View();
 }
