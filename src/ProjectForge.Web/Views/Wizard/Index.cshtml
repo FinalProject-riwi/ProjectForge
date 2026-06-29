@@ -126,7 +126,7 @@
             <h2>Patrones y Librerías</h2>
 
             <div class="ai-suggestion-banner" id="ai-banner">
-                <span class="ai-icon">🤖</span>
+                <span class="ai-icon"></span>
                 <span id="ai-rationale">Analizando tu configuración con IA...</span>
             </div>
             <p class="step-description" style="font-size:.82rem;color:var(--text-muted);margin-top:.5rem">
@@ -181,7 +181,7 @@
                 Siguiente →
             </button>
             <button type="submit" id="btn-submit" class="btn btn-success" style="display:none">
-                🚀 Generar Proyecto
+                 Generar Proyecto
             </button>
         </div>
     </form>
@@ -192,35 +192,46 @@
 }
 
 <!-- ═══════════════════════════════════════════════════════════════════════
-     Modal: Herramientas de desarrollo no detectadas
-     Se muestra al llegar al Step 5 si faltan prerrequisitos en el sistema.
+     Modal: AVISO de herramientas no detectadas (NO BLOQUEANTE)
      ═══════════════════════════════════════════════════════════════════════ -->
-<div id="prereq-modal-backdrop" class="prereq-modal-backdrop" style="display:none" aria-modal="true" role="dialog" aria-labelledby="prereq-modal-title">
+
+<div id="prereq-modal-backdrop"
+     class="prereq-modal-backdrop"
+     style="display:none"
+     aria-modal="true"
+     role="dialog"
+     aria-labelledby="prereq-modal-title">
+
     <div class="prereq-modal-box">
+
         <div class="prereq-modal-header">
             <span class="prereq-modal-icon">⚠️</span>
-            <h3 class="prereq-modal-title" id="prereq-modal-title">Herramientas no detectadas</h3>
+            <h3 class="prereq-modal-title" id="prereq-modal-title">
+                Aviso de herramientas
+            </h3>
         </div>
 
         <p class="prereq-modal-subtitle">
-            Para generar proyectos con <strong id="prereq-arch-label"></strong> necesitás
-            tener instaladas las siguientes herramientas en tu máquina:
+            Para generar proyectos con <strong id="prereq-arch-label"></strong>
+            se recomienda tener instaladas las siguientes herramientas:
         </p>
 
         <ul id="prereq-tools-list" class="prereq-tools-list"></ul>
 
         <p class="prereq-modal-note">
-            💡 Si ya las tenés instaladas y seguís viendo este aviso, verificá que estén
-            en el <code>PATH</code> del sistema y reiniciá el servidor.
+            💡 Este aviso no bloquea la creación del proyecto.
+            Si ya las instalaste, asegúrate de que estén en el <code>PATH</code>.
         </p>
 
         <div class="prereq-modal-actions">
             <button type="button" class="btn btn-ghost" onclick="closePrereqModal()">
-                ← Volver
+                Cerrar
             </button>
-            <button type="button" class="btn btn-warning" onclick="proceedAnywayPrereq()">
-                Continuar de todas formas →
+
+            <button type="button" class="btn btn-primary" onclick="proceedAnywayPrereq()">
+                Entendido
             </button>
         </div>
+
     </div>
 </div>

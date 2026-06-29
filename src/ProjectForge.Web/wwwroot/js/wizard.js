@@ -497,80 +497,87 @@ document.querySelector('.infra-card[data-value="None"]')?.classList.add('selecte
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /** Llama al endpoint que verifica qué herramientas están instaladas en el servidor. */
+// ═══════════════════════════════════════════════════════════════════════════════
+// PREREQUISITE CHECK — SOLO AVISO (NO BLOQUEA)
+// ═══════════════════════════════════════════════════════════════════════════════
+
 async function checkPrerequisites(architecture) {
   try {
     const res = await fetch(`/api/v1/tools/check-prerequisites?architecture=${encodeURIComponent(architecture)}`, {
       headers: { 'Accept': 'application/json' }
     });
-    if (!res.ok) return { allInstalled: true, tools: [] }; // si el endpoint falla, no bloquear
+    if (!res.ok) return { allInstalled: true, tools: [] };
     return await res.json();
   } catch {
-    return { allInstalled: true, tools: [] }; // sin red → no bloquear
+    return { allInstalled: true, tools: [] };
   }
 }
 
 /**
- * Muestra el modal si faltan herramientas; si todo está OK invoca onProceed() directamente.
- * @param {string} architecture  - valor del enum (ej: "Java", "Python", "Php")
- * @param {Function} onProceed   - callback a ejecutar cuando el usuario confirma o todo está OK
+ * SOLO AVISO — nunca bloquea navegación
  */
 async function showPrereqModalIfNeeded(architecture, onProceed) {
   const data = await checkPrerequisites(architecture);
 
-  if (data.allInstalled) {
-    onProceed();
+  const missing = (data.tools ?? []).filter(t => !t.installed);
+
+  // 👉 SI NO HAY FALTANTES: no hacer nada especial
+  if (missing.length === 0) {
+    onProceed?.();
     return;
   }
 
-  const missing = (data.tools ?? []).filter(t => !t.installed);
-  if (missing.length === 0) { onProceed(); return; }
-
-  // Etiqueta amigable por arquitectura
+  // 🟡 SI HAY FALTANTES: mostrar aviso pero NO bloquear
   const archLabels = {
     DotNet: 'C# / .NET', Java: 'Java', Python: 'Python',
     Php: 'PHP', JavaScript: 'JavaScript', TypeScript: 'TypeScript'
   };
-  document.getElementById('prereq-arch-label').textContent = archLabels[architecture] ?? architecture;
 
-  // Renderizar lista de herramientas
+  const labelEl = document.getElementById('prereq-arch-label');
+  if (labelEl) {
+    labelEl.textContent = archLabels[architecture] ?? architecture;
+  }
+
   const list = document.getElementById('prereq-tools-list');
-  list.innerHTML = missing.map(t => `
-    <li class="prereq-tool-item">
-      <span class="prereq-tool-status">❌</span>
-      <span class="prereq-tool-info">
-        <span class="prereq-tool-name">${escapeHtml(t.name)}</span>
-        <span class="prereq-tool-desc">${escapeHtml(t.description)}</span>
-      </span>
-      <a href="${escapeHtml(t.installUrl)}" target="_blank" rel="noopener noreferrer" class="prereq-tool-link">
-        Instalar ↗
-      </a>
-    </li>
-  `).join('');
+  if (list) {
+    list.innerHTML = missing.map(t => `
+      <li class="prereq-tool-item">
+        <span class="prereq-tool-status">⚠️</span>
+        <span class="prereq-tool-info">
+          <span class="prereq-tool-name">${escapeHtml(t.name)}</span>
+          <span class="prereq-tool-desc">${escapeHtml(t.description)}</span>
+        </span>
+        <a href="${escapeHtml(t.installUrl)}" target="_blank" rel="noopener noreferrer" class="prereq-tool-link">
+          Instalar ↗
+        </a>
+      </li>
+    `).join('');
+  }
 
-  // Guardar callback y mostrar modal
-  window._prereqOnProceed = onProceed;
   const backdrop = document.getElementById('prereq-modal-backdrop');
-  backdrop.style.display = 'flex';
-  backdrop.setAttribute('aria-hidden', 'false');
+  if (backdrop) {
+    backdrop.style.display = 'flex';
+    backdrop.setAttribute('aria-hidden', 'false');
+  }
+
+  // ⚠️ NO guardar callback, NO bloquear flujo
+  onProceed?.();
 }
 
-/** Cierra el modal sin continuar. */
+/** Cierra modal */
 function closePrereqModal() {
   const backdrop = document.getElementById('prereq-modal-backdrop');
+  if (!backdrop) return;
+
   backdrop.style.display = 'none';
   backdrop.setAttribute('aria-hidden', 'true');
-  window._prereqOnProceed = null;
 }
 
-/** El usuario eligió continuar aunque falten herramientas. */
+/** Botón "continuar" ahora solo cierra */
 function proceedAnywayPrereq() {
   closePrereqModal();
-  if (typeof window._prereqOnProceed === 'function') {
-    window._prereqOnProceed();
-  }
 }
 
-/** Escapa HTML para evitar XSS al inyectar valores del servidor en el DOM. */
 function escapeHtml(str) {
   const d = document.createElement('div');
   d.textContent = String(str ?? '');
