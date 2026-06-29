@@ -185,7 +185,7 @@ public class AuthController : Controller
             request.Headers.Authorization = new AuthenticationHeaderValue(
                 "Basic",
                 Convert.ToBase64String(Encoding.UTF8.GetBytes($"{clientId}:{clientSecret}")));
-            request.Headers.UserAgent.ParseAdd("ProjectForge");
+            request.Headers.UserAgent.ParseAdd("TabBuilder");
             // Desencriptar antes de enviar a la API de GitHub
             string plainToken;
             try { plainToken = _encryptionService.Decrypt(user.AccessToken); }
