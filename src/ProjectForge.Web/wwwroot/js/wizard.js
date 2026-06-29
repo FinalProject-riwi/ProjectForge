@@ -80,7 +80,15 @@ function normalizeToken(value) {
 async function nextStep() {
   if (!validateStep(state.currentStep)) return;
   if (state.currentStep === 3) await loadStep4Data();
-  if (state.currentStep === 4) buildSummary();
+  if (state.currentStep === 4) {
+    buildSummary();
+    // Verificar prerrequisitos al entrar al paso 5 (resumen final)
+    await showPrereqModalIfNeeded(state.architecture, () => {
+      state.currentStep++;
+      renderStep();
+    });
+    return;
+  }
   state.currentStep++;
   renderStep();
 }
@@ -483,3 +491,100 @@ renderStep();
 
 // Set None as default infrastructure selected
 document.querySelector('.infra-card[data-value="None"]')?.classList.add('selected');
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PREREQUISITE CHECK — detecta herramientas instaladas antes de generar
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/** Llama al endpoint que verifica qué herramientas están instaladas en el servidor. */
+async function checkPrerequisites(architecture) {
+  try {
+    const res = await fetch(`/api/v1/tools/check-prerequisites?architecture=${encodeURIComponent(architecture)}`, {
+      headers: { 'Accept': 'application/json' }
+    });
+    if (!res.ok) return { allInstalled: true, tools: [] }; // si el endpoint falla, no bloquear
+    return await res.json();
+  } catch {
+    return { allInstalled: true, tools: [] }; // sin red → no bloquear
+  }
+}
+
+/**
+ * Muestra el modal si faltan herramientas; si todo está OK invoca onProceed() directamente.
+ * @param {string} architecture  - valor del enum (ej: "Java", "Python", "Php")
+ * @param {Function} onProceed   - callback a ejecutar cuando el usuario confirma o todo está OK
+ */
+async function showPrereqModalIfNeeded(architecture, onProceed) {
+  const data = await checkPrerequisites(architecture);
+
+  if (data.allInstalled) {
+    onProceed();
+    return;
+  }
+
+  const missing = (data.tools ?? []).filter(t => !t.installed);
+  if (missing.length === 0) { onProceed(); return; }
+
+  // Etiqueta amigable por arquitectura
+  const archLabels = {
+    DotNet: 'C# / .NET', Java: 'Java', Python: 'Python',
+    Php: 'PHP', JavaScript: 'JavaScript', TypeScript: 'TypeScript'
+  };
+  document.getElementById('prereq-arch-label').textContent = archLabels[architecture] ?? architecture;
+
+  // Renderizar lista de herramientas
+  const list = document.getElementById('prereq-tools-list');
+  list.innerHTML = missing.map(t => `
+    <li class="prereq-tool-item">
+      <span class="prereq-tool-status">❌</span>
+      <span class="prereq-tool-info">
+        <span class="prereq-tool-name">${escapeHtml(t.name)}</span>
+        <span class="prereq-tool-desc">${escapeHtml(t.description)}</span>
+      </span>
+      <a href="${escapeHtml(t.installUrl)}" target="_blank" rel="noopener noreferrer" class="prereq-tool-link">
+        Instalar ↗
+      </a>
+    </li>
+  `).join('');
+
+  // Guardar callback y mostrar modal
+  window._prereqOnProceed = onProceed;
+  const backdrop = document.getElementById('prereq-modal-backdrop');
+  backdrop.style.display = 'flex';
+  backdrop.setAttribute('aria-hidden', 'false');
+}
+
+/** Cierra el modal sin continuar. */
+function closePrereqModal() {
+  const backdrop = document.getElementById('prereq-modal-backdrop');
+  backdrop.style.display = 'none';
+  backdrop.setAttribute('aria-hidden', 'true');
+  window._prereqOnProceed = null;
+}
+
+/** El usuario eligió continuar aunque falten herramientas. */
+function proceedAnywayPrereq() {
+  closePrereqModal();
+  if (typeof window._prereqOnProceed === 'function') {
+    window._prereqOnProceed();
+  }
+}
+
+/** Escapa HTML para evitar XSS al inyectar valores del servidor en el DOM. */
+function escapeHtml(str) {
+  const d = document.createElement('div');
+  d.textContent = String(str ?? '');
+  return d.innerHTML;
+}
+
+// Cerrar modal con Escape
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.getElementById('prereq-modal-backdrop')?.style.display === 'flex') {
+    closePrereqModal();
+  }
+});
+
+// Cerrar modal al hacer clic en el backdrop (fuera del box)
+document.getElementById('prereq-modal-backdrop')?.addEventListener('click', function(e) {
+  if (e.target === this) closePrereqModal();
+});

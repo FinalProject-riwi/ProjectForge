@@ -53,7 +53,7 @@ public static class DotNetSeeder
         {
             await db.Database.ExecuteSqlRawAsync(
                 $"UPDATE [Libraries] SET [Framework] = NULL WHERE [Architecture] = N'DotNet' AND [PackageName] = N'{pkg}' AND [Framework] IS NOT NULL",
-                ct);
+                Array.Empty<object>());
         }
     }
 
@@ -66,10 +66,10 @@ public static class DotNetSeeder
             var sql = $"""
                 SET IDENTITY_INSERT [Templates] ON;
                 INSERT INTO [Templates] ([Id],[Architecture],[Content],[CreatedAt],[Description],[IsActive],[Name],[TemplateType],[Version])
-                VALUES ({t.Id},N'{t.Architecture}',N'{t.Content.Replace("'","''")}','{t.CreatedAt:yyyy-MM-dd HH:mm:ss}',N'{(t.Description ?? "").Replace("'","''")}',1,N'{t.Name.Replace("'","''")}',N'{t.TemplateType}',{t.Version});
+                VALUES ({t.Id},N'{t.Architecture}',N'{t.Content.Replace("'","''").Replace("{","{{").Replace("}","}}")}','{t.CreatedAt:yyyy-MM-dd HH:mm:ss}',N'{(t.Description ?? "").Replace("'","''")}',1,N'{t.Name.Replace("'","''")}',N'{t.TemplateType}',{t.Version});
                 SET IDENTITY_INSERT [Templates] OFF;
                 """;
-            await db.Database.ExecuteSqlRawAsync(sql, ct);
+            await db.Database.ExecuteSqlRawAsync(sql, Array.Empty<object>());
         }
     }
 
@@ -86,7 +86,7 @@ public static class DotNetSeeder
                 VALUES ({l.Id},N'{l.Architecture}',N'{(l.Category ?? "").Replace("'","''")}','{l.CreatedAt:yyyy-MM-dd HH:mm:ss}',N'{(l.Description ?? "").Replace("'","''")}',{fw},N'{(l.InstallCommand ?? "").Replace("'","''")}',N'{l.Name.Replace("'","''")}',N'{l.PackageName.Replace("'","''")}',{l.PopularityScore});
                 SET IDENTITY_INSERT [Libraries] OFF;
                 """;
-            await db.Database.ExecuteSqlRawAsync(sql, ct);
+            await db.Database.ExecuteSqlRawAsync(sql, Array.Empty<object>());
         }
     }
 
@@ -104,7 +104,7 @@ public static class DotNetSeeder
                 VALUES ({p.Id},N'{p.Architecture}','{p.CreatedAt:yyyy-MM-dd HH:mm:ss}',N'{(p.Description ?? "").Replace("'","''")}',N'{notes}',N'{p.Name.Replace("'","''")}',N'{p.Pattern}',N'{cmds}');
                 SET IDENTITY_INSERT [DesignPatterns] OFF;
                 """;
-            await db.Database.ExecuteSqlRawAsync(sql, ct);
+            await db.Database.ExecuteSqlRawAsync(sql, Array.Empty<object>());
         }
     }
 

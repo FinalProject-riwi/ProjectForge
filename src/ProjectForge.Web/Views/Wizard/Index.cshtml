@@ -190,3 +190,37 @@
 @section Scripts {
 <script src="~/js/wizard.js"></script>
 }
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     Modal: Herramientas de desarrollo no detectadas
+     Se muestra al llegar al Step 5 si faltan prerrequisitos en el sistema.
+     ═══════════════════════════════════════════════════════════════════════ -->
+<div id="prereq-modal-backdrop" class="prereq-modal-backdrop" style="display:none" aria-modal="true" role="dialog" aria-labelledby="prereq-modal-title">
+    <div class="prereq-modal-box">
+        <div class="prereq-modal-header">
+            <span class="prereq-modal-icon">⚠️</span>
+            <h3 class="prereq-modal-title" id="prereq-modal-title">Herramientas no detectadas</h3>
+        </div>
+
+        <p class="prereq-modal-subtitle">
+            Para generar proyectos con <strong id="prereq-arch-label"></strong> necesitás
+            tener instaladas las siguientes herramientas en tu máquina:
+        </p>
+
+        <ul id="prereq-tools-list" class="prereq-tools-list"></ul>
+
+        <p class="prereq-modal-note">
+            💡 Si ya las tenés instaladas y seguís viendo este aviso, verificá que estén
+            en el <code>PATH</code> del sistema y reiniciá el servidor.
+        </p>
+
+        <div class="prereq-modal-actions">
+            <button type="button" class="btn btn-ghost" onclick="closePrereqModal()">
+                ← Volver
+            </button>
+            <button type="button" class="btn btn-warning" onclick="proceedAnywayPrereq()">
+                Continuar de todas formas →
+            </button>
+        </div>
+    </div>
+</div>

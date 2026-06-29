@@ -151,8 +151,9 @@ public partial class ProjectGeneratorService : IProjectGeneratorService
             try
             {
                 var result = await _shell.RunAsync(checkCmd, Path.GetTempPath(), ct);
-                // Consideramos disponible si salió con código 0 o produjo stdout
-                if (!result.Success && string.IsNullOrWhiteSpace(result.Stdout))
+                // Solo verificamos ExitCode — algunos tools (ej: java -version)
+                // escriben a stderr, no stdout, así que no chequeamos Stdout.
+                if (!result.Success)
                     missing.Add($"{toolName}||{installHint}");
             }
             catch

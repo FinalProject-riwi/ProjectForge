@@ -514,6 +514,92 @@ public class ApiV1Controller : ControllerBase
         architecture = ArchitectureType.DotNet;
         return false;
     }
+
+    // ─── Tool Prerequisites Check ─────────────────────────────────────────────
+
+    /// <summary>
+    /// GET /api/v1/tools/check-prerequisites?architecture=Java
+    /// Detecta si las herramientas necesarias están instaladas en el servidor/máquina.
+    /// No requiere autenticación. Seguro de llamar antes de generar el proyecto.
+    /// </summary>
+    [AllowAnonymous]
+    [HttpGet("tools/check-prerequisites")]
+    public async Task<IActionResult> CheckPrerequisites([FromQuery] string? architecture)
+    {
+        var requirements = GetToolRequirements(architecture);
+        var results = new List<ToolCheckResultDto>();
+
+        foreach (var req in requirements)
+        {
+            var installed = await IsToolInstalledAsync(req.Command);
+            results.Add(new ToolCheckResultDto(req.Name, req.Command, installed, req.InstallUrl, req.Description));
+        }
+
+        return Ok(new
+        {
+            allInstalled = results.All(r => r.Installed),
+            architecture = architecture ?? "any",
+            tools = results
+        });
+    }
+
+    private static async Task<bool> IsToolInstalledAsync(string command)
+    {
+        try
+        {
+            var isWindows = OperatingSystem.IsWindows();
+            using var proc = new System.Diagnostics.Process();
+            proc.StartInfo = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName    = isWindows ? "cmd.exe" : "/bin/bash",
+                Arguments   = isWindows ? $"/c where {command}" : $"-c \"which {command}\"",
+                RedirectStandardOutput = true,
+                RedirectStandardError  = true,
+                UseShellExecute  = false,
+                CreateNoWindow   = true
+            };
+            proc.Start();
+            await proc.WaitForExitAsync();
+            return proc.ExitCode == 0;
+        }
+        catch { return false; }
+    }
+
+    private static IEnumerable<ToolRequirementDto> GetToolRequirements(string? architecture)
+    {
+        // Herramientas universales siempre requeridas
+        var tools = new List<ToolRequirementDto>
+        {
+            new("Git",    "git",    "https://git-scm.com/downloads",        "Control de versiones (requerido para push a GitHub)"),
+            new("Docker", "docker", "https://docs.docker.com/get-docker/",  "Contenedores — necesario para Dockerfile y Docker Compose"),
+        };
+
+        switch (architecture?.ToLowerInvariant())
+        {
+            case "dotnet":
+                tools.Add(new(".NET SDK",  "dotnet", "https://dotnet.microsoft.com/download", "SDK de .NET para compilar y ejecutar la aplicación"));
+                break;
+            case "java":
+                tools.Add(new("Java JDK 21+", "java", "https://adoptium.net/",                       "JDK para compilar y ejecutar aplicaciones Java"));
+                tools.Add(new("Maven (mvn)",   "mvn",  "https://maven.apache.org/download.cgi",        "Gestor de dependencias y build para proyectos Java"));
+                break;
+            case "python":
+                tools.Add(new("Python 3.10+", "python3", "https://www.python.org/downloads/",           "Intérprete de Python"));
+                tools.Add(new("pip3",          "pip3",    "https://pip.pypa.io/en/stable/installation/", "Gestor de paquetes de Python"));
+                break;
+            case "php":
+                tools.Add(new("PHP 8.2+",  "php",      "https://www.php.net/downloads",           "Intérprete de PHP"));
+                tools.Add(new("Composer",  "composer", "https://getcomposer.org/download/",        "Gestor de dependencias para PHP (Laravel, Symfony)"));
+                break;
+            case "javascript":
+            case "typescript":
+                tools.Add(new("Node.js 20+", "node", "https://nodejs.org/en/download/", "Runtime de Node.js"));
+                tools.Add(new("npm",          "npm",  "https://nodejs.org/en/download/", "Gestor de paquetes de Node.js"));
+                break;
+        }
+
+        return tools;
+    }
 }
 
 // ─── DTOs for Flutter API ─────────────────────────────────────────────────────
@@ -564,3 +650,18 @@ public sealed class ApiCreateProjectDto
     public List<string>? Libraries { get; set; }
     public bool CreatePrivateRepo  { get; set; }
 }
+
+/// <summary>Herramienta requerida por arquitectura (uso interno del controller).</summary>
+internal sealed record ToolRequirementDto(
+    string Name,
+    string Command,
+    string InstallUrl,
+    string Description);
+
+/// <summary>Resultado del check de una herramienta (devuelto al cliente).</summary>
+public sealed record ToolCheckResultDto(
+    string Name,
+    string Command,
+    bool   Installed,
+    string InstallUrl,
+    string Description);

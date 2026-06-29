@@ -35,10 +35,10 @@ public static class JavaScriptSeeder
                 var sql = $"""
                     SET IDENTITY_INSERT [Templates] ON;
                     INSERT INTO [Templates] ([Id],[Architecture],[Content],[CreatedAt],[Database],[Description],[Framework],[Infrastructure],[IsActive],[Name],[TemplateType],[Version])
-                    VALUES ({template.Id},N'{template.Architecture}',N'{template.Content.Replace("'","''")}','{template.CreatedAt:yyyy-MM-dd HH:mm:ss}',{dbVal},N'{(template.Description??"").Replace("'","''")}',{fw},{infra},1,N'{template.Name.Replace("'","''")}',N'{template.TemplateType}',{template.Version});
+                    VALUES ({template.Id},N'{template.Architecture}',N'{template.Content.Replace("'","''").Replace("{","{{").Replace("}","}}")}','{template.CreatedAt:yyyy-MM-dd HH:mm:ss}',{dbVal},N'{(template.Description??"").Replace("'","''")}',{fw},{infra},1,N'{template.Name.Replace("'","''")}',N'{template.TemplateType}',{template.Version});
                     SET IDENTITY_INSERT [Templates] OFF;
                     """;
-                await db.Database.ExecuteSqlRawAsync(sql, ct);
+                await db.Database.ExecuteSqlRawAsync(sql, Array.Empty<object>());
                 inserted = true;
             }
         }
@@ -59,7 +59,7 @@ public static class JavaScriptSeeder
                     VALUES ({library.Id},N'{library.Architecture}',N'{(library.Category??"").Replace("'","''")}','{library.CreatedAt:yyyy-MM-dd HH:mm:ss}',N'{(library.Description??"").Replace("'","''")}',{fwLib},N'{(library.InstallCommand??"").Replace("'","''")}',N'{library.Name.Replace("'","''")}',N'{library.PackageName.Replace("'","''")}',{library.PopularityScore});
                     SET IDENTITY_INSERT [Libraries] OFF;
                     """;
-                await db.Database.ExecuteSqlRawAsync(sqlLib, ct);
+                await db.Database.ExecuteSqlRawAsync(sqlLib, Array.Empty<object>());
                 inserted = true;
             }
         }
@@ -82,7 +82,7 @@ public static class JavaScriptSeeder
                     VALUES ({pattern.Id},N'{pattern.Architecture}','{pattern.CreatedAt:yyyy-MM-dd HH:mm:ss}',N'{(pattern.Description??"").Replace("'","''")}',N'{notes}',N'{pattern.Name.Replace("'","''")}',N'{pattern.Pattern}',N'{cmds}');
                     SET IDENTITY_INSERT [DesignPatterns] OFF;
                     """;
-                await db.Database.ExecuteSqlRawAsync(sqlPat, ct);
+                await db.Database.ExecuteSqlRawAsync(sqlPat, Array.Empty<object>());
                 inserted = true;
             }
         }

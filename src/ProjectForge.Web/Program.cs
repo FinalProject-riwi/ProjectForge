@@ -184,14 +184,27 @@ var app = builder.Build();
             await db.Database.CanConnectAsync();
 
             await db.Database.MigrateAsync();
-            await DotNetSeeder.SeedAsync(db);
-            await TypeScriptSeeder.SeedAsync(db);
-            await PhpSeeder.SeedAsync(db);
-            await PythonSeeder.SeedAsync(db);
-            await JavaSeeder.SeedAsync(db);
-            await JavaScriptSeeder.SeedAsync(db);
 
-            startupLogger.LogInformation("✅ Migraciones y seeders aplicados correctamente.");
+            // Ejecutar cada seeder individualmente — un fallo no bloquea los demás
+            foreach (var (name, seeder) in new (string, Func<Task>)[]
+            {
+                ("DotNet",     () => DotNetSeeder.SeedAsync(db)),
+                ("TypeScript", () => TypeScriptSeeder.SeedAsync(db)),
+                ("Php",        () => PhpSeeder.SeedAsync(db)),
+                ("Python",     () => PythonSeeder.SeedAsync(db)),
+                ("Java",       () => JavaSeeder.SeedAsync(db)),
+                ("JavaScript", () => JavaScriptSeeder.SeedAsync(db)),
+            })
+            {
+                try   { await seeder(); }
+                catch (Exception seedEx)
+                {
+                    startupLogger.LogError(seedEx,
+                        "⚠️  Seeder {Seeder} falló: {Msg}", name, seedEx.Message);
+                }
+            }
+
+            startupLogger.LogInformation("✅ Migraciones y seeders completados.");
             break;
         }
         catch (Exception ex) when (attempt < maxAttempts)
