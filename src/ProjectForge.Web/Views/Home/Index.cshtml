@@ -1,34 +1,29 @@
 @{
-    ViewData["Title"] = "TabBuilder — Genera proyectos listos para producción con IA";
+    ViewData["Title"] = "ProjectForge — Genera proyectos listos para producción con IA";
     Layout = "_Layout";
 }
 
 <!-- ═══════════════════════════════════════════════════════════════════════
-     HERO
+     HERO — two-column: copy left, live terminal right
      ═══════════════════════════════════════════════════════════════════════ -->
 <section class="hero" aria-label="Sección principal">
-    <div class="hero-bg">
-        <div class="hero-grid" aria-hidden="true"></div>
-        <div class="hero-orb hero-orb-1" aria-hidden="true"></div>
-        <div class="hero-orb hero-orb-2" aria-hidden="true"></div>
-        <div class="hero-orb hero-orb-3" aria-hidden="true"></div>
-    </div>
-
+    <!-- LEFT: copy -->
     <div class="hero-content">
-        <img src="~/img/logo.jpg" alt="TabBuilder" class="hero-logo" width="80" height="80" />
+        <img src="~/img/logo.jpg" alt="ProjectForge" class="hero-logo" width="72" height="72" />
 
-        <div class="hero-badge" role="text">
+        <div class="hero-eyebrow">
+            <span class="hero-eyebrow-dot"></span>
             Impulsado por IA · GitHub OAuth · Multi-stack
         </div>
 
         <h1 class="hero-title">
-            Genera proyectos de software<br />
+            Genera proyectos<br />
             <span class="gradient-text">listos para producción</span>
         </h1>
 
         <p class="hero-subtitle">
             Elige tu stack, arquitectura e infraestructura. La IA sugiere patrones y librerías.
-            TabBuilder genera el código, lo sube a GitHub y configura tu CI/CD automáticamente.
+            ProjectForge genera el código, lo sube a GitHub y configura tu CI/CD automáticamente.
         </p>
 
         <div class="hero-actions">
@@ -36,7 +31,7 @@
                 @if (User.Identity?.IsAuthenticated == true)
                 {
                     <a asp-controller="Wizard" asp-action="Index" class="btn btn-primary btn-lg">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
                             <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
                         </svg>
                         Crear nuevo proyecto
@@ -48,7 +43,7 @@
                 else
                 {
                     <a asp-controller="Auth" asp-action="GitHubLogin" class="btn btn-primary btn-xl">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                             <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
                         </svg>
                         Empezar con GitHub — gratis
@@ -60,6 +55,30 @@
             {
                 <p class="hero-note">Sin tarjeta de crédito. Conecta tu cuenta de GitHub en segundos.</p>
             }
+        </div>
+    </div>
+
+    <!-- RIGHT: live terminal -->
+    <div class="hero-terminal-col" aria-hidden="true">
+        <div class="hero-terminal-wrapper">
+            <div class="hero-terminal">
+                <div class="hero-term-header">
+                    <div class="term-dots">
+                        <span class="term-dot red"></span>
+                        <span class="term-dot yellow"></span>
+                        <span class="term-dot green"></span>
+                    </div>
+                    <span class="term-tab">projectforge — scaffold</span>
+                </div>
+                <div class="hero-term-body" id="hero-term-body">
+                    <!-- Lines injected by JS -->
+                </div>
+                <div class="hero-term-footer">
+                    <span class="term-stat"><span class="term-stat-dot ts-green"></span>scaffolding</span>
+                    <span class="term-stat"><span class="term-stat-dot ts-blue"></span>IA activa</span>
+                    <span class="term-stat"><span class="term-stat-dot ts-cyan"></span>GitHub ready</span>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -91,7 +110,7 @@
      FEATURES
      ═══════════════════════════════════════════════════════════════════════ -->
 <section class="features-section" aria-labelledby="features-title">
-    <p class="section-eyebrow reveal">Qué hace TabBuilder</p>
+    <p class="section-eyebrow reveal">Qué hace ProjectForge</p>
     <h2 class="section-title reveal" id="features-title">Todo lo que necesitas para arrancar</h2>
     <p class="section-subtitle reveal">De cero a repositorio en menos de 2 minutos</p>
 
@@ -158,10 +177,10 @@
 
     <div class="steps-list">
         @foreach (var (num, title, desc) in new[] {
-            ("01", "Elige tu stack",          "Selecciona el lenguaje, framework, base de datos e infraestructura usando el wizard visual."),
-            ("02", "La IA te asesora",        "Claude analiza tu selección y sugiere los patrones y librerías más adecuados para tu caso de uso."),
-            ("03", "TabBuilder genera",     "El motor genera la estructura de carpetas, archivos de configuración, Dockerfile, CI/CD y README."),
-            ("04", "Push a GitHub",           "Con un clic, crea el repositorio en tu cuenta y hace el primer commit con todo el código generado."),
+            ("01", "Elige tu stack",        "Selecciona el lenguaje, framework, base de datos e infraestructura usando el wizard visual."),
+            ("02", "La IA te asesora",      "Claude analiza tu selección y sugiere los patrones y librerías más adecuados para tu caso de uso."),
+            ("03", "ProjectForge genera",   "El motor genera la estructura de carpetas, archivos de configuración, Dockerfile, CI/CD y README."),
+            ("04", "Push a GitHub",         "Con un clic, crea el repositorio en tu cuenta y hace el primer commit con todo el código generado."),
         })
         {
             <div class="step-item reveal">
@@ -180,12 +199,11 @@
      ═══════════════════════════════════════════════════════════════════════ -->
 <section class="download-section" aria-labelledby="download-title">
     <p class="section-eyebrow reveal">Disponible en todas partes</p>
-    <h2 class="section-title reveal" id="download-title">Lleva TabBuilder contigo</h2>
+    <h2 class="section-title reveal" id="download-title">Lleva ProjectForge contigo</h2>
     <p class="section-subtitle reveal">Accede desde tu navegador o instala la app en tu dispositivo</p>
 
     <div class="download-badges">
-        <!-- Desktop PWA install -->
-        <button class="download-btn reveal reveal-delay-1" id="pwa-install-btn" style="display:none" aria-label="Instalar TabBuilder como app de escritorio">
+        <button class="download-btn reveal reveal-delay-1" id="pwa-install-btn" style="display:none" aria-label="Instalar ProjectForge como app de escritorio">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
                 <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><circle cx="6.5" cy="6" r=".5" fill="currentColor"/><circle cx="9.5" cy="6" r=".5" fill="currentColor"/>
             </svg>
@@ -195,7 +213,6 @@
             </div>
         </button>
 
-        <!-- iOS -->
         <div class="download-btn reveal reveal-delay-2" role="note" title="En iOS: Safari → Compartir → Añadir a inicio" style="cursor:help">
             <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
@@ -206,7 +223,6 @@
             </div>
         </div>
 
-        <!-- Android -->
         <div class="download-btn reveal reveal-delay-3" role="note" title="En Android: Chrome → Menú → Añadir a pantalla de inicio" style="cursor:help">
             <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <path d="M17.6 9.48l1.84-3.18c.16-.31.04-.69-.26-.85-.29-.15-.65-.06-.83.22l-1.88 3.24c-1.44-.62-3.01-.97-4.47-.97s-3.03.35-4.47.97L5.65 5.67c-.19-.29-.58-.38-.87-.2-.28.18-.37.54-.2.82L6.4 9.48C3.3 11.25 1.28 14.44 1 18h22c-.28-3.56-2.3-6.75-5.4-8.52zM7 15.25c-.69 0-1.25-.56-1.25-1.25s.56-1.25 1.25-1.25 1.25.56 1.25 1.25-.56 1.25-1.25 1.25zm10 0c-.69 0-1.25-.56-1.25-1.25s.56-1.25 1.25-1.25 1.25.56 1.25 1.25-.56 1.25-1.25 1.25z"/>
@@ -218,8 +234,8 @@
         </div>
     </div>
 
-    <p style="margin-top:1.5rem;font-size:.8rem;color:var(--text-muted)" class="reveal">
-        TabBuilder es una Progressive Web App. No requiere tienda de aplicaciones.
+    <p style="margin-top:1.5rem;font-size:.78rem;color:var(--text-muted)" class="reveal">
+        ProjectForge es una Progressive Web App. No requiere tienda de aplicaciones.
     </p>
 </section>
 
@@ -228,7 +244,7 @@
      ═══════════════════════════════════════════════════════════════════════ -->
 <section class="cta-section" aria-labelledby="cta-title">
     <div class="cta-card reveal">
-        <img src="~/img/logo.jpg" alt="" style="width:56px;height:56px;border-radius:14px;margin:0 auto 1.25rem;border:1px solid rgba(59,130,246,.3);" />
+        <img src="~/img/logo.jpg" alt="" style="width:60px;height:60px;border-radius:16px;margin:0 auto 1.5rem;border:1px solid rgba(99,102,241,.3);box-shadow:0 8px 24px rgba(99,102,241,.2);display:block" />
         <h2 id="cta-title">Empieza en menos de 2 minutos</h2>
         <p>Conecta tu cuenta de GitHub y genera tu primer proyecto con arquitectura limpia, Docker y CI/CD incluidos.</p>
         @if (User.Identity?.IsAuthenticated == true)
@@ -240,71 +256,144 @@
         else
         {
             <a asp-controller="Auth" asp-action="GitHubLogin" class="btn btn-primary btn-xl">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                     <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
                 </svg>
                 Empezar con GitHub — gratis
             </a>
         }
+        <div class="cta-trust">
+            <span class="cta-trust-item">Sin tarjeta de crédito</span>
+            <span class="cta-trust-item">Código 100% tuyo</span>
+            <span class="cta-trust-item">GitHub OAuth seguro</span>
+        </div>
     </div>
 </section>
 
 @section Scripts {
 <script>
-// ── PWA Install prompt ────────────────────────────────────────────────────────
+// ── Live terminal animation ────────────────────────────────────────────────
+(function() {
+  const body = document.getElementById('hero-term-body');
+  if (!body) return;
+
+  const lines = [
+    { type: 'cmd',     text: 'projectforge init --name="mi-api" --arch=dotnet' },
+    { type: 'info',    text: '✦ IA analizando stack seleccionado...' },
+    { type: 'success', text: '✔  Patrones recomendados: Repository, CQRS, Unit of Work' },
+    { type: 'info',    text: '↳  Librerías: MediatR · AutoMapper · FluentValidation' },
+    { type: 'cmd',     text: 'dotnet new webapi -n MiApi --framework net10.0' },
+    { type: 'success', text: '✔  Proyecto creado (23 archivos)' },
+    { type: 'file',    text: '   src/MiApi/Controllers/BaseController.cs' },
+    { type: 'file',    text: '   src/MiApi/Application/Services/' },
+    { type: 'file',    text: '   src/MiApi/Infrastructure/Repositories/' },
+    { type: 'file',    text: '   docker-compose.yml · .github/workflows/ci.yml' },
+    { type: 'cmd',     text: 'gh repo create mi-api --private --push' },
+    { type: 'accent',  text: '↗  https://github.com/usuario/mi-api' },
+    { type: 'success', text: '✔  Initial commit pushed (47 archivos)' },
+    { type: 'success', text: '✔  GitHub Actions CI/CD activado' },
+    { type: 'info',    text: '⚡ Listo en 1m 38s — ¡a programar!' },
+  ];
+
+  let idx = 0;
+  let restarting = false;
+
+  function addLine() {
+    if (idx >= lines.length) {
+      if (!restarting) {
+        restarting = true;
+        // Add blinking cursor line then restart after pause
+        const cursorLine = document.createElement('div');
+        cursorLine.className = 'term-line';
+        cursorLine.innerHTML = '<span class="term-prompt">$</span><span class="term-cursor"></span>';
+        body.appendChild(cursorLine);
+        body.scrollTop = body.scrollHeight;
+        setTimeout(function() {
+          body.innerHTML = '';
+          idx = 0;
+          restarting = false;
+          setTimeout(addLine, 400);
+        }, 3500);
+      }
+      return;
+    }
+
+    const l = lines[idx++];
+    const el = document.createElement('div');
+    el.className = 'term-line';
+    el.style.animationDelay = '0ms';
+
+    let inner = '';
+    if (l.type === 'cmd') {
+      inner = '<span class="term-prompt">$</span><span class="term-cmd">' + l.text + '</span>';
+    } else if (l.type === 'success') {
+      inner = '<span class="term-out-success">' + l.text + '</span>';
+    } else if (l.type === 'info') {
+      inner = '<span class="term-out-info">' + l.text + '</span>';
+    } else if (l.type === 'accent') {
+      inner = '<span class="term-out-accent">' + l.text + '</span>';
+    } else if (l.type === 'file') {
+      inner = '<span class="term-out-file">' + l.text + '</span>';
+    }
+    el.innerHTML = inner;
+    body.appendChild(el);
+    body.scrollTop = body.scrollHeight;
+
+    const delay = l.type === 'cmd' ? 900 : (l.type === 'file' ? 160 : 350);
+    setTimeout(addLine, delay);
+  }
+
+  // Start after a short pause
+  setTimeout(addLine, 700);
+})();
+
+// ── PWA Install ───────────────────────────────────────────────────────────
 let deferredInstall = null;
-window.addEventListener('beforeinstallprompt', function (e) {
-    e.preventDefault();
-    deferredInstall = e;
-    const btn = document.getElementById('pwa-install-btn');
-    if (btn) btn.style.display = 'inline-flex';
+window.addEventListener('beforeinstallprompt', function(e) {
+  e.preventDefault();
+  deferredInstall = e;
+  const btn = document.getElementById('pwa-install-btn');
+  if (btn) btn.style.display = 'inline-flex';
+});
+document.getElementById('pwa-install-btn')?.addEventListener('click', async function() {
+  if (!deferredInstall) return;
+  deferredInstall.prompt();
+  const { outcome } = await deferredInstall.userChoice;
+  if (outcome === 'accepted') this.style.display = 'none';
+  deferredInstall = null;
+});
+window.addEventListener('appinstalled', function() {
+  const btn = document.getElementById('pwa-install-btn');
+  if (btn) btn.style.display = 'none';
 });
 
-document.getElementById('pwa-install-btn')?.addEventListener('click', async function () {
-    if (!deferredInstall) return;
-    deferredInstall.prompt();
-    const { outcome } = await deferredInstall.userChoice;
-    if (outcome === 'accepted') {
-        this.style.display = 'none';
-    }
-    deferredInstall = null;
-});
-
-// Hide install btn after installed
-window.addEventListener('appinstalled', function () {
-    const btn = document.getElementById('pwa-install-btn');
-    if (btn) btn.style.display = 'none';
-});
-
-// ── Counter animation ─────────────────────────────────────────────────────────
-(function () {
-    function animateNum(el, target, suffix) {
-        let current = 0;
-        const isTime = suffix.includes('min');
-        if (isTime) return; // skip non-numeric
-        const step = Math.ceil(target / 40);
-        const timer = setInterval(function () {
-            current = Math.min(current + step, target);
-            el.textContent = current + suffix;
-            if (current >= target) clearInterval(timer);
-        }, 35);
-    }
-
-    const observer = new IntersectionObserver(function (entries) {
-        entries.forEach(function (entry) {
-            if (entry.isIntersecting) {
-                const el = entry.target;
-                const text = el.textContent.trim();
-                const match = text.match(/^(\d+)(.*)$/);
-                if (match) animateNum(el, parseInt(match[1]), match[2]);
-                observer.unobserve(el);
-            }
-        });
-    }, { threshold: .5 });
-
-    document.querySelectorAll('.stat-number').forEach(function (el) {
-        observer.observe(el);
+// ── Counter animation ─────────────────────────────────────────────────────
+(function() {
+  function animateNum(el, target, suffix) {
+    let current = 0;
+    const isTime = suffix.includes('min');
+    if (isTime) return;
+    const step = Math.ceil(target / 40);
+    const timer = setInterval(function() {
+      current = Math.min(current + step, target);
+      el.textContent = current + suffix;
+      if (current >= target) clearInterval(timer);
+    }, 30);
+  }
+  const observer = new IntersectionObserver(function(entries) {
+    entries.forEach(function(entry) {
+      if (entry.isIntersecting) {
+        const el = entry.target;
+        const text = el.textContent.trim();
+        const match = text.match(/^(\d+)(.*)$/);
+        if (match) animateNum(el, parseInt(match[1]), match[2]);
+        observer.unobserve(el);
+      }
     });
+  }, { threshold: .5 });
+  document.querySelectorAll('.stat-number').forEach(function(el) {
+    observer.observe(el);
+  });
 })();
 </script>
 }

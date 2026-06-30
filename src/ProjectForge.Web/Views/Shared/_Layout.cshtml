@@ -39,6 +39,12 @@
     </script>
 </head>
 <body>
+    <!-- ── Page background (grid + glow + particles), spans the whole page ─── -->
+    <div class="page-bg" aria-hidden="true">
+        <div class="hero-grid"></div>
+        <div class="hero-particles" id="hero-particles"></div>
+    </div>
+
     <!-- ── Navbar ──────────────────────────────────────────────────────────── -->
     <nav class="navbar" role="navigation" aria-label="Navegación principal">
         <a class="navbar-brand" asp-controller="Home" asp-action="Index" aria-label="TabBuilder inicio">
@@ -209,6 +215,33 @@
             document.querySelectorAll('.reveal').forEach(function (el) {
                 observer.observe(el);
             });
+
+            // ── Page background — floating code particles ──────────────────────
+            // Lives in the layout so the backdrop is consistent across every
+            // page, not just the landing hero.
+            const particleHost = document.getElementById('hero-particles');
+            if (particleHost) {
+                const snippets = [
+                    'dotnet new webapi', 'git init', 'docker-compose up',
+                    'npm install', 'pip install fastapi', 'composer create-project',
+                    'kubectl apply -f', 'mvn spring-boot:run', 'go mod init',
+                    'SELECT * FROM', 'async/await', 'IRepository<T>', 'Clean Architecture',
+                    '{ "name": "app" }', 'FROM node:20', 'services:', 'ENTRYPOINT',
+                    'github.com/actions', 'Bearer ${token}', 'swagger.json',
+                ];
+                const count = window.innerWidth < 640 ? 10 : 20;
+                for (let i = 0; i < count; i++) {
+                    const el = document.createElement('span');
+                    el.className = 'hero-particle';
+                    el.textContent = snippets[i % snippets.length];
+                    el.style.left = (Math.random() * 100) + '%';
+                    el.style.animationDuration = (22 + Math.random() * 26) + 's';
+                    el.style.animationDelay = (-Math.random() * 40) + 's';
+                    el.style.fontSize = (.62 + Math.random() * .2) + 'rem';
+                    el.style.opacity = (.1 + Math.random() * .15).toString();
+                    particleHost.appendChild(el);
+                }
+            }
 
             // ── Auto-dismiss alerts ───────────────────────────────────────────
             document.querySelectorAll('.alert').forEach(function (el) {

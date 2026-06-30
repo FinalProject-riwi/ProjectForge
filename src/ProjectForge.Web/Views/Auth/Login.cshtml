@@ -4,9 +4,14 @@
 }
 
 <div class="auth-page">
-    <div class="auth-card">
+    <!-- Background glow -->
+    <div style="position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden" aria-hidden="true">
+        <div style="position:absolute;width:600px;height:600px;top:-150px;left:50%;transform:translateX(-50%);background:radial-gradient(circle,rgba(99,102,241,.1),transparent 65%)"></div>
+    </div>
+
+    <div class="auth-card" style="position:relative;z-index:1">
         <div class="auth-logo">
-            <img src="/img/logo.jpg" alt="TabBuilder" style="width:42px;height:42px;border-radius:10px;object-fit:cover" />
+            <img src="/img/logo.jpg" alt="ProjectForge" style="width:46px;height:46px;border-radius:12px;object-fit:cover;box-shadow:0 6px 20px rgba(99,102,241,.3)" />
             <h1>Project<strong>Forge</strong></h1>
         </div>
         <p class="auth-subtitle">
@@ -28,31 +33,17 @@
         </a>
 
         <div class="auth-permissions">
-            <p class="perm-title">TabBuilder solicitará permisos para:</p>
+            <p class="perm-title">ProjectForge solicitará permisos para:</p>
             <ul>
-                <li>✓ Leer tu perfil de GitHub (nombre, avatar)</li>
-                <li>✓ Crear repositorios en tu cuenta</li>
-                <li>✓ Hacer push de código a repositorios nuevos</li>
+                <li>Leer tu perfil de GitHub (nombre, avatar)</li>
+                <li>Crear repositorios en tu cuenta</li>
+                <li>Hacer push de código a repositorios nuevos</li>
             </ul>
         </div>
+
+        <p style="margin-top:1.5rem;font-size:.75rem;color:var(--text-muted);line-height:1.6">
+            Al continuar, aceptas nuestros <a href="/terms" style="color:var(--text-dim)">Términos</a> y 
+            <a href="/privacy" style="color:var(--text-dim)">Política de privacidad</a>.
+        </p>
     </div>
 </div>
-
-<style>
-.auth-page { display: flex; align-items: center; justify-content: center; min-height: 70vh; }
-.auth-card {
-    width: 100%; max-width: 420px; padding: 2.5rem;
-    background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px;
-    text-align: center;
-}
-.auth-logo { display: flex; align-items: center; justify-content: center; gap: .75rem; margin-bottom: 1rem; font-size: 1.5rem; font-family: var(--font-mono); }
-.auth-subtitle { color: var(--text-muted); margin-bottom: 2rem; line-height: 1.6; }
-.btn-github { width: 100%; justify-content: center; padding: .85rem; font-size: 1rem; }
-.auth-permissions {
-    margin-top: 1.5rem; padding: 1rem; border-radius: var(--radius);
-    background: var(--bg-elevated); border: 1px solid var(--border); text-align: left;
-}
-.perm-title { font-size: .8rem; color: var(--text-muted); margin-bottom: .5rem; }
-.session-error { border-radius: 8px; padding: .75rem 1rem; margin-bottom: 1.25rem; font-size: .88rem; line-height: 1.5; }
-.auth-permissions ul { list-style: none; font-size: .82rem; color: var(--text-dim); line-height: 1.8; }
-</style>

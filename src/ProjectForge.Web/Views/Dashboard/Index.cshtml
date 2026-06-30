@@ -2,17 +2,20 @@
 @using ProjectForge.Core.Enums
 @model IEnumerable<Project>
 @{
-    ViewData[index: "Title"] = "Dashboard";
+    ViewData["Title"] = "Dashboard";
     Layout = "_Layout";
 }
 
 <div class="dashboard-header">
     <div>
-        <h1>Mis Proyectos</h1>
-        <p class="text-muted">@Model.Count() proyecto(s) generado(s)</p>
+        <p class="section-eyebrow" style="text-align:left;margin-bottom:.3rem">Mis Proyectos</p>
+        <h1 style="font-size:1.75rem;font-weight:800;letter-spacing:-.02em">
+            @Model.Count() proyecto(s) generado(s)
+        </h1>
     </div>
     <a asp-controller="Wizard" asp-action="Index" class="btn btn-primary">
-        + Nuevo Proyecto
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+        Nuevo Proyecto
     </a>
 </div>
 
@@ -32,7 +35,7 @@ else
         {
             <div class="project-card">
                 <div class="project-card-header">
-                    <div>
+                    <div style="min-width:0">
                         <h3 class="project-name">@project.Name</h3>
                         <span class="project-status status-@project.Status.ToString().ToLower()">
                             @project.Status
@@ -40,14 +43,14 @@ else
                     </div>
                     <div class="project-arch-badge">
                         @{ var logo = GetArchLogo(project.WizardConfig?.Architecture); }
-                    @if (!string.IsNullOrEmpty(logo))
-                    {
-                        <img src="@logo" alt="arch" style="width:28px;height:28px;object-fit:contain" />
-                    }
-                    else
-                    {
-                        <span>📦</span>
-                    }
+                        @if (!string.IsNullOrEmpty(logo))
+                        {
+                            <img src="@logo" alt="arch" style="width:26px;height:26px;object-fit:contain" />
+                        }
+                        else
+                        {
+                            <span style="font-size:1.2rem">📦</span>
+                        }
                     </div>
                 </div>
 
@@ -71,7 +74,7 @@ else
 
                     @if (!string.IsNullOrEmpty(project.RepositoryUrl))
                     {
-                        <a href="@project.RepositoryUrl" target="_blank" class="btn btn-outline btn-sm">
+                        <a href="@project.RepositoryUrl" target="_blank" rel="noopener" class="btn btn-outline btn-sm">
                             GitHub →
                         </a>
                     }
@@ -99,15 +102,3 @@ else
         _                             => ""
     };
 }
-
-<style>
-.dashboard-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2rem; }
-.empty-state { text-align: center; padding: 5rem 2rem; }
-.empty-icon { font-size: 3rem; margin-bottom: 1rem; }
-.project-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: .75rem; }
-.project-name { font-size: 1.05rem; font-weight: 600; font-family: var(--font-mono); }
-.project-arch-badge { font-size: 1.5rem; }
-.project-desc { font-size: .85rem; color: var(--text-muted); margin-bottom: .75rem; }
-.project-meta { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1rem; font-size: .78rem; color: var(--text-dim); }
-.project-actions { display: flex; gap: .5rem; flex-wrap: wrap; }
-</style>
