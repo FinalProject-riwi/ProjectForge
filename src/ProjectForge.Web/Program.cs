@@ -17,6 +17,7 @@ using ProjectForge.Infrastructure.Seeders.Java;
 using ProjectForge.Infrastructure.Seeders.JavaScript;
 using ProjectForge.Infrastructure.Seeders.Python;
 using ProjectForge.Infrastructure.Seeders.Php;
+using ProjectForge.Infrastructure.Seeders;
 using ProjectForge.Web.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -188,12 +189,13 @@ var app = builder.Build();
             // Ejecutar cada seeder individualmente — un fallo no bloquea los demás
             foreach (var (name, seeder) in new (string, Func<Task>)[]
             {
-                ("DotNet",     () => DotNetSeeder.SeedAsync(db)),
-                ("TypeScript", () => TypeScriptSeeder.SeedAsync(db)),
-                ("Php",        () => PhpSeeder.SeedAsync(db)),
-                ("Python",     () => PythonSeeder.SeedAsync(db)),
-                ("Java",       () => JavaSeeder.SeedAsync(db)),
-                ("JavaScript", () => JavaScriptSeeder.SeedAsync(db)),
+                ("DotNet",        () => DotNetSeeder.SeedAsync(db)),
+                ("TypeScript",    () => TypeScriptSeeder.SeedAsync(db)),
+                ("Php",           () => PhpSeeder.SeedAsync(db)),
+                ("Python",        () => PythonSeeder.SeedAsync(db)),
+                ("Java",          () => JavaSeeder.SeedAsync(db)),
+                ("JavaScript",    () => JavaScriptSeeder.SeedAsync(db)),
+                ("AllCombinations", () => AllCombinationsSeeder.SeedAsync(db)),
             })
             {
                 try   { await seeder(); }
