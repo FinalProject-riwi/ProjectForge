@@ -24,13 +24,14 @@ public static partial class AllCombinationsSeeder
 
     private static IEnumerable<ProjectTemplate> GetAllTemplates()
     {
-        foreach (var t in GetDotNetTemplates())       yield return t;
-        foreach (var t in GetJavaTemplates())          yield return t;
-        foreach (var t in GetPythonTemplates())        yield return t;
-        foreach (var t in GetPhpAdditionalTemplates()) yield return t;
-        foreach (var t in GetJsAdditionalTemplates())  yield return t;
-        foreach (var t in GetTsTemplates())            yield return t;
-        foreach (var t in GetVersionDockerfiles())     yield return t;
+        foreach (var t in GetDotNetTemplates())           yield return t;
+        foreach (var t in GetJavaTemplates())              yield return t;
+        foreach (var t in GetPythonTemplates())            yield return t;
+        foreach (var t in GetPhpAdditionalTemplates())     yield return t;
+        foreach (var t in GetJsAdditionalTemplates())      yield return t;
+        foreach (var t in GetTsTemplates())                yield return t;
+        foreach (var t in GetVersionDockerfiles())         yield return t;
+        foreach (var t in GetEnvAndMakefileTemplates())   yield return t;
     }
 
     private static IEnumerable<LibraryRecommendation> GetAllLibraries()
@@ -176,7 +177,7 @@ public static partial class AllCombinationsSeeder
         _ => ""
     };
 
-    // Generates Kubernetes manifest with connection string env var
+    // Generates Kubernetes manifest with connection string env var + liveness/readiness probes
     private static string K8sManifest(string connEnvKey, string connEnvValue, int containerPort) =>
         "apiVersion: apps/v1\n" +
         "kind: Deployment\n" +
@@ -200,6 +201,20 @@ public static partial class AllCombinationsSeeder
         "          env:\n" +
         $"            - name: {connEnvKey}\n" +
         $"              value: \"{connEnvValue}\"\n" +
+        "          livenessProbe:\n" +
+        "            httpGet:\n" +
+        "              path: /health\n" +
+        $"              port: {containerPort}\n" +
+        "            initialDelaySeconds: 30\n" +
+        "            periodSeconds: 10\n" +
+        "            failureThreshold: 3\n" +
+        "          readinessProbe:\n" +
+        "            httpGet:\n" +
+        "              path: /health\n" +
+        $"              port: {containerPort}\n" +
+        "            initialDelaySeconds: 5\n" +
+        "            periodSeconds: 5\n" +
+        "            successThreshold: 1\n" +
         "---\n" +
         "apiVersion: v1\n" +
         "kind: Service\n" +

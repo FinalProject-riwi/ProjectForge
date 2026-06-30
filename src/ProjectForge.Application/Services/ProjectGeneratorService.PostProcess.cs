@@ -117,6 +117,107 @@ public partial class ProjectGeneratorService
             await File.WriteAllTextAsync(ciPath, InterpolateTemplate(ciTemplate.Content, vars), ct);
             await EmitLogAsync(project, "Templates", "✅ .github/workflows/ci.yml generado", ct: ct);
         }
+
+        // .env.example (don't overwrite if the framework already generated one)
+        var dotenvTpl = await _templates.GetTemplateAsync(cfg.Architecture, "dotenv");
+        if (dotenvTpl != null)
+        {
+            var envExamplePath = Path.Combine(path, ".env.example");
+            if (!File.Exists(envExamplePath))
+            {
+                await File.WriteAllTextAsync(envExamplePath, InterpolateTemplate(dotenvTpl.Content, vars), ct);
+                await EmitLogAsync(project, "Templates", "✅ .env.example generado", ct: ct);
+            }
+        }
+
+        // Makefile
+        var makefileTpl = await _templates.GetTemplateAsync(cfg.Architecture, "makefile");
+        if (makefileTpl != null)
+        {
+            var makefilePath = Path.Combine(path, "Makefile");
+            if (!File.Exists(makefilePath))
+            {
+                await File.WriteAllTextAsync(makefilePath, makefileTpl.Content, ct);
+                await EmitLogAsync(project, "Templates", "✅ Makefile generado", ct: ct);
+            }
+        }
+
+        // Secondary DB → docker-compose.override.yml (merged automatically by Docker Compose)
+        if (cfg.Infrastructure == InfrastructureType.DockerCompose)
+        {
+            var secondaryDb = GetSecondaryDatabase(cfg);
+            if (secondaryDb.HasValue)
+            {
+                var (secKey, secConnTemplate) = GetSecondaryDbConnectionInfo(secondaryDb.Value);
+                var secConn = InterpolateTemplate(secConnTemplate, vars);
+                var overrideContent = BuildSecondaryDbOverride(secondaryDb.Value, secKey, secConn, vars);
+                await File.WriteAllTextAsync(Path.Combine(path, "docker-compose.override.yml"), overrideContent, ct);
+                await EmitLogAsync(project, "Templates", $"✅ docker-compose.override.yml generado ({secondaryDb.Value})", ct: ct);
+            }
+        }
+    }
+
+    private static DatabaseType? GetSecondaryDatabase(WizardConfig cfg)
+    {
+        if (string.IsNullOrWhiteSpace(cfg.AdditionalOptionsJson))
+            return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(cfg.AdditionalOptionsJson);
+            if (doc.RootElement.TryGetProperty("secondaryDatabase", out var el)
+                && el.ValueKind == JsonValueKind.String
+                && Enum.TryParse<DatabaseType>(el.GetString(), out var db))
+                return db;
+        }
+        catch { }
+        return null;
+    }
+
+    private static (string EnvKey, string ConnStr) GetSecondaryDbConnectionInfo(DatabaseType db) => db switch
+    {
+        DatabaseType.Redis      => ("REDIS_URL",              "redis://db2:6379"),
+        DatabaseType.MongoDB    => ("MONGODB_SECONDARY_URI",  "mongodb://admin:secret@db2:27017/{{DB_NAME}}_secondary"),
+        DatabaseType.PostgreSQL => ("SECONDARY_DATABASE_URL", "Host=db2;Port=5432;Database={{DB_NAME}}_secondary;Username=postgres;Password=secret"),
+        DatabaseType.MySQL      => ("SECONDARY_DATABASE_URL", "Server=db2;Port=3306;Database={{DB_NAME}}_secondary;Uid=root;Pwd=secret;"),
+        DatabaseType.SqlServer  => ("SECONDARY_DATABASE_URL", "Server=db2,1433;Database={{DB_NAME}}_secondary;User Id=sa;Password=Secret1234!;"),
+        DatabaseType.SQLite     => ("SECONDARY_DATABASE_URL", "Data Source=/data/{{DB_NAME}}_secondary.db"),
+        _                       => ("SECONDARY_DATABASE_URL", "")
+    };
+
+    private static string BuildSecondaryDbOverride(
+        DatabaseType db, string envKey, string interpolatedConn, Dictionary<string, string> vars)
+    {
+        var serviceBlock = BuildSecondaryServiceBlock(db, vars);
+        return
+            "version: '3.9'\n" +
+            "# This file is merged automatically with docker-compose.yml by Docker Compose.\n" +
+            "# It adds the secondary database service.\n" +
+            "services:\n" +
+            "  app:\n" +
+            "    environment:\n" +
+            $"      - {envKey}={interpolatedConn}\n" +
+            "    depends_on:\n" +
+            "      - db2\n" +
+            serviceBlock;
+    }
+
+    private static string BuildSecondaryServiceBlock(DatabaseType db, Dictionary<string, string> vars)
+    {
+        var dbName = vars.GetValueOrDefault("DB_NAME", "app_db");
+        return db switch
+        {
+            DatabaseType.PostgreSQL =>
+                $"  db2:\n    image: postgres:16-alpine\n    environment:\n      POSTGRES_DB: {dbName}_secondary\n      POSTGRES_PASSWORD: secret\n    volumes:\n      - pgdata2:/var/lib/postgresql/data\n    healthcheck:\n      test: [\"CMD\",\"pg_isready\",\"-U\",\"postgres\"]\n      interval: 10s\n      timeout: 5s\n      retries: 5\nvolumes:\n  pgdata2:",
+            DatabaseType.MySQL =>
+                $"  db2:\n    image: mysql:8.0\n    environment:\n      MYSQL_DATABASE: {dbName}_secondary\n      MYSQL_ROOT_PASSWORD: secret\n    volumes:\n      - mysqldata2:/var/lib/mysql\n    healthcheck:\n      test: [\"CMD\",\"mysqladmin\",\"ping\",\"-h\",\"localhost\"]\n      interval: 10s\n      timeout: 5s\n      retries: 5\nvolumes:\n  mysqldata2:",
+            DatabaseType.Redis =>
+                "  db2:\n    image: redis:7-alpine\n    volumes:\n      - redisdata2:/data\n    healthcheck:\n      test: [\"CMD\",\"redis-cli\",\"ping\"]\n      interval: 10s\n      timeout: 5s\n      retries: 5\nvolumes:\n  redisdata2:",
+            DatabaseType.MongoDB =>
+                $"  db2:\n    image: mongo:7\n    environment:\n      MONGO_INITDB_ROOT_USERNAME: admin\n      MONGO_INITDB_ROOT_PASSWORD: secret\n      MONGO_INITDB_DATABASE: {dbName}_secondary\n    volumes:\n      - mongodata2:/data/db\nvolumes:\n  mongodata2:",
+            DatabaseType.SqlServer =>
+                "  db2:\n    image: mcr.microsoft.com/mssql/server:2022-latest\n    environment:\n      ACCEPT_EULA: Y\n      SA_PASSWORD: Secret1234!\n    volumes:\n      - mssqldata2:/var/opt/mssql\nvolumes:\n  mssqldata2:",
+            _ => "volumes:\n  sqlitedata2:"
+        };
     }
 
     private async Task ConfigureLaravelMongoDbAsync(Project project, string path, Dictionary<string, string> vars, CancellationToken ct)

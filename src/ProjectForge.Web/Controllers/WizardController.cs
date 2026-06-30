@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using System.Text.Json;
 using ProjectForge.Application.DTOs;
+using ProjectForge.Application.Services;
 using ProjectForge.Application.UseCases.Projects;
 using ProjectForge.Core.Entities;
 using ProjectForge.Core.Enums;
@@ -47,6 +48,7 @@ public class WizardController : Controller
         [FromForm(Name = "__fw")]       string? fw,
         [FromForm(Name = "__fwv")]      string? fwv,
         [FromForm(Name = "__db")]       string? db,
+        [FromForm(Name = "__db2")]      string? db2,
         [FromForm(Name = "__infra")]    string? infra,
         [FromForm(Name = "__patterns")] string? patternsJson,
         [FromForm(Name = "__libs")]     string? libsJson)
@@ -98,6 +100,11 @@ public class WizardController : Controller
             .ToList();
         var libs     = TryParseJson<List<string>>(libsJson)     ?? new List<string>();
 
+        // Secondary DB (optional — stored in AdditionalOptionsJson)
+        var secondaryDatabase = Enum.TryParse<DatabaseType>(db2, out var sd) && sd != database
+            ? (DatabaseType?)sd
+            : null;
+
         // Validaciones async para evitar bloquear el pool de conexiones
         // (GetPatternOptions y GetLibraryOptions consultan la BD)
         var patternOptions = await GetPatternOptionsAsync(architecture, framework);
@@ -114,6 +121,15 @@ public class WizardController : Controller
             return RedirectToAction("Index");
         }
 
+        // Compatibility validation — block on hard errors only; warnings are non-blocking
+        var compatIssues = WizardCompatibilityValidator.Validate(architecture, framework, database, infrastructure, patterns);
+        var compatErrors = compatIssues.Where(i => i.IsError).ToList();
+        if (compatErrors.Count > 0)
+        {
+            TempData["Error"] = string.Join(" | ", compatErrors.Select(e => e.Message));
+            return RedirectToAction("Index");
+        }
+
         var config = new WizardConfig
         {
             Architecture       = architecture,
@@ -124,7 +140,11 @@ public class WizardController : Controller
             DeploymentTarget   = DeploymentTarget.Local,
             DesignPatternsJson = JsonSerializer.Serialize(patterns),
             LibrariesJson      = JsonSerializer.Serialize(libs),
-            AdditionalOptionsJson = JsonSerializer.Serialize(new { createPrivateRepo }),
+            AdditionalOptionsJson = JsonSerializer.Serialize(new
+            {
+                createPrivateRepo,
+                secondaryDatabase = secondaryDatabase?.ToString()
+            }),
             CreatedAt          = DateTime.UtcNow,
         };
 
@@ -215,6 +235,69 @@ public class WizardController : Controller
             return Ok(Array.Empty<object>());
 
         return Ok(GetLibraryOptions(arch, fw));
+    }
+
+    // ── Validate endpoint (real-time compatibility check) ──────────────────────
+    [HttpPost("api/validate")]
+    [IgnoreAntiforgeryToken]
+    public IActionResult ValidateConfig([FromBody] ValidateRequestDto req)
+    {
+        if (!TryParseArchitecture(req.Architecture, out var arch))
+            return BadRequest(new { error = "Invalid architecture" });
+        if (!Enum.TryParse<FrameworkType>(req.Framework, out var fw))
+            return BadRequest(new { error = "Invalid framework" });
+        if (!Enum.TryParse<DatabaseType>(req.Database, out var db))
+            return BadRequest(new { error = "Invalid database" });
+        if (!Enum.TryParse<InfrastructureType>(req.Infrastructure, out var infra))
+            infra = InfrastructureType.None;
+
+        var issues = WizardCompatibilityValidator.Validate(arch, fw, db, infra, req.Patterns ?? Array.Empty<string>());
+        return Ok(new
+        {
+            hasErrors = issues.Any(i => i.IsError),
+            issues    = issues.Select(i => new { i.Code, i.Message, i.IsError })
+        });
+    }
+
+    // ── Secondary DB options (exclude primary) ─────────────────────────────────
+    [HttpGet("api/databases/{architecture}/{framework}/secondary")]
+    public IActionResult GetSecondaryDatabases(string architecture, string framework, [FromQuery] string? primaryDb)
+    {
+        if (!TryParseArchitecture(architecture, out var arch) || !Enum.TryParse<FrameworkType>(framework, out var fw))
+            return Ok(Array.Empty<object>());
+
+        Enum.TryParse<DatabaseType>(primaryDb, out var primary);
+
+        var options = GetDatabaseOptions(arch, fw)
+            .Where(o => !string.Equals(o.Value, primaryDb, StringComparison.OrdinalIgnoreCase))
+            .Select(o => o.Value switch
+            {
+                "Redis"   => o with { Badge = "Cache recomendado" },
+                "MongoDB" => o with { Badge = "NoSQL secundario" },
+                _         => o
+            })
+            .ToList();
+
+        return Ok(options);
+    }
+
+    // ── File-tree preview (no I/O, returns expected paths) ────────────────────
+    [HttpPost("api/preview")]
+    [IgnoreAntiforgeryToken]
+    public IActionResult GetPreview([FromBody] PreviewRequestDto req)
+    {
+        if (!TryParseArchitecture(req.Architecture, out var arch))
+            return BadRequest(new { error = "Invalid architecture" });
+        if (!Enum.TryParse<FrameworkType>(req.Framework, out var fw))
+            return BadRequest(new { error = "Invalid framework" });
+        if (!Enum.TryParse<DatabaseType>(req.Database, out var db))
+            return BadRequest(new { error = "Invalid database" });
+        if (!Enum.TryParse<InfrastructureType>(req.Infrastructure, out var infra))
+            infra = InfrastructureType.None;
+
+        var projectName = string.IsNullOrWhiteSpace(req.ProjectName) ? "my-project" : req.ProjectName;
+        var files = _generator.PreviewFiles(arch, fw, db, infra, req.Patterns ?? Array.Empty<string>(), projectName);
+        return Ok(new { projectName, files });
     }
 
     [HttpPost("api/suggest")]
@@ -489,4 +572,23 @@ public class WizardSuggestionRequestDto
     public string Database     { get; set; } = "";
     public string Infrastructure { get; set; } = "";
     public IEnumerable<string>? AlreadySelectedPatterns { get; set; }
+}
+
+public class ValidateRequestDto
+{
+    public string Architecture  { get; set; } = "";
+    public string Framework     { get; set; } = "";
+    public string Database      { get; set; } = "";
+    public string Infrastructure { get; set; } = "";
+    public IEnumerable<string>? Patterns { get; set; }
+}
+
+public class PreviewRequestDto
+{
+    public string Architecture  { get; set; } = "";
+    public string Framework     { get; set; } = "";
+    public string Database      { get; set; } = "";
+    public string Infrastructure { get; set; } = "";
+    public string? ProjectName  { get; set; }
+    public IEnumerable<string>? Patterns { get; set; }
 }

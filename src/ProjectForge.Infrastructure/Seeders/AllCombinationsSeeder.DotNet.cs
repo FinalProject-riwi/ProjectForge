@@ -137,6 +137,6 @@ public static partial class AllCombinationsSeeder
         {
             Id = id, CreatedAt = SeedDate, Name = name, TemplateType = type,
             Architecture = arch, Framework = framework, Database = db,
-            Infrastructure = infra, Description = desc, IsActive = true, Version = 1, Content = content
+            Infrastructure = infra, Description = desc ?? "", IsActive = true, Version = 1, Content = content
         };
 }

@@ -64,6 +64,18 @@ public interface IAiSuggestionService
 public interface IProjectGeneratorService
 {
     Task<GenerationResult> GenerateAsync(int projectId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Returns the expected file tree for a project configuration without executing any I/O or CLI commands.
+    /// Useful for showing a preview before the user triggers generation.
+    /// </summary>
+    IReadOnlyList<string> PreviewFiles(
+        ArchitectureType arch,
+        FrameworkType framework,
+        DatabaseType db,
+        InfrastructureType infra,
+        IEnumerable<string> patterns,
+        string projectName);
 }
 
 public interface IVpsDeploymentService
