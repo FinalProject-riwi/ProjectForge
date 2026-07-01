@@ -64,6 +64,7 @@ builder.Services.AddScoped<IShellExecutor, ShellExecutor>();
 builder.Services.AddScoped<IGitHubService, GitHubService>();
 builder.Services.AddScoped<IEncryptionService, AesEncryptionService>();
 builder.Services.AddScoped<IAiSuggestionService, MultiProviderAiSuggestionService>();
+builder.Services.AddScoped<IVoiceParsingService, GroqVoiceParsingService>();
 builder.Services.AddScoped<ICreateProjectUseCase, CreateProjectUseCase>();
 builder.Services.AddScoped<IProjectGeneratorService, ProjectGeneratorService>();
 builder.Services.AddScoped<IVpsDeploymentService, VpsDeploymentService>();
@@ -83,6 +84,11 @@ builder.Services.AddHttpClient("Gemini", c =>
 {
     c.BaseAddress = new Uri("https://generativelanguage.googleapis.com");
     c.Timeout = TimeSpan.FromMinutes(3);
+});
+builder.Services.AddHttpClient("Groq", c =>
+{
+    c.BaseAddress = new Uri("https://api.groq.com");
+    c.Timeout = TimeSpan.FromSeconds(15); // voice needs to be fast
 });
 
 // ─── Sesión ───────────────────────────────────────────────────────────────────

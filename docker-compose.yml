@@ -17,6 +17,7 @@ services:
       - Anthropic__ApiKey=${ANTHROPIC_API_KEY:-PLACEHOLDER}
       - OpenAI__ApiKey=${OPENAI_API_KEY:-PLACEHOLDER}
       - Gemini__ApiKey=${GEMINI_API_KEY:-PLACEHOLDER}
+      - Groq__ApiKey=${GROQ_API_KEY:-PLACEHOLDER}
       - Encryption__Key=${ENCRYPTION_KEY:-DefaultKeyChangeThisInProduction32}
       - Generation__WorkspacePath=/workspaces
       - ASPNETCORE_DataProtection__KeysPath=/dataprotection-keys
@@ -47,6 +48,7 @@ services:
       - Anthropic__ApiKey=${ANTHROPIC_API_KEY:-PLACEHOLDER}
       - OpenAI__ApiKey=${OPENAI_API_KEY:-PLACEHOLDER}
       - Gemini__ApiKey=${GEMINI_API_KEY:-PLACEHOLDER}
+      - Groq__ApiKey=${GROQ_API_KEY:-PLACEHOLDER}
       - Encryption__Key=${ENCRYPTION_KEY:-DefaultKeyChangeThisInProduction32}
       - Generation__WorkspacePath=/workspaces
     volumes:

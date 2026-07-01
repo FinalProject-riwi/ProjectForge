@@ -113,6 +113,9 @@ function renderStep() {
   document.getElementById('btn-prev').style.display   = state.currentStep > 1 ? 'flex' : 'none';
   document.getElementById('btn-next').style.display   = state.currentStep < state.totalSteps ? 'flex' : 'none';
   document.getElementById('btn-submit').style.display = state.currentStep === state.totalSteps ? 'flex' : 'none';
+
+  // Notify voice assistant about step change
+  document.dispatchEvent(new CustomEvent('wizardStepChanged', { detail: { step: state.currentStep } }));
 }
 
 // ── Validation ────────────────────────────────────────────────────────────────

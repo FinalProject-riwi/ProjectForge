@@ -4,7 +4,29 @@
 @{
     ViewData["Title"] = "Dashboard";
     Layout = "_Layout";
+    var githubName = User.Identity?.Name ?? "amigo";
 }
+
+<!-- Voice assistant init marker — voice.js reads data-username -->
+<div id="voice-dashboard-init" data-username="@githubName" style="display:none"></div>
+
+<!-- Voice card: greets user + one-shot mic -->
+<div class="dashboard-voice-card">
+    <div class="dashboard-voice-icon">🤖</div>
+    <div class="dashboard-voice-body">
+        <strong>Hola, @githubName! ¿Qué construimos hoy?</strong>
+        <p>Dime tu stack de una vez o crea el proyecto paso a paso.</p>
+    </div>
+    <button class="voice-speak-btn" id="voice-dashboard-mic-btn" title="Hablar con la asistente">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+            <line x1="12" y1="19" x2="12" y2="23"/>
+            <line x1="8" y1="23" x2="16" y2="23"/>
+        </svg>
+        Hablar
+    </button>
+</div>
 
 <div class="dashboard-header">
     <div>

@@ -280,5 +280,11 @@
     </script>
 
     @await RenderSectionAsync("Scripts", required: false)
+
+    @* Voice assistant — only for authenticated users *@
+    @if (User.Identity?.IsAuthenticated == true)
+    {
+        <script src="~/js/voice.js" asp-append-version="true" defer></script>
+    }
 </body>
 </html>

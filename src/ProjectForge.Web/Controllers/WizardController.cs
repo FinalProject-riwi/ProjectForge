@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using System.Text.Json;
+using ProjectForge.Application.AI;
 using ProjectForge.Application.DTOs;
 using ProjectForge.Application.Services;
 using ProjectForge.Application.UseCases.Projects;
@@ -24,13 +25,16 @@ public class WizardController : Controller
     private readonly IAiSuggestionService _ai;
     private readonly ICreateProjectUseCase _createProject;
     private readonly IProjectGeneratorService _generator;
+    private readonly IVoiceParsingService _voiceParser;
 
     public WizardController(
         AppDbContext db, IAiSuggestionService ai,
         ICreateProjectUseCase createProject,
-        IProjectGeneratorService generator)
+        IProjectGeneratorService generator,
+        IVoiceParsingService voiceParser)
     {
-        _db = db; _ai = ai; _createProject = createProject; _generator = generator;
+        _db = db; _ai = ai; _createProject = createProject;
+        _generator = generator; _voiceParser = voiceParser;
     }
 
     // ── GET /wizard ────────────────────────────────────────────────────────────
@@ -298,6 +302,29 @@ public class WizardController : Controller
         var projectName = string.IsNullOrWhiteSpace(req.ProjectName) ? "my-project" : req.ProjectName;
         var files = _generator.PreviewFiles(arch, fw, db, infra, req.Patterns ?? Array.Empty<string>(), projectName);
         return Ok(new { projectName, files });
+    }
+
+    // ── Voice parse: transcript → WizardConfig ────────────────────────────────
+    [HttpPost("api/voice-parse")]
+    [IgnoreAntiforgeryToken]
+    public async Task<IActionResult> VoiceParse([FromBody] VoiceParseRequestDto req)
+    {
+        if (string.IsNullOrWhiteSpace(req.Transcript))
+            return BadRequest(new { success = false, error = "Transcript vacío" });
+
+        var result = await _voiceParser.ParseAsync(req.Transcript);
+        if (result is null)
+            return Ok(new { success = false, error = "No se pudo interpretar el mensaje" });
+
+        return Ok(new
+        {
+            success        = true,
+            architecture   = result.Architecture,
+            framework      = result.Framework,
+            database       = result.Database,
+            infrastructure = result.Infrastructure,
+            projectName    = result.ProjectName
+        });
     }
 
     [HttpPost("api/suggest")]
@@ -591,4 +618,9 @@ public class PreviewRequestDto
     public string Infrastructure { get; set; } = "";
     public string? ProjectName  { get; set; }
     public IEnumerable<string>? Patterns { get; set; }
+}
+
+public class VoiceParseRequestDto
+{
+    public string Transcript { get; set; } = "";
 }
