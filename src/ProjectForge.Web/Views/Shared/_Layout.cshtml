@@ -25,8 +25,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="~/css/app.css" asp-append-version="true" />
 
-    <!-- SignalR -->
-    <script src="https://cdn.jsdelivr.net/npm/@@microsoft/signalr@8.0.0/dist/browser/signalr.min.js" defer></script>
+    <!-- SignalR (local copy — CDN is unreliable in some environments) -->
+    <script src="~/js/signalr.min.js" asp-append-version="true" defer></script>
 
     <!-- Tema: cargar antes de paint para evitar flash -->
     <script>

@@ -9,7 +9,9 @@ public record VoiceParseResult(
     string Framework,
     string Database,
     string Infrastructure,
-    string? ProjectName
+    string? ProjectName,
+    bool InScope = true,
+    string? OutOfScopeReply = null
 );
 
 public interface IVoiceParsingService
@@ -18,9 +20,9 @@ public interface IVoiceParsingService
 }
 
 /// <summary>
-/// Parses a natural-language voice transcript into a structured WizardConfig
-/// using Groq (Llama 3.3-70B) — free tier, sub-second latency.
-/// Falls back to keyword matching when the API key is not configured.
+/// Parses natural-language voice transcripts into structured WizardConfig using Groq (Llama 3.3-70B).
+/// Detects out-of-scope requests and returns a warm Spanish reply.
+/// Falls back to keyword matching when no API key is configured.
 /// </summary>
 public class GroqVoiceParsingService : IVoiceParsingService
 {
@@ -34,25 +36,45 @@ public class GroqVoiceParsingService : IVoiceParsingService
     }
 
     private const string SystemPrompt = """
-        You are a software project configuration extractor for ProjectForge.
-        Given a natural language description (possibly in Spanish or English), extract the project configuration.
+        Eres la asistente de voz de ProjectForge, una app que genera proyectos de software.
+        Tu única función es ayudar a crear proyectos. NO puedes enseñar, responder preguntas generales, ni hacer nada fuera de crear proyectos.
 
-        Available values — use EXACT spelling:
+        Analiza el mensaje del usuario (puede ser en español coloquial, informal o poco estructurado) y determina:
+        1. ¿Está pidiendo crear un proyecto de software? → inScope: true
+        2. ¿Está hablando de otra cosa (preguntas, saludos, conceptos, otra app, etc.)? → inScope: false
+
+        Si inScope: false, responde con un mensaje cálido y breve en español que explique que solo puedes ayudar a crear proyectos con ProjectForge, y pregunta si quiere crear uno. Máximo 2 oraciones.
+
+        Si inScope: true, extrae la configuración del proyecto de lo que dijo el usuario, siendo MUY inteligente con el lenguaje natural:
+        - "una tienda" → Django o ASP.NET MVC con PostgreSQL
+        - "una API" o "backend" → AspNetCoreWebApi o FastAPI con PostgreSQL
+        - "un blog" → Django o Laravel con MySQL
+        - "algo con node para un chat" → NodeJs o NestJs con MongoDB
+        - "microservicios" → SpringBoot o NestJs con Kubernetes
+        - Si menciona el nombre del proyecto ("se llamará X", "llamado X", "el nombre es X") → extráelo
+        - Usa el contexto para inferir lo que no dijo explícitamente
+        - Si no hay suficiente información, usa defaults razonables (no lo más difícil)
+
+        Valores disponibles (usa EXACTAMENTE estos):
           architecture : DotNet | Java | Python | Php | JavaScript | TypeScript
-          framework (DotNet)      : AspNetCoreWebApi | AspNetCoreMVC | BlazorServer | BlazorWasm | MinimalApi
-          framework (Java)        : SpringBoot | Quarkus | Micronaut
-          framework (Python)      : FastAPI | Django | Flask
-          framework (Php)         : Laravel | Symfony
-          framework (JavaScript)  : NodeJs | ExpressJs | NestJs | NextJs
-          framework (TypeScript)  : NestTs | NextTs
+          framework (DotNet)     : AspNetCoreWebApi | AspNetCoreMVC | BlazorServer | BlazorWasm | MinimalApi
+          framework (Java)       : SpringBoot | Quarkus | Micronaut
+          framework (Python)     : FastAPI | Django | Flask
+          framework (Php)        : Laravel | Symfony
+          framework (JavaScript) : NodeJs | ExpressJs | NestJs | NextJs
+          framework (TypeScript) : NestTs | NextTs
           database     : PostgreSQL | MySQL | SqlServer | MongoDB | Redis | SQLite
           infrastructure : None | DockerCompose | Kubernetes
 
-        Defaults when not mentioned: architecture=DotNet, framework=AspNetCoreWebApi, database=PostgreSQL, infrastructure=None.
-        For projectName: extract if clearly mentioned (e.g. "llamado mi-api"), otherwise return null.
+        Defaults si no se menciona: architecture=DotNet, framework=AspNetCoreWebApi, database=PostgreSQL, infrastructure=None
 
-        Respond ONLY with a single-line JSON object — no markdown, no explanation:
-        {"architecture":"...","framework":"...","database":"...","infrastructure":"...","projectName":null}
+        Responde ÚNICAMENTE con JSON válido en una sola línea, sin markdown ni explicaciones:
+
+        Si inScope true:
+        {"inScope":true,"architecture":"...","framework":"...","database":"...","infrastructure":"...","projectName":null,"outOfScopeReply":null}
+
+        Si inScope false:
+        {"inScope":false,"architecture":"DotNet","framework":"AspNetCoreWebApi","database":"PostgreSQL","infrastructure":"None","projectName":null,"outOfScopeReply":"Solo puedo ayudarte a crear proyectos de software con ProjectForge. ¿Quieres que creemos uno juntos?"}
         """;
 
     public async Task<VoiceParseResult?> ParseAsync(string transcript)
@@ -67,8 +89,8 @@ public class GroqVoiceParsingService : IVoiceParsingService
             var body = new
             {
                 model       = "llama-3.3-70b-versatile",
-                max_tokens  = 128,
-                temperature = 0.1,
+                max_tokens  = 200,
+                temperature = 0.2,
                 messages    = new[]
                 {
                     new { role = "system", content = SystemPrompt },
@@ -102,31 +124,56 @@ public class GroqVoiceParsingService : IVoiceParsingService
     private static VoiceParseResult? ParseJson(string raw)
     {
         var clean = raw.Trim();
+        // Strip markdown code fences if Groq wraps response
         if (clean.StartsWith("```"))
         {
             var s = clean.IndexOf('{');
             var e = clean.LastIndexOf('}');
             if (s >= 0 && e > s) clean = clean[s..(e + 1)];
         }
+        // Find JSON object bounds
+        var start = clean.IndexOf('{');
+        var end   = clean.LastIndexOf('}');
+        if (start >= 0 && end > start) clean = clean[start..(end + 1)];
+
         try
         {
             using var doc = JsonDocument.Parse(clean);
             var r = doc.RootElement;
+
+            var inScope = r.TryGetProperty("inScope", out var p) && p.ValueKind == JsonValueKind.True;
+            if (!inScope)
+            {
+                var reply = NullableStr(r, "outOfScopeReply")
+                    ?? "Solo estoy equipada para crear proyectos con ProjectForge. ¿Creamos uno?";
+                return new VoiceParseResult("DotNet", "AspNetCoreWebApi", "PostgreSQL", "None", null,
+                    InScope: false, OutOfScopeReply: reply);
+            }
+
             return new VoiceParseResult(
-                Str(r, "architecture", "DotNet"),
-                Str(r, "framework",    "AspNetCoreWebApi"),
-                Str(r, "database",     "PostgreSQL"),
+                Str(r, "architecture",   "DotNet"),
+                Str(r, "framework",      "AspNetCoreWebApi"),
+                Str(r, "database",       "PostgreSQL"),
                 Str(r, "infrastructure", "None"),
-                NullableStr(r, "projectName")
+                NullableStr(r, "projectName"),
+                InScope: true
             );
         }
         catch { return null; }
     }
 
-    // Keyword-based fallback — no API key required
+    // Keyword fallback — no Groq key required
     private static VoiceParseResult FallbackParse(string text)
     {
         var t = text.ToLowerInvariant();
+
+        // Out-of-scope heuristic: very short or common non-project phrases
+        var nonProjectPhrases = new[] { "hola", "qué tal", "cómo estás", "gracias", "adiós", "bye", "help" };
+        if (t.Split(' ').Length <= 2 && nonProjectPhrases.Any(p => t.Contains(p)))
+        {
+            return new VoiceParseResult("DotNet", "AspNetCoreWebApi", "PostgreSQL", "None", null,
+                InScope: false, OutOfScopeReply: "Solo puedo ayudarte a crear proyectos de software con ProjectForge. ¿Creamos uno juntos?");
+        }
 
         var arch = t.Contains("python") ? "Python"
             : System.Text.RegularExpressions.Regex.IsMatch(t, @"\bjava\b") && !t.Contains("javascript") ? "Java"
@@ -149,14 +196,14 @@ public class GroqVoiceParsingService : IVoiceParsingService
             : t.Contains("mongo")      ? "MongoDB"
             : t.Contains("redis")      ? "Redis"
             : t.Contains("sqlite")     ? "SQLite"
-            : t.Contains("sql server") || t.Contains("sqlserver") || t.Contains("mssql") ? "SqlServer"
+            : t.Contains("sql server") || t.Contains("mssql") ? "SqlServer"
             : "PostgreSQL";
 
         var infra = t.Contains("kubernetes") || t.Contains("k8s") ? "Kubernetes"
             : t.Contains("docker") ? "DockerCompose"
             : "None";
 
-        return new VoiceParseResult(arch, fw, db, infra, null);
+        return new VoiceParseResult(arch, fw, db, infra, null, InScope: true);
     }
 
     private static string Str(JsonElement r, string key, string fallback)

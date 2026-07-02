@@ -323,12 +323,14 @@ public class WizardController : Controller
 
         return Ok(new
         {
-            success        = true,
-            architecture   = result.Architecture,
-            framework      = result.Framework,
-            database       = result.Database,
-            infrastructure = result.Infrastructure,
-            projectName    = result.ProjectName
+            success         = true,
+            inScope         = result.InScope,
+            outOfScopeReply = result.OutOfScopeReply,
+            architecture    = result.Architecture,
+            framework       = result.Framework,
+            database        = result.Database,
+            infrastructure  = result.Infrastructure,
+            projectName     = result.ProjectName
         });
     }
 
@@ -398,7 +400,7 @@ public class WizardController : Controller
         {
             Architecture          = architecture,
             Framework             = framework,
-            FrameworkVersion      = "latest",
+            FrameworkVersion      = GetDefaultFrameworkVersion(framework),
             Database              = database,
             Infrastructure        = infrastructure,
             DeploymentTarget      = DeploymentTarget.Local,
@@ -678,6 +680,30 @@ public class WizardController : Controller
         architecture = ArchitectureType.DotNet;
         return false;
     }
+
+    private static string GetDefaultFrameworkVersion(FrameworkType fw) => fw switch
+    {
+        FrameworkType.AspNetCoreWebApi => "10.0",
+        FrameworkType.AspNetCoreMVC    => "10.0",
+        FrameworkType.BlazorServer     => "10.0",
+        FrameworkType.BlazorWasm       => "10.0",
+        FrameworkType.MinimalApi       => "10.0",
+        FrameworkType.SpringBoot       => "3.3",
+        FrameworkType.Quarkus          => "3.x",
+        FrameworkType.Micronaut        => "4.x",
+        FrameworkType.FastAPI          => "0.115",
+        FrameworkType.Django           => "5.0",
+        FrameworkType.Flask            => "3.0",
+        FrameworkType.Laravel          => "11.x",
+        FrameworkType.Symfony          => "7.x",
+        FrameworkType.NodeJs           => "22.x",
+        FrameworkType.ExpressJs        => "5.x",
+        FrameworkType.NestJs           => "10.x",
+        FrameworkType.NextJs           => "14.x",
+        FrameworkType.NestTs           => "10.x",
+        FrameworkType.NextTs           => "14.x",
+        _                              => "latest"
+    };
 
     private sealed record OptionDto(string Value, string Label, string? Badge = null, string? Description = null);
 }

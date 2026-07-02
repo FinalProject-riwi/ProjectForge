@@ -1,177 +1,167 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   ProjectForge — Voice Assistant  v3
-   TTS: ElevenLabs (eleven_multilingual_v2) → fallback to SpeechSynthesis
-   STT: Web Speech API (Chrome/Edge)
-   Dashboard: voice → parse → name → auto-generate → terminal
-   Wizard:    step-by-step guided voice filling
+   ProjectForge — Voice Assistant  v4
+   TTS  : ElevenLabs (eleven_multilingual_v2) → fallback SpeechSynthesis
+   STT  : Web Speech API  (Chrome / Edge)
+   Scope: ONLY project creation — out-of-scope answered warmly and redirected.
+   Flow : Free natural speech → Groq parses → auto-generate → terminal
    ═══════════════════════════════════════════════════════════════════════════ */
 (function () {
   'use strict';
 
-  const hasTTS = typeof window.speechSynthesis !== 'undefined';
+  const hasTTS    = typeof window.speechSynthesis !== 'undefined';
   const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
-  const hasSTT = !!SpeechRec;
+  const hasSTT    = !!SpeechRec;
 
-  /* ── VoiceAssistant ─────────────────────────────────────────────────────── */
+  /* ── Preferred recognition languages (try in order) ────────────────────── */
+  const STT_LANGS = ['es-US', 'es-ES', 'es-MX', 'es'];
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     VoiceAssistant
+     ═══════════════════════════════════════════════════════════════════════════ */
   class VoiceAssistant {
     constructor() {
       this._state        = 'idle';
       this._muted        = localStorage.getItem('pf-voice-muted') === '1';
-      this._fbVoice      = null;   // fallback SpeechSynthesis voice
-      this._recognition  = null;
+      this._fbVoice      = null;
+      this._rec          = null;
+      this._recLangIdx   = 0;
       this._audioCtx     = null;
       this._analyser     = null;
       this._micStream    = null;
-      this._currentAudio = null;  // active HTMLAudioElement (ElevenLabs)
+      this._curAudio     = null;
       this._canvas       = null;
       this._ctx2d        = null;
       this._t            = 0;
 
-      if (hasTTS) this._loadFallbackVoice();
+      if (hasTTS) this._loadFbVoice();
       if (hasSTT) this._initSTT();
       this._createBar();
     }
 
-    /* ── Fallback voice (SpeechSynthesis) ───────────────────────────────── */
-    _loadFallbackVoice() {
+    /* ── Fallback voice ─────────────────────────────────────────────────── */
+    _loadFbVoice() {
       const pick = () => {
-        const voices = window.speechSynthesis.getVoices();
-        const names = [
+        const v = window.speechSynthesis.getVoices();
+        const pref = [
           'Microsoft Sabina Online (Natural) - Spanish (Mexico)',
           'Microsoft Sabina - Spanish (Mexico)',
           'Google español de Estados Unidos',
-          'Paulina', 'Mónica', 'Monica', 'Luciana', 'Conchita', 'Helena',
-          'Google español',
+          'Paulina', 'Mónica', 'Monica', 'Luciana', 'Helena', 'Google español',
         ];
         this._fbVoice =
-          voices.find(v => names.includes(v.name)) ||
-          voices.find(v => v.lang.startsWith('es') && /online|neural|natural/i.test(v.name)) ||
-          voices.find(v => v.lang.startsWith('es') && /sabina|paulina|monica|conchita|luciana/i.test(v.name)) ||
-          voices.find(v => v.lang.startsWith('es') && /google/i.test(v.name)) ||
-          voices.find(v => v.lang.startsWith('es')) ||
-          null;
+          v.find(x => pref.includes(x.name)) ||
+          v.find(x => x.lang.startsWith('es') && /online|neural|natural/i.test(x.name)) ||
+          v.find(x => x.lang.startsWith('es') && /sabina|paulina|monica|luciana|helena/i.test(x.name)) ||
+          v.find(x => x.lang.startsWith('es') && /google/i.test(x.name)) ||
+          v.find(x => x.lang.startsWith('es')) || null;
       };
       if (window.speechSynthesis.getVoices().length) pick();
       window.speechSynthesis.addEventListener('voiceschanged', pick);
     }
 
-    /* ── STT ────────────────────────────────────────────────────────────── */
+    /* ── STT init ───────────────────────────────────────────────────────── */
     _initSTT() {
-      this._recognition = new SpeechRec();
-      this._recognition.continuous     = false;
-      this._recognition.interimResults = false;
-      this._recognition.lang           = 'es-ES';
+      try {
+        this._rec = new SpeechRec();
+        this._rec.continuous     = false;
+        this._rec.interimResults = false;
+        this._rec.lang           = STT_LANGS[0];
+        this._rec.maxAlternatives = 3;
+      } catch { this._rec = null; }
     }
 
     /* ── TTS: ElevenLabs → SpeechSynthesis fallback ─────────────────────── */
     speak(text, onEnd) {
       if (!text || this._muted) { setTimeout(() => onEnd?.(), 0); return; }
-      this._cancelAudio();
-      window.speechSynthesis?.cancel();
+      this._cancelAudio(); window.speechSynthesis?.cancel();
       this._setState('speaking', 'Hablando...');
 
-      const encoded = encodeURIComponent(text.trim().slice(0, 500));
-      const audio   = new Audio(`/wizard/api/tts?text=${encoded}`);
-      this._currentAudio = audio;
-
-      audio.onended = () => {
-        this._currentAudio = null;
-        this._setState('idle', 'Lista');
-        onEnd?.();
-      };
-      audio.onerror = () => {
-        this._currentAudio = null;
-        this._speakFallback(text, onEnd);
-      };
-      audio.play().catch(() => {
-        this._currentAudio = null;
-        this._speakFallback(text, onEnd);
-      });
+      const audio = new Audio(`/wizard/api/tts?text=${encodeURIComponent(text.trim().slice(0, 500))}`);
+      this._curAudio = audio;
+      audio.onended = () => { this._curAudio = null; this._setState('idle', 'Lista'); onEnd?.(); };
+      audio.onerror = () => { this._curAudio = null; this._fbSpeak(text, onEnd); };
+      audio.play().catch(() => { this._curAudio = null; this._fbSpeak(text, onEnd); });
     }
 
-    _speakFallback(text, onEnd) {
+    _fbSpeak(text, onEnd) {
       if (!hasTTS) { this._setState('idle', 'Lista'); onEnd?.(); return; }
       this._setState('speaking', 'Hablando...');
       const u = new SpeechSynthesisUtterance(text);
       if (this._fbVoice) u.voice = this._fbVoice;
-      u.lang = 'es-MX'; u.rate = 0.87; u.pitch = 0.95; u.volume = 1.0;
-      u.onend   = () => { this._setState('idle', 'Lista'); onEnd?.(); };
-      u.onerror = () => { this._setState('idle', 'Lista'); onEnd?.(); };
+      u.lang = 'es-MX'; u.rate = 0.87; u.pitch = 0.95; u.volume = 1;
+      u.onend = u.onerror = () => { this._setState('idle', 'Lista'); onEnd?.(); };
       window.speechSynthesis.speak(u);
     }
 
     _cancelAudio() {
-      if (this._currentAudio) {
-        this._currentAudio.onended = null;
-        this._currentAudio.onerror = null;
-        this._currentAudio.pause();
-        this._currentAudio = null;
-      }
+      if (!this._curAudio) return;
+      this._curAudio.onended = this._curAudio.onerror = null;
+      this._curAudio.pause();
+      this._curAudio = null;
     }
 
-    stopSpeaking() {
-      this._cancelAudio();
-      window.speechSynthesis?.cancel();
-      this._setState('idle', 'Lista');
-    }
+    stopSpeaking() { this._cancelAudio(); window.speechSynthesis?.cancel(); this._setState('idle', 'Lista'); }
 
     /* ── STT: listen ────────────────────────────────────────────────────── */
-    listen(timeoutMs = 10000) {
-      if (!hasSTT || !this._recognition) return Promise.resolve(null);
+    listen(timeoutMs = 12000) {
+      if (!hasSTT || !this._rec) return Promise.resolve(null);
       return new Promise(resolve => {
         let settled = false;
         const done = val => {
-          if (settled) return;
-          settled = true;
+          if (settled) return; settled = true;
           clearTimeout(timer);
-          this._hideOverlay();
-          this._stopMic();
+          this._hideOverlay(); this._stopMic();
+          // Try rotating language on failure for better recognition
+          if (!val) this._recLangIdx = (this._recLangIdx + 1) % STT_LANGS.length;
           this._setState(val ? 'thinking' : 'idle', val ? 'Procesando...' : 'Lista');
           resolve(val);
         };
 
         this._setState('listening', 'Escuchando...');
-        this._showOverlay(() => { try { this._recognition.stop(); } catch {} done(null); });
+        this._showOverlay(() => { try { this._rec?.stop(); } catch {} done(null); });
         this._startMic();
 
-        const timer = setTimeout(() => { try { this._recognition.stop(); } catch {} }, timeoutMs);
-        this._recognition.onresult = e => done(e.results[0][0].transcript);
-        this._recognition.onerror  = () => done(null);
-        this._recognition.onend    = () => done(null);
-        try { this._recognition.start(); } catch { done(null); }
+        const timer = setTimeout(() => { try { this._rec?.stop(); } catch {} }, timeoutMs);
+
+        this._rec.lang = STT_LANGS[this._recLangIdx];
+        this._rec.onresult = e => {
+          // Use the best alternative with highest confidence
+          const best = [...Array(e.results[0].length)]
+            .map((_, i) => e.results[0][i])
+            .sort((a, b) => b.confidence - a.confidence)[0];
+          done(best?.transcript || null);
+        };
+        this._rec.onerror = () => done(null);
+        this._rec.onend   = () => done(null);
+        try { this._rec.start(); } catch { done(null); }
       });
     }
 
     stopListening() {
-      try { this._recognition?.stop(); } catch {}
-      this._hideOverlay();
-      this._stopMic();
-      this._setState('idle', 'Lista');
+      try { this._rec?.stop(); } catch {}
+      this._hideOverlay(); this._stopMic(); this._setState('idle', 'Lista');
     }
 
-    setIdle(text = 'Lista') { this._setState('idle', text); }
+    setIdle(t = 'Lista') { this._setState('idle', t); }
+    setState(s, t) { this._setState(s, t); }  // public alias for external callers
 
     /* ── Mic visualizer ─────────────────────────────────────────────────── */
     async _startMic() {
       try {
-        this._audioCtx = this._audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+        this._audioCtx  = this._audioCtx || new (window.AudioContext || window.webkitAudioContext)();
         this._micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-        this._analyser = this._audioCtx.createAnalyser();
-        this._analyser.fftSize = 128;
+        this._analyser  = this._audioCtx.createAnalyser(); this._analyser.fftSize = 128;
         this._audioCtx.createMediaStreamSource(this._micStream).connect(this._analyser);
-      } catch { /* mic denied — fallback animation */ }
+      } catch { /* mic denied — animated fallback */ }
     }
 
-    _stopMic() {
-      this._micStream?.getTracks().forEach(t => t.stop());
-      this._micStream = null;
-      this._analyser  = null;
-    }
+    _stopMic() { this._micStream?.getTracks().forEach(t => t.stop()); this._micStream = null; this._analyser = null; }
 
     /* ── Voice bar ──────────────────────────────────────────────────────── */
     _createBar() {
-      const bar = document.createElement('div');
-      bar.id = 'voice-bar'; bar.className = 'voice-bar';
+      const bar = Object.assign(document.createElement('div'), {
+        id: 'voice-bar', className: 'voice-bar',
+      });
       bar.setAttribute('data-state', 'idle');
       bar.setAttribute('role', 'status');
       bar.setAttribute('aria-live', 'polite');
@@ -191,17 +181,15 @@
                 <line x1="8" y1="23" x2="16" y2="23"/>
               </svg>
             </button>
-            <button class="voice-mute-btn${this._muted ? ' muted' : ''}" id="v-mute-btn" title="Silenciar/Activar" aria-label="Silenciar">
+            <button class="voice-mute-btn${this._muted ? ' muted' : ''}" id="v-mute-btn" title="Silenciar" aria-label="Silenciar">
               ${this._muted ? '🔇' : '🔊'}
             </button>
           </div>
         </div>`;
       document.body.appendChild(bar);
       document.body.classList.add('voice-bar-active');
-
       this._canvas = document.getElementById('voice-waveform');
       this._ctx2d  = this._canvas?.getContext('2d');
-
       document.getElementById('v-mic-btn')?.addEventListener('click',  () => this._onMicClick());
       document.getElementById('v-mute-btn')?.addEventListener('click', () => this._toggleMute());
       this._animate();
@@ -244,7 +232,6 @@
       document.body.appendChild(ov);
       document.getElementById('v-cancel-listen')?.addEventListener('click', () => onCancel?.());
     }
-
     _hideOverlay() { document.getElementById('v-listen-overlay')?.remove(); }
 
     /* ── Waveform animation ─────────────────────────────────────────────── */
@@ -253,8 +240,7 @@
         requestAnimationFrame(draw);
         if (!this._ctx2d || !this._canvas) return;
         const W = this._canvas.width, H = this._canvas.height;
-        this._ctx2d.clearRect(0, 0, W, H);
-        this._t += 0.055;
+        this._ctx2d.clearRect(0, 0, W, H); this._t += 0.055;
         switch (this._state) {
           case 'speaking':  this._drawSpeaking(W, H); break;
           case 'listening': this._drawListening(W, H); break;
@@ -276,12 +262,12 @@
     }
 
     _drawSpeaking(W, H) {
-      const c = this._ctx2d;
       [
         { col: 'rgba(99,102,241,0.75)',  f: 0.038, a: 13, s: 1.0  },
         { col: 'rgba(167,139,250,0.45)', f: 0.058, a: 7,  s: 1.55 },
         { col: 'rgba(34,211,238,0.3)',   f: 0.028, a: 9,  s: 0.72 },
       ].forEach(({ col, f, a, s }) => {
+        const c = this._ctx2d;
         c.strokeStyle = col; c.lineWidth = 2; c.beginPath();
         for (let x = 0; x < W; x++) {
           const y = H / 2 + Math.sin(x * f + this._t * s) * a + Math.sin(x * f * 1.8 + this._t * s * 0.45) * (a * 0.38);
@@ -294,21 +280,18 @@
     _drawListening(W, H) {
       const c = this._ctx2d;
       if (this._analyser) {
-        const data = new Uint8Array(this._analyser.frequencyBinCount);
-        this._analyser.getByteFrequencyData(data);
-        const bw = W / data.length;
-        const grad = c.createLinearGradient(0, 0, W, 0);
-        grad.addColorStop(0, 'rgba(34,211,238,0.85)');
-        grad.addColorStop(0.5, 'rgba(99,102,241,0.85)');
-        grad.addColorStop(1, 'rgba(34,211,238,0.85)');
-        c.fillStyle = grad;
-        data.forEach((v, i) => { const bh = (v / 255) * H; c.fillRect(i * bw, H - bh, Math.max(bw - 1, 1), bh); });
+        const d = new Uint8Array(this._analyser.frequencyBinCount);
+        this._analyser.getByteFrequencyData(d);
+        const bw = W / d.length, g = c.createLinearGradient(0, 0, W, 0);
+        g.addColorStop(0, 'rgba(34,211,238,0.85)'); g.addColorStop(0.5, 'rgba(99,102,241,0.85)'); g.addColorStop(1, 'rgba(34,211,238,0.85)');
+        c.fillStyle = g;
+        d.forEach((v, i) => { const bh = (v / 255) * H; c.fillRect(i * bw, H - bh, Math.max(bw - 1, 1), bh); });
       } else {
         const bars = 24, bw = W / bars;
         for (let i = 0; i < bars; i++) {
           const h = (Math.sin(i * 0.55 + this._t * 2.8) * 0.5 + 0.5) * H * 0.82;
-          c.fillStyle = `rgba(34,211,238,${0.35 + (h / H) * 0.55})`;
-          c.fillRect(i * bw + 1, (H - h) / 2, bw - 2, h);
+          this._ctx2d.fillStyle = `rgba(34,211,238,${0.35 + (h / H) * 0.55})`;
+          this._ctx2d.fillRect(i * bw + 1, (H - h) / 2, bw - 2, h);
         }
       }
     }
@@ -327,18 +310,14 @@
   window.voiceAssistant = new VoiceAssistant();
   const va = window.voiceAssistant;
 
-  /* Accessors to wizard.js internal state (exposed via window._wizardState) */
+  /* Wizard state accessor — safe on non-wizard pages */
   const ws = () => window._wizardState;
-
-  /* Suppresses wizardStepChanged speaking during batch config apply */
   let _applyingConfig = false;
-
-  /* Helper: await a va.speak() call */
   const asyncSpeak = text => new Promise(resolve => va.speak(text, resolve));
 
   /* ═══════════════════════════════════════════════════════════════════════════
      DASHBOARD MODE
-     Voice → Groq parse → ask project name → auto-generate → terminal
+     Free conversational voice → Groq parses → confirms → name → generate → terminal
      ═══════════════════════════════════════════════════════════════════════════ */
   const dashInit = document.getElementById('voice-dashboard-init');
   if (dashInit) {
@@ -346,17 +325,16 @@
     const username = (dashInit.dataset.username || 'amigo').split(' ')[0];
 
     setTimeout(() => {
-      va.speak(`¡Hola ${username}! ¿Qué construimos hoy? Dime tu stack completo y lo genero por ti.`);
+      va.speak(`¡Hola ${username}! Soy tu asistente de ProjectForge. Cuéntame qué tipo de proyecto quieres crear.`);
     }, 700);
 
     window.__voiceDashboardListen = async function () {
-      /* ── Step 1: listen for stack ── */
-      const transcript = await va.listen(14000);
+      /* ── Turn 1: user describes what they want ── */
+      const transcript = await va.listen(18000);
       if (!transcript) { va.setIdle(); return; }
 
-      va._setState('thinking', 'Analizando...');
+      va.setState('thinking', 'Analizando...');
 
-      /* ── Step 2: parse with Groq ── */
       let data;
       try {
         const resp = await fetch('/wizard/api/voice-parse', {
@@ -366,71 +344,107 @@
         });
         data = await resp.json();
       } catch {
-        va.speak('Error de red. Intenta de nuevo.');
+        va.speak('Tuve un problema de red. ¿Puedes intentarlo de nuevo?');
         return;
       }
 
-      if (!data.success) {
-        va.speak('No entendí el stack. Prueba: Python con FastAPI y PostgreSQL.');
+      /* ── Out of scope: gentle redirect ── */
+      if (!data.inScope) {
+        await asyncSpeak(data.outOfScopeReply || 'Solo puedo ayudarte a crear proyectos de software con ProjectForge. ¿Quieres que creemos uno?');
+        // Give them a chance to reply with a project request
+        const retry = await va.listen(12000);
+        if (retry) window.__voiceDashboardListen();  // restart flow with their new message
         return;
       }
 
-      /* ── Step 3: confirm parse and ask for project name ── */
-      const infraLabel = data.infrastructure === 'DockerCompose' ? 'Docker Compose'
-        : data.infrastructure === 'Kubernetes' ? 'Kubernetes' : 'sin contenedores';
+      /* ── Build a natural confirmation ── */
+      const archLabel = _archLabel(data.architecture);
+      const infraLabel = _infraLabel(data.infrastructure);
+      const fwLabel   = data.framework || archLabel;
 
-      await asyncSpeak(`${data.architecture} con ${data.framework}, ${data.database} y ${infraLabel}. ¿Cómo se llamará el proyecto?`);
-
-      /* ── Step 4: listen for project name ── */
-      const nameText = await va.listen(10000);
-      if (!nameText) {
-        va.speak('Cancelado. Puedes crear el proyecto desde el wizard manualmente.');
+      /* ── If Groq already extracted a project name, skip that turn ── */
+      if (data.projectName && data.projectName.length >= 2) {
+        await asyncSpeak(`Perfecto. ${archLabel} con ${fwLabel}, ${data.database} y ${infraLabel}. Proyecto: ${data.projectName}. Generando...`);
+        await _generate(data, data.projectName);
         return;
       }
 
-      const projectName = nameText
-        .replace(/[^a-zA-Z0-9\-_\s]/g, '').trim()
-        .split(/\s+/).join('-').toLowerCase().slice(0, 60);
+      /* ── Ask for project name naturally ── */
+      await asyncSpeak(`Entendido. ${archLabel} con ${fwLabel} y ${data.database}. ¿Cómo quieres llamar el proyecto?`);
 
-      if (projectName.length < 2) {
-        va.speak('Nombre inválido. Usa letras y números. Inténtalo de nuevo.');
+      /* ── Turn 2: project name ── */
+      const nameRaw = await va.listen(12000);
+      if (!nameRaw) {
+        va.speak('No escuché el nombre. Puedes continuar en el wizard manualmente.');
         return;
       }
 
-      /* ── Step 5: generate in background ── */
-      await asyncSpeak(`Generando ${projectName}. Un momento...`);
-      va._setState('thinking', 'Creando proyecto...');
-
-      try {
-        const genResp = await fetch('/wizard/api/voice-generate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            architecture:   data.architecture,
-            framework:      data.framework,
-            database:       data.database,
-            infrastructure: data.infrastructure || 'None',
-            projectName,
-          }),
-        });
-        const genData = await genResp.json();
-        if (genData.success) {
-          window.location.href = genData.redirectUrl;
-        } else {
-          va.speak('Error al crear el proyecto. Intenta con el wizard manual.');
-        }
-      } catch {
-        va.speak('Error de red al generar. Intenta de nuevo.');
+      const projectName = _extractName(nameRaw);
+      if (!projectName) {
+        va.speak('No pude entender el nombre. Usa solo letras, números y guiones.');
+        return;
       }
+
+      await asyncSpeak(`Generando ${projectName}...`);
+      await _generate(data, projectName);
     };
 
     document.getElementById('voice-dashboard-mic-btn')
       ?.addEventListener('click', window.__voiceDashboardListen);
   }
 
+  /* ── Background generation helper ──────────────────────────────────────── */
+  async function _generate(data, projectName) {
+    va.setState('thinking', 'Creando proyecto...');
+    try {
+      const resp = await fetch('/wizard/api/voice-generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          architecture:   data.architecture,
+          framework:      data.framework,
+          database:       data.database,
+          infrastructure: data.infrastructure || 'None',
+          projectName,
+        }),
+      });
+      const result = await resp.json();
+      if (result.success) {
+        window.location.href = result.redirectUrl;
+      } else {
+        va.speak('Algo salió mal al crear el proyecto. Puedes intentarlo en el wizard.');
+      }
+    } catch {
+      va.speak('Error de red. Intenta de nuevo o usa el wizard manualmente.');
+    }
+  }
+
+  /* ── Extract a clean project name from natural speech ─────────────────── */
+  function _extractName(raw) {
+    // Strip common "name" prefix phrases in Spanish
+    const clean = raw
+      .replace(/^(qu[eé] se llame?|ll[aá]malo|ll[aá]mala|el nombre es|se llamar[aá]|llamado|llamada|se llama|lo llamamos|ponle|puedes llamarlo|quiero que se llame)\s+/i, '')
+      .replace(/[^a-zA-Z0-9\-_áéíóúñÁÉÍÓÚÑ\s]/g, '')
+      .trim()
+      .replace(/\s+/g, '-')
+      .toLowerCase()
+      .slice(0, 60);
+
+    // Remove accents for valid folder/repo names
+    return clean.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9\-_]/g, '') || null;
+  }
+
+  function _archLabel(arch) {
+    return { DotNet: 'C Sharp .NET', Java: 'Java', Python: 'Python', Php: 'PHP', JavaScript: 'JavaScript', TypeScript: 'TypeScript' }[arch] || arch;
+  }
+
+  function _infraLabel(infra) {
+    return { DockerCompose: 'Docker Compose', Kubernetes: 'Kubernetes', None: 'sin contenedores' }[infra] || 'sin contenedores';
+  }
+
   /* ═══════════════════════════════════════════════════════════════════════════
      WIZARD MODE
-     Step-by-step voice guidance. Also accepts dashboard pre-fill via sessionStorage.
+     Step-by-step voice guidance (keeps working for manual users who open /wizard directly)
      ═══════════════════════════════════════════════════════════════════════════ */
   const wizInit = document.getElementById('voice-wizard-init');
   if (wizInit) {
@@ -453,61 +467,68 @@
     });
 
     window.__voiceWizardListen = async function () {
-      const text = await va.listen(10000);
-      if (text) _handleWizardInput(text);
-      else va.setIdle();
+      const text = await va.listen(12000);
+      if (!text) { va.setIdle(); return; }
+
+      /* Check scope even in wizard */
+      va.setState('thinking', 'Procesando...');
+      try {
+        const resp = await fetch('/wizard/api/voice-parse', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ transcript: text }),
+        });
+        const data = await resp.json();
+        if (!data.inScope) {
+          va.speak(data.outOfScopeReply || 'Solo puedo ayudarte con el proyecto. ¿Continuamos?');
+          return;
+        }
+        _handleWizardInput(text, data);
+      } catch {
+        _handleWizardInput(text, null);
+      }
     };
   }
 
-  /* ── Wizard helpers ─────────────────────────────────────────────────────── */
-
+  /* ── Wizard step speaker ────────────────────────────────────────────────── */
   function _speakStep(step) {
     const s = step || ws()?.currentStep || 1;
     const arch = ws()?.architecture || '';
-    const archLabel = arch === 'DotNet' ? 'punto NET' : arch;
+    const al = arch === 'DotNet' ? 'punto NET' : arch;
     const prompts = {
-      1: '¿Qué lenguaje prefieres? Python, Java, C Sharp, PHP, JavaScript o TypeScript.',
-      2: `¿Qué framework${archLabel ? ' de ' + archLabel : ''} usarás? Dime también la base de datos.`,
-      3: '¿Necesitas contenedores? Docker Compose, Kubernetes, o sin contenedores.',
-      4: 'La IA ya hizo sugerencias. ¿Cambias algo?',
+      1: '¿Qué tecnología quieres usar? Por ejemplo: Python, Java, Node, C Sharp, PHP...',
+      2: `¿Qué framework${al ? ' de ' + al : ''} prefieres? Y dime la base de datos.`,
+      3: '¿Necesitas contenedores? Docker, Kubernetes, o sin contenedores.',
+      4: 'La IA ya sugirió patrones y librerías. ¿Cambias algo?',
       5: '¿Cómo se llamará el proyecto?',
     };
     if (prompts[s]) va.speak(prompts[s]);
   }
 
-  function _clickCard(selector, value) {
-    if (!value) return false;
-    const card = document.querySelector(`${selector}[data-value="${value}"]`);
-    if (card) { card.click(); return true; }
-    return false;
-  }
-
-  function _handleWizardInput(text) {
+  /* ── Wizard input handler (uses parsed Groq data when available) ─────── */
+  function _handleWizardInput(text, parsedData) {
     const t    = text.toLowerCase();
     const step = ws()?.currentStep || 1;
 
     if (step === 1) {
-      const arch = _parseArch(t);
-      if (!arch) {
-        va.speak('No reconocí el lenguaje. Prueba: Python, Java, C Sharp, PHP, JavaScript o TypeScript.');
-        return;
-      }
-      const fw    = _parseFramework(t, arch);
-      const db    = _parseDb(t);
-      const infra = _parseInfra(t);
+      const arch = parsedData?.architecture || _parseArch(t);
+      if (!arch) { va.speak('No reconocí el lenguaje. ¿Python, Java, Node, C Sharp o PHP?'); return; }
+
+      const fw    = parsedData?.framework    || _parseFramework(t, arch);
+      const db    = parsedData?.database     || _parseDb(t);
+      const infra = parsedData?.infrastructure || _parseInfra(t);
 
       if (fw || db) {
         _applyVoiceConfig({ architecture: arch, framework: fw, database: db, infrastructure: infra || 'None' });
       } else {
         _clickCard('.arch-card', arch);
-        const label = arch === 'DotNet' ? 'punto NET' : arch;
-        va.speak(`${label}.`, () => setTimeout(() => window.nextStep?.(), 300));
+        va.speak(`${_archLabel(arch)}.`, () => setTimeout(() => window.nextStep?.(), 300));
       }
 
     } else if (step === 2) {
       const arch = ws()?.architecture;
-      const fw   = _parseFramework(t, arch);
-      const db   = _parseDb(t);
+      const fw   = parsedData?.framework || _parseFramework(t, arch);
+      const db   = parsedData?.database  || _parseDb(t);
 
       if (fw) _clickCard('.fw-card', fw);
       if (db) _clickCard('.db-card', db);
@@ -517,87 +538,76 @@
         if (hasBoth) {
           va.speak('Listo.', () => setTimeout(() => window.nextStep?.(), 300));
         } else if (!ws()?.framework) {
-          va.speak(`${db} seleccionada. ¿Qué framework?`);
+          va.speak(`${db} lista. ¿Qué framework?`);
         } else {
-          va.speak(`${fw || ws()?.framework} seleccionado. ¿Qué base de datos?`);
+          va.speak(`${fw || ws()?.framework} listo. ¿Qué base de datos?`);
         }
       } else {
-        va.speak('No entendí. Di el framework y la base de datos, como FastAPI y PostgreSQL.');
+        va.speak('Dime el framework y la base de datos.');
       }
 
     } else if (step === 3) {
-      const infra = _parseInfra(t);
+      const infra = parsedData?.infrastructure || _parseInfra(t);
       if (infra) {
         _clickCard('.infra-card', infra);
-        const label = infra === 'None' ? 'sin contenedores' : infra;
-        va.speak(`${label}.`, () => setTimeout(() => window.nextStep?.(), 300));
+        va.speak(`${_infraLabel(infra)}.`, () => setTimeout(() => window.nextStep?.(), 300));
       } else {
-        va.speak('Di: Docker, Kubernetes, o sin contenedores.');
+        va.speak('Di Docker, Kubernetes, o sin contenedores.');
       }
 
     } else if (step === 5) {
-      const name = text.replace(/[^a-zA-Z0-9\-_\s]/g, '').trim().split(/\s+/).join('-').toLowerCase().slice(0, 60);
-      if (name.length >= 2) {
+      const name = parsedData?.projectName || _extractName(text);
+      if (name && name.length >= 2) {
         const el = document.getElementById('project-name');
         if (el) el.value = name;
-        va.speak(`${name}. Presiona Generar cuando estés listo.`);
+        va.speak(`${name}. Cuando estés listo, presiona Generar.`);
       } else {
-        va.speak('El nombre debe tener al menos dos letras. ¿Cómo lo llamarás?');
+        va.speak('¿Cómo se llamará el proyecto?');
       }
     }
   }
 
   function _applyVoiceConfig(cfg) {
     _applyingConfig = true;
-
-    // Click arch card — triggers renderFrameworkOptions() inside wizard.js
     _clickCard('.arch-card', cfg.architecture);
-
-    // Wait one event-loop tick; renderFrameworkOptions is sync but give DOM a tick
     setTimeout(() => {
       if (cfg.framework) _clickCard('.fw-card', cfg.framework);
       if (cfg.database)  _clickCard('.db-card', cfg.database);
       _clickCard('.infra-card', cfg.infrastructure || 'None');
-      if (cfg.projectName) {
-        const el = document.getElementById('project-name');
-        if (el) el.value = cfg.projectName;
-      }
+      if (cfg.projectName) { const el = document.getElementById('project-name'); if (el) el.value = cfg.projectName; }
 
       const hasAll = !!(ws()?.framework && ws()?.database);
-
       setTimeout(() => {
         const w = ws();
-        if (w) {
-          w.currentStep = hasAll ? 5 : 2;
-          if (hasAll) window.buildSummary?.();
-          window.renderStep?.();
-        }
+        if (w) { w.currentStep = hasAll ? 5 : 2; if (hasAll) window.buildSummary?.(); window.renderStep?.(); }
         _applyingConfig = false;
       }, 60);
 
-      const arch = cfg.architecture || '';
-      const fw   = ws()?.framework  || cfg.framework  || '';
-      const db   = ws()?.database   || cfg.database   || '';
-      const infraLabel = cfg.infrastructure === 'DockerCompose' ? 'Docker Compose'
-        : cfg.infrastructure === 'Kubernetes' ? 'Kubernetes' : 'sin contenedores';
-
+      const arch = cfg.architecture || '', fw = ws()?.framework || cfg.framework || '', db = ws()?.database || cfg.database || '';
       if (hasAll) {
-        va.speak(`${arch} con ${fw}, ${db} y ${infraLabel}. ¿Cómo se llamará el proyecto?`);
+        va.speak(`${_archLabel(arch)} con ${fw}, ${db} y ${_infraLabel(cfg.infrastructure)}. ¿Cómo se llamará el proyecto?`);
       } else {
-        va.speak(`${arch} listo. Elige el framework y la base de datos.`);
+        va.speak(`${_archLabel(arch)} seleccionado. Elige el framework y la base de datos.`);
       }
     }, 80);
   }
 
-  /* ── Parsers ──────────────────────────────────────────────────────────────── */
+  function _clickCard(selector, value) {
+    if (!value) return false;
+    const card = document.querySelector(`${selector}[data-value="${value}"]`);
+    if (card) { card.click(); return true; }
+    return false;
+  }
+
+  /* ── Parsers (fallback when Groq is unavailable) ─────────────────────── */
   function _parseArch(t) {
-    if (/python/.test(t))                                return 'Python';
-    if (/\bjava\b(?!script)/i.test(t))                  return 'Java';
-    if (/php|laravel|symfony/.test(t))                   return 'Php';
-    if (/typescript|typoscript/.test(t))                 return 'TypeScript';
-    if (/javascript|nodejs|node\.?js/.test(t))           return 'JavaScript';
+    if (/python/.test(t)) return 'Python';
+    if (/\bjava\b(?!script)/i.test(t)) return 'Java';
+    if (/php|laravel|symfony/.test(t)) return 'Php';
+    if (/typescript|typoscript/.test(t)) return 'TypeScript';
+    if (/javascript|nodejs|node\.?js/.test(t)) return 'JavaScript';
     if (/\.?net|csharp|c.?sharp|aspnet|dotnet/.test(t)) return 'DotNet';
-    if (/\bnode\b/.test(t))                              return 'JavaScript';
+    if (/\bnode\b/.test(t)) return 'JavaScript';
     return null;
   }
 
@@ -611,25 +621,23 @@
       TypeScript: { 'nestts|nest': 'NestTs', 'nextts|next': 'NextTs' },
     };
     const m = map[arch] || {};
-    for (const [pattern, val] of Object.entries(m)) {
-      if (new RegExp(pattern).test(t)) return val;
-    }
+    for (const [pat, val] of Object.entries(m)) if (new RegExp(pat).test(t)) return val;
     return null;
   }
 
   function _parseDb(t) {
-    if (/mysql/.test(t))              return 'MySQL';
-    if (/mongo/.test(t))              return 'MongoDB';
-    if (/redis/.test(t))              return 'Redis';
-    if (/sqlite/.test(t))             return 'SQLite';
-    if (/sql.?server|mssql/.test(t))  return 'SqlServer';
-    if (/postgres/.test(t))           return 'PostgreSQL';
+    if (/mysql/.test(t)) return 'MySQL';
+    if (/mongo/.test(t)) return 'MongoDB';
+    if (/redis/.test(t)) return 'Redis';
+    if (/sqlite/.test(t)) return 'SQLite';
+    if (/sql.?server|mssql/.test(t)) return 'SqlServer';
+    if (/postgres/.test(t)) return 'PostgreSQL';
     return null;
   }
 
   function _parseInfra(t) {
-    if (/kubernetes|k8s/.test(t))          return 'Kubernetes';
-    if (/docker/.test(t))                  return 'DockerCompose';
+    if (/kubernetes|k8s/.test(t)) return 'Kubernetes';
+    if (/docker/.test(t)) return 'DockerCompose';
     if (/sin|none|no\b|solo|local/.test(t)) return 'None';
     return null;
   }
