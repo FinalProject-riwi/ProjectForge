@@ -90,6 +90,11 @@ builder.Services.AddHttpClient("Groq", c =>
     c.BaseAddress = new Uri("https://api.groq.com");
     c.Timeout = TimeSpan.FromSeconds(15); // voice needs to be fast
 });
+builder.Services.AddHttpClient("ElevenLabs", c =>
+{
+    c.BaseAddress = new Uri("https://api.elevenlabs.io");
+    c.Timeout = TimeSpan.FromSeconds(30);
+});
 
 // ─── Sesión ───────────────────────────────────────────────────────────────────
 builder.Services.AddDistributedMemoryCache();

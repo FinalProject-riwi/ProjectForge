@@ -485,6 +485,10 @@ function collectVpsData() {
   return rows;
 }
 
+// ── Expose state for voice assistant (const is not a window property) ─────────
+window._wizardState       = state;
+window._frameworkCatalog  = frameworkCatalog;
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 initializeArchitectureCards();
 initializeDatabaseCards();

@@ -18,6 +18,8 @@ services:
       - OpenAI__ApiKey=${OPENAI_API_KEY:-PLACEHOLDER}
       - Gemini__ApiKey=${GEMINI_API_KEY:-PLACEHOLDER}
       - Groq__ApiKey=${GROQ_API_KEY:-PLACEHOLDER}
+      - ElevenLabs__ApiKey=${ELEVENLABS_API_KEY:-PLACEHOLDER}
+      - ElevenLabs__VoiceId=${ELEVENLABS_VOICE_ID:-21m00Tcm4TlvDq8ikWAM}
       - Encryption__Key=${ENCRYPTION_KEY:-DefaultKeyChangeThisInProduction32}
       - Generation__WorkspacePath=/workspaces
       - ASPNETCORE_DataProtection__KeysPath=/dataprotection-keys
@@ -49,6 +51,8 @@ services:
       - OpenAI__ApiKey=${OPENAI_API_KEY:-PLACEHOLDER}
       - Gemini__ApiKey=${GEMINI_API_KEY:-PLACEHOLDER}
       - Groq__ApiKey=${GROQ_API_KEY:-PLACEHOLDER}
+      - ElevenLabs__ApiKey=${ELEVENLABS_API_KEY:-PLACEHOLDER}
+      - ElevenLabs__VoiceId=${ELEVENLABS_VOICE_ID:-21m00Tcm4TlvDq8ikWAM}
       - Encryption__Key=${ENCRYPTION_KEY:-DefaultKeyChangeThisInProduction32}
       - Generation__WorkspacePath=/workspaces
     volumes:

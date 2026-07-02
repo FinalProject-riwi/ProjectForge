@@ -26,15 +26,20 @@ public class WizardController : Controller
     private readonly ICreateProjectUseCase _createProject;
     private readonly IProjectGeneratorService _generator;
     private readonly IVoiceParsingService _voiceParser;
+    private readonly IConfiguration _configuration;
+    private readonly IHttpClientFactory _httpClientFactory;
 
     public WizardController(
         AppDbContext db, IAiSuggestionService ai,
         ICreateProjectUseCase createProject,
         IProjectGeneratorService generator,
-        IVoiceParsingService voiceParser)
+        IVoiceParsingService voiceParser,
+        IConfiguration configuration,
+        IHttpClientFactory httpClientFactory)
     {
         _db = db; _ai = ai; _createProject = createProject;
         _generator = generator; _voiceParser = voiceParser;
+        _configuration = configuration; _httpClientFactory = httpClientFactory;
     }
 
     // ── GET /wizard ────────────────────────────────────────────────────────────
@@ -325,6 +330,92 @@ public class WizardController : Controller
             infrastructure = result.Infrastructure,
             projectName    = result.ProjectName
         });
+    }
+
+    // ── ElevenLabs TTS proxy ──────────────────────────────────────────────────────
+    [HttpGet("api/tts")]
+    [IgnoreAntiforgeryToken]
+    public async Task<IActionResult> TextToSpeech([FromQuery] string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return BadRequest();
+        text = text.Length > 500 ? text[..500] : text;
+
+        var apiKey  = _configuration["ElevenLabs:ApiKey"] ?? "";
+        var voiceId = _configuration["ElevenLabs:VoiceId"] ?? "21m00Tcm4TlvDq8ikWAM";
+
+        if (string.IsNullOrWhiteSpace(apiKey) || apiKey is "PLACEHOLDER")
+            return StatusCode(503, new { error = "ElevenLabs not configured" });
+
+        try
+        {
+            var client  = _httpClientFactory.CreateClient("ElevenLabs");
+            var payload = new
+            {
+                text,
+                model_id = "eleven_multilingual_v2",
+                voice_settings = new { stability = 0.45, similarity_boost = 0.80, style = 0.25, use_speaker_boost = true }
+            };
+            using var req2 = new HttpRequestMessage(HttpMethod.Post, $"v1/text-to-speech/{voiceId}");
+            req2.Headers.Add("xi-api-key", apiKey);
+            req2.Content = System.Net.Http.Json.JsonContent.Create(payload);
+
+            using var resp = await client.SendAsync(req2);
+            if (!resp.IsSuccessStatusCode) return StatusCode(502);
+
+            var audio = await resp.Content.ReadAsByteArrayAsync();
+            Response.Headers.CacheControl = "no-store";
+            return File(audio, "audio/mpeg");
+        }
+        catch
+        {
+            return StatusCode(502);
+        }
+    }
+
+    // ── Voice auto-generate: parsed config → WizardConfig + Project ──────────────
+    [HttpPost("api/voice-generate")]
+    [IgnoreAntiforgeryToken]
+    public async Task<IActionResult> VoiceGenerate([FromBody] VoiceGenerateDto req)
+    {
+        if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+            return Unauthorized();
+
+        var userExists = await _db.Users.AnyAsync(u => u.Id == userId);
+        if (!userExists) return Unauthorized();
+
+        if (string.IsNullOrWhiteSpace(req.ProjectName))
+            return BadRequest(new { error = "Project name required" });
+
+        var projectName = System.Text.RegularExpressions.Regex.Replace(req.ProjectName.Trim(), @"[^\w\-]", "-");
+        if (projectName.Length < 2) return BadRequest(new { error = "Invalid project name" });
+
+        var architecture = TryParseArchitecture(req.Architecture, out var a)                ? a : ArchitectureType.DotNet;
+        var framework    = Enum.TryParse<FrameworkType>(req.Framework, out var f)            ? f : FrameworkType.AspNetCoreWebApi;
+        var database     = Enum.TryParse<DatabaseType>(req.Database, out var d)              ? d : DatabaseType.PostgreSQL;
+        var infrastructure = Enum.TryParse<InfrastructureType>(req.Infrastructure, out var i) ? i : InfrastructureType.None;
+
+        var config = new WizardConfig
+        {
+            Architecture          = architecture,
+            Framework             = framework,
+            FrameworkVersion      = "latest",
+            Database              = database,
+            Infrastructure        = infrastructure,
+            DeploymentTarget      = DeploymentTarget.Local,
+            DesignPatternsJson    = JsonSerializer.Serialize(new List<string>()),
+            LibrariesJson         = JsonSerializer.Serialize(new List<string>()),
+            AdditionalOptionsJson = JsonSerializer.Serialize(new { createPrivateRepo = false }),
+            CreatedAt             = DateTime.UtcNow,
+        };
+
+        _db.WizardConfigs.Add(config);
+        await _db.SaveChangesAsync();
+
+        var project = await _createProject.ExecuteAsync(
+            new CreateProjectRequest(userId, config.Id, projectName, null),
+            HttpContext.RequestAborted);
+
+        return Ok(new { success = true, projectId = project.Id, redirectUrl = $"/wizard/generate/{project.Id}" });
     }
 
     [HttpPost("api/suggest")]
@@ -623,4 +714,13 @@ public class PreviewRequestDto
 public class VoiceParseRequestDto
 {
     public string Transcript { get; set; } = "";
+}
+
+public class VoiceGenerateDto
+{
+    public string Architecture  { get; set; } = "";
+    public string Framework     { get; set; } = "";
+    public string Database      { get; set; } = "";
+    public string Infrastructure { get; set; } = "None";
+    public string ProjectName   { get; set; } = "";
 }
