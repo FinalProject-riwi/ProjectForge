@@ -37,7 +37,7 @@ public partial class ProjectGeneratorService
         await EmitLogAsync(project, "Scaffold", "✅ Estructura Python generada", ct: ct);
     }
 
-    private static async Task ScaffoldFastApiAsync(string path, string name, CancellationToken ct)
+    internal static async Task ScaffoldFastApiAsync(string path, string name, CancellationToken ct)
     {
         var appDir = Path.Combine(path, "app");
         Directory.CreateDirectory(Path.Combine(appDir, "api", "v1"));
@@ -75,7 +75,7 @@ public partial class ProjectGeneratorService
             "__pycache__/\n*.pyc\nvenv/\n.env\n.env.*\n*.egg-info/\ndist/\n");
     }
 
-    private static async Task ScaffoldDjangoAsync(string path, string name, DatabaseType db, CancellationToken ct)
+    internal static async Task ScaffoldDjangoAsync(string path, string name, DatabaseType db, CancellationToken ct)
     {
         var projectDir = Path.Combine(path, name);
         Directory.CreateDirectory(projectDir);
@@ -147,7 +147,7 @@ public partial class ProjectGeneratorService
             "__pycache__/\n*.pyc\nvenv/\n.env\ndb.sqlite3\n");
     }
 
-    private static async Task ScaffoldFlaskAsync(string path, string name, CancellationToken ct)
+    internal static async Task ScaffoldFlaskAsync(string path, string name, CancellationToken ct)
     {
         Directory.CreateDirectory(Path.Combine(path, "app", "routes"));
         Directory.CreateDirectory(Path.Combine(path, "app", "models"));
@@ -225,7 +225,7 @@ public partial class ProjectGeneratorService
         await EmitLogAsync(project, "Scaffold", "✅ Estructura Java generada", ct: ct);
     }
 
-    private static async Task ScaffoldSpringBootAsync(
+    internal static async Task ScaffoldSpringBootAsync(
         string path, string className, string artifact, string bootVersion, CancellationToken ct)
     {
         var pkg = "com.example." + ToJavaPackageSegment(artifact);
@@ -284,7 +284,7 @@ public partial class ProjectGeneratorService
             "target/\n*.class\n*.jar\n*.war\n.idea/\n*.iml\n");
     }
 
-    private static async Task ScaffoldQuarkusAsync(
+    internal static async Task ScaffoldQuarkusAsync(
         string path, string className, string artifact, CancellationToken ct)
     {
         var pkg = "com.example." + ToJavaPackageSegment(artifact);
@@ -340,7 +340,7 @@ public partial class ProjectGeneratorService
         await WriteAsync(Path.Combine(path, "src", "main", "java", pkgPath, "GreetingResource.java"), ct, resource);
     }
 
-    private static async Task ScaffoldMicronautAsync(
+    internal static async Task ScaffoldMicronautAsync(
         string path, string className, string artifact, CancellationToken ct)
     {
         var pkg = "com.example." + ToJavaPackageSegment(artifact);
@@ -390,7 +390,7 @@ public partial class ProjectGeneratorService
 
     // ─── Utility ──────────────────────────────────────────────────────────────
 
-    private static async Task WriteAsync(string filePath, CancellationToken ct, string content)
+    internal static async Task WriteAsync(string filePath, CancellationToken ct, string content)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
         await File.WriteAllTextAsync(filePath, content, ct);
@@ -398,7 +398,7 @@ public partial class ProjectGeneratorService
 
     // A Java package segment can't start with a digit (e.g. artifact "3-tier-app" → "3tierapp"
     // would produce the illegal package "com.example.3tierapp").
-    private static string ToJavaPackageSegment(string artifact)
+    internal static string ToJavaPackageSegment(string artifact)
     {
         var segment = artifact.Replace("-", "");
         if (segment.Length == 0 || char.IsDigit(segment[0]))
@@ -408,14 +408,14 @@ public partial class ProjectGeneratorService
 
     // ─── Django: DB-aware settings ────────────────────────────────────────────
 
-    private static string BuildDjangoRequirementsTxt(DatabaseType db)
+    internal static string BuildDjangoRequirementsTxt(DatabaseType db)
     {
         var packages = new List<string> { "Django>=5.0", "djangorestframework>=3.15.0", "python-dotenv>=1.0.0" };
         packages.AddRange(GetDjangoDbPackages(db));
         return string.Join("\n", packages) + "\n";
     }
 
-    private static IReadOnlyList<string> GetDjangoDbPackages(DatabaseType db) => db switch
+    internal static IReadOnlyList<string> GetDjangoDbPackages(DatabaseType db) => db switch
     {
         DatabaseType.PostgreSQL => new[] { "psycopg2-binary>=2.9.9" },
         DatabaseType.MySQL      => new[] { "mysqlclient>=2.2.0" },
@@ -431,7 +431,7 @@ public partial class ProjectGeneratorService
     // Fixes a real generation bug: settings.py used to hardcode sqlite3 regardless of the
     // database picked in the wizard, so selecting Postgres/MySQL/SqlServer for a Django
     // project silently produced a SQLite app instead.
-    private static string BuildDjangoDatabasesBlock(DatabaseType db) => db switch
+    internal static string BuildDjangoDatabasesBlock(DatabaseType db) => db switch
     {
         DatabaseType.PostgreSQL =>
             "DATABASES = {\n" +
@@ -479,7 +479,7 @@ public partial class ProjectGeneratorService
             "}\n"
     };
 
-    private static string BuildDjangoExtrasBlock(DatabaseType db) => db switch
+    internal static string BuildDjangoExtrasBlock(DatabaseType db) => db switch
     {
         DatabaseType.MongoDB =>
             "\n# MongoDB is used as a document store via pymongo; Django's ORM (DATABASES above)\n" +
@@ -496,7 +496,7 @@ public partial class ProjectGeneratorService
         _ => "\n"
     };
 
-    private static string BuildDjangoEnvFile(DatabaseType db) => db switch
+    internal static string BuildDjangoEnvFile(DatabaseType db) => db switch
     {
         DatabaseType.PostgreSQL => "SECRET_KEY=change-me-in-production\nDEBUG=True\nDB_HOST=db\nDB_PORT=5432\nDB_NAME=app_db\nDB_USER=postgres\nDB_PASSWORD=secret\n",
         DatabaseType.MySQL      => "SECRET_KEY=change-me-in-production\nDEBUG=True\nDB_HOST=db\nDB_PORT=3306\nDB_NAME=app_db\nDB_USER=root\nDB_PASSWORD=secret\n",
@@ -510,7 +510,7 @@ public partial class ProjectGeneratorService
     // underscores only, never starting with a digit. Project names are allowed to contain
     // hyphens (e.g. "my-app"), but "import my-app" / "my-app.settings" is a Python syntax error —
     // Django's manage.py builds exactly that import path from this name.
-    private static string ToPythonIdentifier(string name, string fallback = "app")
+    internal static string ToPythonIdentifier(string name, string fallback = "app")
     {
         var chars = name.Select(c => char.IsLetterOrDigit(c) ? char.ToLowerInvariant(c) : '_').ToArray();
         var collapsed = System.Text.RegularExpressions.Regex.Replace(new string(chars), "_+", "_").Trim('_');

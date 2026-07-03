@@ -13,6 +13,8 @@
     </PackageReference>
     <PackageReference Include="Octokit" Version="9.*" />
     <PackageReference Include="SSH.NET" Version="2024.*" />
+    <!-- Lets RoutedShellExecutor call out to the per-language worker containers over HTTP -->
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.*" />
     <ProjectReference Include="..\ProjectForge.Core\ProjectForge.Core.csproj" />
     <ProjectReference Include="..\ProjectForge.Application\ProjectForge.Application.csproj" />
   </ItemGroup>

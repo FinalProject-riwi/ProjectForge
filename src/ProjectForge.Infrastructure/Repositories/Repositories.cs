@@ -62,21 +62,30 @@ public class TemplateRepository : Repository<ProjectTemplate>, ITemplateReposito
 
     public async Task<ProjectTemplate?> GetTemplateAsync(
         ArchitectureType arch, string templateType,
-        DatabaseType? db = null, InfrastructureType? infra = null)
+        DatabaseType? db = null, InfrastructureType? infra = null, FrameworkType? framework = null)
     {
         var q = _set.Where(t => t.Architecture == arch && t.TemplateType == templateType && t.IsActive);
 
-        if (db.HasValue || infra.HasValue)
+        if (db.HasValue || infra.HasValue || framework.HasValue)
         {
+            // Boost rows matching Database/Infrastructure/Framework, newest Version wins among
+            // those — but several seeders insert rows that share Architecture+TemplateType+Database
+            // and only differ by Framework (previously not filtered here at all), and some go
+            // further and insert outright duplicate Framework+Database rows with different
+            // Content. ThenByDescending(Id) doesn't resolve which duplicate is "correct" content,
+            // but it makes the pick deterministic/reproducible instead of depending on the SQL
+            // provider's physical row order.
             q = q
                 .OrderByDescending(t => db.HasValue && t.Database == db)
                 .ThenByDescending(t => infra.HasValue && t.Infrastructure == infra)
-                .ThenByDescending(t => t.Version);
+                .ThenByDescending(t => framework.HasValue && t.Framework == framework)
+                .ThenByDescending(t => t.Version)
+                .ThenByDescending(t => t.Id);
 
             return await q.FirstOrDefaultAsync();
         }
 
-        return await q.OrderByDescending(t => t.Version).FirstOrDefaultAsync();
+        return await q.OrderByDescending(t => t.Version).ThenByDescending(t => t.Id).FirstOrDefaultAsync();
     }
 
     public async Task<IEnumerable<ProjectTemplate>> GetInfraTemplatesAsync(

@@ -40,7 +40,13 @@ builder.Services.AddScoped<IAiSuggestionCacheRepository, AiSuggestionCacheReposi
 builder.Services.AddScoped<IGenerationHubNotifier, NoOpGenerationHubNotifier>();
 
 // ─── Servicios ────────────────────────────────────────────────────────────────
-builder.Services.AddScoped<IShellExecutor, ShellExecutor>();
+// Same routed executor as the Web app — this ALSO fixes API's own generation feature: its
+// Dockerfile never had any language toolchain installed (slim ASP.NET runtime, only git/curl),
+// so ShellExecutor's local "dotnet new"/"npm"/etc. calls were guaranteed to fail here before;
+// with worker containers doing the real work, API's generation endpoint starts working too.
+builder.Services.AddScoped<ShellExecutor>();
+builder.Services.AddHttpClient("projectforge-worker");
+builder.Services.AddScoped<IShellExecutor, RoutedShellExecutor>();
 builder.Services.AddScoped<IGitHubService, GitHubService>();
 builder.Services.AddScoped<IEncryptionService, AesEncryptionService>();
 builder.Services.AddScoped<IAiSuggestionService, MultiProviderAiSuggestionService>();

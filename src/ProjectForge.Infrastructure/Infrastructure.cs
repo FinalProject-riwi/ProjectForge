@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Net.Http.Json;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
@@ -88,6 +89,93 @@ public class ShellExecutor : IShellExecutor
             CreateNoWindow = true
         };
     }
+}
+
+// ─── Routed Shell Executor (local process vs. per-language worker container) ─────────────────
+
+/// <summary>
+/// Replaces ShellExecutor as the registered IShellExecutor: instead of always spawning
+/// dotnet/npm/composer/python as a child process of THIS app (which used to mean the web/api
+/// container had to have every language toolchain installed at once), it routes each command to
+/// a small per-language worker container over HTTP based on the command's first token, and only
+/// falls back to running locally for tools that don't have a worker configured (git, or any
+/// command when no "Workers:*" URL is set at all — e.g. local "dotnet run" dev without Docker,
+/// which keeps working exactly like it did before this class existed).
+/// </summary>
+public class RoutedShellExecutor : IShellExecutor
+{
+    private static readonly TimeSpan WorkerCallTimeout = TimeSpan.FromMinutes(11); // a bit longer than the worker's own 10-minute internal timeout, so the worker's response wins the race
+
+    private readonly ShellExecutor _local;
+    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly IConfiguration _configuration;
+    private readonly ILogger<RoutedShellExecutor> _logger;
+
+    public RoutedShellExecutor(
+        ShellExecutor local,
+        IHttpClientFactory httpClientFactory,
+        IConfiguration configuration,
+        ILogger<RoutedShellExecutor> logger)
+    {
+        _local = local;
+        _httpClientFactory = httpClientFactory;
+        _configuration = configuration;
+        _logger = logger;
+    }
+
+    public async Task<ShellResult> RunAsync(string command, string workingDirectory, CancellationToken ct = default)
+    {
+        var workerBaseUrl = ResolveWorkerBaseUrl(command);
+        if (workerBaseUrl == null)
+            return await _local.RunAsync(command, workingDirectory, ct);
+
+        try
+        {
+            var client = _httpClientFactory.CreateClient("projectforge-worker");
+            client.Timeout = WorkerCallTimeout;
+
+            using var response = await client.PostAsJsonAsync(
+                $"{workerBaseUrl.TrimEnd('/')}/execute",
+                new WorkerExecuteRequest(command, workingDirectory), ct);
+            response.EnsureSuccessStatusCode();
+
+            var result = await response.Content.ReadFromJsonAsync<WorkerExecuteResponse>(cancellationToken: ct)
+                ?? throw new InvalidOperationException("El worker devolvió una respuesta vacía.");
+            return new ShellResult(result.ExitCode, result.Stdout, result.Stderr);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            _logger.LogWarning(ex,
+                "No se pudo contactar al worker en {Url} para el comando '{Command}'; ejecutando localmente como respaldo.",
+                workerBaseUrl, command);
+            return await _local.RunAsync(command, workingDirectory, ct);
+        }
+    }
+
+    public IAsyncEnumerable<string> StreamAsync(string command, string workingDirectory, CancellationToken ct = default) =>
+        // Streaming isn't currently invoked anywhere in the generation pipeline (log tailing goes
+        // through EmitLogAsync/SignalR instead) — keeping this local-only avoids adding chunked
+        // HTTP streaming to every worker for a code path nothing exercises today.
+        _local.StreamAsync(command, workingDirectory, ct);
+
+    private string? ResolveWorkerBaseUrl(string command)
+    {
+        var firstToken = command.TrimStart().Split(' ', 2)[0];
+        var configKey = firstToken switch
+        {
+            "dotnet" => "Workers:DotNet",
+            "npm" or "npx" or "nest" or "node" => "Workers:Node",
+            "composer" => "Workers:Php",
+            "python" or "python3" or "pip" => "Workers:Python",
+            "java" or "mvn" => "Workers:Java",
+            _ => null
+        };
+
+        return configKey == null ? null : _configuration[configKey];
+    }
+
+    private sealed record WorkerExecuteRequest(string Command, string WorkingDirectory);
+    private sealed record WorkerExecuteResponse(int ExitCode, string Stdout, string Stderr);
 }
 
 // ─── GitHub Service ───────────────────────────────────────────────────────────

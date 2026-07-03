@@ -4,7 +4,7 @@ namespace ProjectForge.Application.Services;
 
 public partial class ProjectGeneratorService
 {
-    private static IReadOnlyList<(string RelativePath, string Content)> BuildDotNetPatternFiles(
+    internal static IReadOnlyList<(string RelativePath, string Content)> BuildDotNetPatternFiles(
         FrameworkType framework, DatabaseType database, string pattern)
     {
         return NormalizePatternToken(pattern) switch
@@ -334,7 +334,7 @@ public record ReleaseInventoryCommand(Guid ReservationId) : IRequest;
     //  - BlazorWasm: runs entirely in the browser sandbox with no raw socket access, so it can
     //    never open an EF Core/Npgsql/SqlClient/Mongo/Redis connection no matter which database
     //    was picked — data access has to go through an HTTP API instead.
-    private static IReadOnlyList<(string RelativePath, string Content)> BuildDotNetRepositoryPatternFiles(
+    internal static IReadOnlyList<(string RelativePath, string Content)> BuildDotNetRepositoryPatternFiles(
         FrameworkType framework, DatabaseType database)
     {
         if (framework == FrameworkType.BlazorWasm)
@@ -387,7 +387,7 @@ public class BaseRepository<T>(DbContext context) : IRepository<T> where T : cla
         };
     }
 
-    private static IReadOnlyList<(string RelativePath, string Content)> BuildDotNetHexagonalPatternFiles(
+    internal static IReadOnlyList<(string RelativePath, string Content)> BuildDotNetHexagonalPatternFiles(
         FrameworkType framework, DatabaseType database)
     {
         if (framework == FrameworkType.BlazorWasm)
@@ -451,7 +451,7 @@ public class ItemEfAdapter(AppDbContext ctx) : IItemPort
         };
     }
 
-    private static IReadOnlyList<(string RelativePath, string Content)> BuildDotNetHttpRepositoryFiles() => new[]
+    internal static IReadOnlyList<(string RelativePath, string Content)> BuildDotNetHttpRepositoryFiles() => new[]
     {
         ("src/Services/IItemService.cs", """
 namespace Services;
@@ -492,7 +492,7 @@ public class ItemService(HttpClient http) : IItemService
 """),
     };
 
-    private static IReadOnlyList<(string RelativePath, string Content)> BuildDotNetMongoRepositoryFiles() => new[]
+    internal static IReadOnlyList<(string RelativePath, string Content)> BuildDotNetMongoRepositoryFiles() => new[]
     {
         ("src/Domain/Item.cs", """
 namespace Domain;
@@ -550,7 +550,7 @@ public class ItemRepository(IMongoDatabase database) : IItemRepository
 """),
     };
 
-    private static IReadOnlyList<(string RelativePath, string Content)> BuildDotNetRedisRepositoryFiles() => new[]
+    internal static IReadOnlyList<(string RelativePath, string Content)> BuildDotNetRedisRepositoryFiles() => new[]
     {
         ("src/Domain/Item.cs", """
 namespace Domain;
@@ -590,7 +590,7 @@ namespace Infrastructure.Repositories;
 public class ItemRepository(IConnectionMultiplexer redis) : IItemRepository
 {
     private readonly IDatabase _db = redis.GetDatabase();
-    private static string Key(string id) => $"item:{id}";
+    internal static string Key(string id) => $"item:{id}";
 
     public async Task<Item?> GetByIdAsync(string id, CancellationToken ct = default)
     {
@@ -621,7 +621,7 @@ public class ItemRepository(IConnectionMultiplexer redis) : IItemRepository
 """),
     };
 
-    private static IReadOnlyList<(string RelativePath, string Content)> BuildJavaPatternFiles(
+    internal static IReadOnlyList<(string RelativePath, string Content)> BuildJavaPatternFiles(
         FrameworkType framework, string pattern)
     {
         return NormalizePatternToken(pattern) switch
@@ -885,7 +885,7 @@ public class OrderSaga {
         };
     }
 
-    private static IReadOnlyList<(string RelativePath, string Content)> BuildPythonPatternFiles(
+    internal static IReadOnlyList<(string RelativePath, string Content)> BuildPythonPatternFiles(
         FrameworkType framework, string pattern)
     {
         return NormalizePatternToken(pattern) switch

@@ -34,7 +34,7 @@ public partial class ProjectGeneratorService
 
         if (cfg.Infrastructure == InfrastructureType.DockerCompose && !isPhpMicroservices)
         {
-            var tpl = await _templates.GetTemplateAsync(cfg.Architecture, "compose", cfg.Database, InfrastructureType.DockerCompose);
+            var tpl = await _templates.GetTemplateAsync(cfg.Architecture, "compose", cfg.Database, InfrastructureType.DockerCompose, cfg.Framework);
             if (tpl != null)
             {
                 await File.WriteAllTextAsync(Path.Combine(path, "docker-compose.yml"), InterpolateTemplate(tpl.Content, vars), ct);
@@ -52,7 +52,7 @@ public partial class ProjectGeneratorService
             var dockerfilePath = Path.Combine(path, "Dockerfile");
             if (!File.Exists(dockerfilePath))
             {
-                var dockerfile = await _templates.GetTemplateAsync(cfg.Architecture, "dockerfile", cfg.Database);
+                var dockerfile = await _templates.GetTemplateAsync(cfg.Architecture, "dockerfile", cfg.Database, framework: cfg.Framework);
                 if (dockerfile != null)
                 {
                     await File.WriteAllTextAsync(dockerfilePath, InterpolateTemplate(dockerfile.Content, vars), ct);
@@ -175,7 +175,7 @@ public partial class ProjectGeneratorService
         }
     }
 
-    private static DatabaseType? GetSecondaryDatabase(WizardConfig cfg)
+    internal static DatabaseType? GetSecondaryDatabase(WizardConfig cfg)
     {
         if (string.IsNullOrWhiteSpace(cfg.AdditionalOptionsJson))
             return null;
@@ -191,7 +191,7 @@ public partial class ProjectGeneratorService
         return null;
     }
 
-    private static (string EnvKey, string ConnStr) GetSecondaryDbConnectionInfo(DatabaseType db) => db switch
+    internal static (string EnvKey, string ConnStr) GetSecondaryDbConnectionInfo(DatabaseType db) => db switch
     {
         DatabaseType.Redis      => ("REDIS_URL",              "redis://db2:6379"),
         DatabaseType.MongoDB    => ("MONGODB_SECONDARY_URI",  "mongodb://admin:secret@db2:27017/{{DB_NAME}}_secondary"),
@@ -202,7 +202,7 @@ public partial class ProjectGeneratorService
         _                       => ("SECONDARY_DATABASE_URL", "")
     };
 
-    private static string BuildSecondaryDbOverride(
+    internal static string BuildSecondaryDbOverride(
         DatabaseType db, string envKey, string interpolatedConn, Dictionary<string, string> vars)
     {
         var serviceBlock = BuildSecondaryServiceBlock(db, vars);
@@ -219,7 +219,7 @@ public partial class ProjectGeneratorService
             serviceBlock;
     }
 
-    private static string BuildSecondaryServiceBlock(DatabaseType db, Dictionary<string, string> vars)
+    internal static string BuildSecondaryServiceBlock(DatabaseType db, Dictionary<string, string> vars)
     {
         var dbName = vars.GetValueOrDefault("DB_NAME", "app_db");
         return db switch
@@ -511,13 +511,13 @@ framework:
         await EmitLogAsync(project, "Templates", "✅ Symfony configurado para Redis", ct: ct);
     }
 
-    private static bool HasSelectedPattern(WizardConfig cfg, string patternName)
+    internal static bool HasSelectedPattern(WizardConfig cfg, string patternName)
     {
         var selectedPatterns = JsonSerializer.Deserialize<List<string>>(cfg.DesignPatternsJson) ?? [];
         return selectedPatterns.Any(p => NormalizePatternToken(p) == NormalizePatternToken(patternName));
     }
 
-    private static async Task UpdateLaravelEnvironmentAsync(
+    internal static async Task UpdateLaravelEnvironmentAsync(
         string path,
         string fileName,
         IReadOnlyDictionary<string, string> values,
@@ -534,7 +534,7 @@ framework:
         await File.WriteAllTextAsync(envPath, env, ct);
     }
 
-    private static async Task UpdateLaravelDatabaseConfigAsync(string path, string defaultConnection, CancellationToken ct)
+    internal static async Task UpdateLaravelDatabaseConfigAsync(string path, string defaultConnection, CancellationToken ct)
     {
         var configPath = Path.Combine(path, "config", "database.php");
         if (!File.Exists(configPath))
@@ -587,7 +587,7 @@ framework:
         await File.WriteAllTextAsync(configPath, content, ct);
     }
 
-    private static string SetEnvLine(string content, string key, string value)
+    internal static string SetEnvLine(string content, string key, string value)
     {
         var prefix = key + "=";
         var lines = content
@@ -635,7 +635,7 @@ framework:
         }
     }
 
-    private static IEnumerable<string> GetInstallCommands(ArchitectureType arch, FrameworkType fw, List<string> libs) =>
+    internal static IEnumerable<string> GetInstallCommands(ArchitectureType arch, FrameworkType fw, List<string> libs) =>
         arch switch
         {
             ArchitectureType.DotNet => libs.Select(l => $"dotnet add package {l}"),
@@ -651,7 +651,7 @@ framework:
             _ => Enumerable.Empty<string>()
         };
 
-    private static IEnumerable<string> GetImplicitLibraries(WizardConfig cfg)
+    internal static IEnumerable<string> GetImplicitLibraries(WizardConfig cfg)
     {
         var libraries = new List<string>();
         var selectedPatterns = JsonSerializer.Deserialize<List<string>>(cfg.DesignPatternsJson) ?? [];
@@ -833,7 +833,7 @@ framework:
         }
     }
 
-    private static bool ShouldCreatePrivateRepo(WizardConfig cfg)
+    internal static bool ShouldCreatePrivateRepo(WizardConfig cfg)
     {
         if (string.IsNullOrWhiteSpace(cfg.AdditionalOptionsJson))
             return false;
@@ -852,14 +852,14 @@ framework:
 
     // ─── Utilidades ───────────────────────────────────────────────────────────
 
-    private static string InterpolateTemplate(string content, Dictionary<string, string> vars)
+    internal static string InterpolateTemplate(string content, Dictionary<string, string> vars)
     {
         foreach (var (k, v) in vars)
             content = content.Replace($"{{{{{k}}}}}", v);
         return content;
     }
 
-    private static int GetDefaultDbPort(DatabaseType db) => db switch
+    internal static int GetDefaultDbPort(DatabaseType db) => db switch
     {
         DatabaseType.MySQL => 3306,
         DatabaseType.PostgreSQL => 5432,
@@ -869,7 +869,7 @@ framework:
         _ => 5432
     };
 
-    private static int GetDefaultAppPort(ArchitectureType architecture, FrameworkType framework) =>
+    internal static int GetDefaultAppPort(ArchitectureType architecture, FrameworkType framework) =>
         architecture switch
         {
             ArchitectureType.JavaScript or ArchitectureType.TypeScript => 3000,

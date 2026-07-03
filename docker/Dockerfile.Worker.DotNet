@@ -1,0 +1,25 @@
+# ─── Stage 1: Build the worker app ────────────────────────────────────────────
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /src
+
+COPY src/ProjectForge.Worker/ProjectForge.Worker.csproj src/ProjectForge.Worker/
+RUN dotnet restore src/ProjectForge.Worker/ProjectForge.Worker.csproj
+
+COPY src/ProjectForge.Worker/ src/ProjectForge.Worker/
+RUN dotnet publish src/ProjectForge.Worker/ProjectForge.Worker.csproj \
+    -c Release -o /app/publish /p:UseAppHost=false
+
+# ─── Stage 2: Runtime ─────────────────────────────────────────────────────────
+# This worker's own toolchain IS the .NET SDK, so unlike the other workers there's nothing extra
+# to apt-get install on top — the base image already has "dotnet new"/"dotnet add package"/etc.
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS final
+WORKDIR /app
+
+# curl is only here for the docker-compose healthcheck — the SDK base image doesn't include it.
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && dotnet new install Microsoft.AspNetCore.SpaTemplates 2>/dev/null || true
+
+COPY --from=build /app/publish .
+EXPOSE 8080
+ENTRYPOINT ["dotnet", "ProjectForge.Worker.dll"]

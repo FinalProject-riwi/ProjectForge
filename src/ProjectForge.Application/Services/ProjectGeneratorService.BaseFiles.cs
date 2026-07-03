@@ -83,7 +83,7 @@ public partial class ProjectGeneratorService
         await EmitLogAsync(project, "Scaffold", "✅ Archivos base Java generados", ct: ct);
     }
 
-    private static string BuildJavaDockerfile() => """
+    internal static string BuildJavaDockerfile() => """
 FROM maven:3.9-eclipse-temurin-21 AS build
 WORKDIR /app
 COPY . .
@@ -96,7 +96,7 @@ EXPOSE 8080
 ENTRYPOINT ["java","-jar","app.jar"]
 """;
 
-    private static string BuildJavaEnvFile(DatabaseType db, string dbName) => db switch
+    internal static string BuildJavaEnvFile(DatabaseType db, string dbName) => db switch
     {
         DatabaseType.PostgreSQL  => $"SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/{dbName}\nSPRING_DATASOURCE_USERNAME=postgres\nSPRING_DATASOURCE_PASSWORD=secret\n",
         DatabaseType.MySQL       => $"SPRING_DATASOURCE_URL=jdbc:mysql://db:3306/{dbName}\nSPRING_DATASOURCE_USERNAME=root\nSPRING_DATASOURCE_PASSWORD=secret\n",
@@ -107,7 +107,7 @@ ENTRYPOINT ["java","-jar","app.jar"]
         _                        => ""
     };
 
-    private static async Task InjectJavaDbDependencyAsync(string pomPath, DatabaseType db, CancellationToken ct)
+    internal static async Task InjectJavaDbDependencyAsync(string pomPath, DatabaseType db, CancellationToken ct)
     {
         var content = await File.ReadAllTextAsync(pomPath, ct);
         var marker  = "</dependencies>";
@@ -242,7 +242,7 @@ ENTRYPOINT ["java","-jar","app.jar"]
         await EmitLogAsync(project, "Scaffold", "✅ Archivos base Python generados", ct: ct);
     }
 
-    private static string BuildFastApiMain(DatabaseType db, string dbName)
+    internal static string BuildFastApiMain(DatabaseType db, string dbName)
     {
         var dbImport = db is DatabaseType.MongoDB
             ? "from app.database import connect_db, close_db"
@@ -287,14 +287,14 @@ ENTRYPOINT ["java","-jar","app.jar"]
     // db.init_app()/db.create_all(), so the config value was dead and no table was ever
     // created; for MongoDB/Redis it routed a mongodb://... or redis://... URL through the
     // *relational* SQLALCHEMY_DATABASE_URI key, which SQLAlchemy can't parse at all.
-    private static string BuildFlaskMain(DatabaseType db, string dbName) => db switch
+    internal static string BuildFlaskMain(DatabaseType db, string dbName) => db switch
     {
         DatabaseType.MongoDB => BuildFlaskMongoMain(db),
         DatabaseType.Redis   => BuildFlaskRedisMain(db),
         _                    => BuildFlaskRelationalMain(db, dbName)
     };
 
-    private static string BuildFlaskRelationalMain(DatabaseType db, string dbName)
+    internal static string BuildFlaskRelationalMain(DatabaseType db, string dbName)
     {
         string uriLine;
         if (db == DatabaseType.SQLite)
@@ -340,7 +340,7 @@ ENTRYPOINT ["java","-jar","app.jar"]
             "    app.run(host=\"0.0.0.0\", port=8000, debug=True)\n";
     }
 
-    private static string BuildFlaskMongoMain(DatabaseType db) =>
+    internal static string BuildFlaskMongoMain(DatabaseType db) =>
         "from flask import Flask, jsonify\n" +
         "from dotenv import load_dotenv\n" +
         "from app.database import db as mongo_db\n\n" +
@@ -355,7 +355,7 @@ ENTRYPOINT ["java","-jar","app.jar"]
         "if __name__ == \"__main__\":\n" +
         "    app.run(host=\"0.0.0.0\", port=8000, debug=True)\n";
 
-    private static string BuildFlaskRedisMain(DatabaseType db) =>
+    internal static string BuildFlaskRedisMain(DatabaseType db) =>
         "from flask import Flask, jsonify\n" +
         "from dotenv import load_dotenv\n" +
         "from app.database import redis_client\n\n" +
@@ -371,7 +371,7 @@ ENTRYPOINT ["java","-jar","app.jar"]
         "if __name__ == \"__main__\":\n" +
         "    app.run(host=\"0.0.0.0\", port=8000, debug=True)\n";
 
-    private static string BuildPythonModels(FrameworkType fw, DatabaseType db)
+    internal static string BuildPythonModels(FrameworkType fw, DatabaseType db)
     {
         if (db == DatabaseType.MongoDB)
         {
@@ -428,7 +428,7 @@ class Item(Base):
 """;
     }
 
-    private static string BuildPythonDockerfile(FrameworkType fw)
+    internal static string BuildPythonDockerfile(FrameworkType fw)
     {
         var port = 8000;
         var cmd  = fw switch
@@ -449,7 +449,7 @@ EXPOSE {port}
 """;
     }
 
-    private static string BuildPythonTestFile(FrameworkType fw) => fw switch
+    internal static string BuildPythonTestFile(FrameworkType fw) => fw switch
     {
         FrameworkType.FastAPI => """
 import pytest
@@ -644,7 +644,7 @@ ENTRYPOINT [\"dotnet\", \"{safeName}.dll\"]
         await EmitLogAsync(project, "Scaffold", "✅ Archivos base .NET generados", ct: ct);
     }
 
-    private static async Task EnsureDotNetDbContextRegistrationAsync(
+    internal static async Task EnsureDotNetDbContextRegistrationAsync(
         string projectDir, string namespaceName, DatabaseType database, CancellationToken ct)
     {
         var programPath = Path.Combine(projectDir, "Program.cs");
@@ -677,7 +677,7 @@ ENTRYPOINT [\"dotnet\", \"{safeName}.dll\"]
         await File.WriteAllTextAsync(programPath, content, ct);
     }
 
-    private static string GetDotNetSdkVersion(string frameworkVersion)
+    internal static string GetDotNetSdkVersion(string frameworkVersion)
     {
         if (string.IsNullOrWhiteSpace(frameworkVersion))
             return "10.0";
@@ -700,7 +700,7 @@ ENTRYPOINT [\"dotnet\", \"{safeName}.dll\"]
         };
     }
 
-    private static string GetValidDotNetNamespace(string projectName)
+    internal static string GetValidDotNetNamespace(string projectName)
     {
         var candidate = System.Text.RegularExpressions.Regex.Replace(projectName.Trim(), @"[^\w]", "");
         if (string.IsNullOrWhiteSpace(candidate))
@@ -710,7 +710,7 @@ ENTRYPOINT [\"dotnet\", \"{safeName}.dll\"]
         return candidate;
     }
 
-    private static string GetValidDatabaseName(string projectName)
+    internal static string GetValidDatabaseName(string projectName)
     {
         var safeName = System.Text.RegularExpressions.Regex.Replace(projectName.Trim().ToLowerInvariant(), @"[^a-z0-9_]", "_");
         if (string.IsNullOrWhiteSpace(safeName))

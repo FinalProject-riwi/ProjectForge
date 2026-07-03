@@ -8,13 +8,13 @@ namespace ProjectForge.Application.Services;
 
 public partial class ProjectGeneratorService
 {
-    private static IReadOnlyList<(string RelativePath, string Content)> BuildSymfonyCleanArchitecturePatternFiles()
+    internal static IReadOnlyList<(string RelativePath, string Content)> BuildSymfonyCleanArchitecturePatternFiles()
         => BuildPhpDddPatternFiles(FrameworkType.Symfony);
 
-    private static IReadOnlyList<(string RelativePath, string Content)> BuildSymfonyRepositoryPatternFiles()
+    internal static IReadOnlyList<(string RelativePath, string Content)> BuildSymfonyRepositoryPatternFiles()
         => BuildPhpDddPatternFiles(FrameworkType.Symfony);
 
-    private static IReadOnlyList<(string RelativePath, string Content)> BuildSymfonyHexagonalPatternFiles()
+    internal static IReadOnlyList<(string RelativePath, string Content)> BuildSymfonyHexagonalPatternFiles()
     {
         return new[]
         {
@@ -389,7 +389,7 @@ final class Version20260626010000 extends AbstractMigration
         };
     }
 
-    private static IReadOnlyList<(string RelativePath, string Content)> BuildSymfonyEventSourcingPatternFiles()
+    internal static IReadOnlyList<(string RelativePath, string Content)> BuildSymfonyEventSourcingPatternFiles()
     {
         return new[]
         {
@@ -594,7 +594,7 @@ final class Project extends AggregateRoot
         $this->description = $event->newDescription;
     }
 
-    private static function normalizeDescription(?string $description): ?string
+    internal static function normalizeDescription(?string $description): ?string
     {
         $description = trim((string) $description);
 
@@ -1078,7 +1078,7 @@ final class Version20260626020000 extends AbstractMigration
         };
     }
 
-    private static IReadOnlyList<(string RelativePath, string Content)> BuildSymfonyMicroservicesPatternFiles(DatabaseType database)
+    internal static IReadOnlyList<(string RelativePath, string Content)> BuildSymfonyMicroservicesPatternFiles(DatabaseType database)
     {
         var projectsDbEnv = GetSymfonyMicroservicesDbEnvironment(database, "projects");
         var notificationsDbEnv = GetSymfonyMicroservicesDbEnvironment(database, "notifications");
@@ -1243,7 +1243,7 @@ jobs:
         };
     }
 
-    private static string GetSymfonyMicroservicesDbEnvironment(DatabaseType database, string serviceName)
+    internal static string GetSymfonyMicroservicesDbEnvironment(DatabaseType database, string serviceName)
     {
         var databaseName = $"{serviceName}_db";
         var port = serviceName == "projects" ? 8081 : 8082;
@@ -1304,7 +1304,7 @@ MESSENGER_TRANSPORT_DSN=redis://redis:6379/messages
         };
     }
 
-    private static string BuildSymfonyMicroservicesCompose(DatabaseType database) =>
+    internal static string BuildSymfonyMicroservicesCompose(DatabaseType database) =>
         database switch
         {
             DatabaseType.MySQL => """
@@ -1618,7 +1618,7 @@ volumes:
 """
         };
 
-    private static IReadOnlyList<(string RelativePath, string Content)> BuildSymfonyCqrsPatternFiles()
+    internal static IReadOnlyList<(string RelativePath, string Content)> BuildSymfonyCqrsPatternFiles()
     {
         return new[]
         {
@@ -1721,7 +1721,7 @@ class Item
         };
     }
 
-    private static IReadOnlyList<(string RelativePath, string Content)> BuildSymfonyMediatorPatternFiles()
+    internal static IReadOnlyList<(string RelativePath, string Content)> BuildSymfonyMediatorPatternFiles()
     {
         return new[]
         {
@@ -1799,7 +1799,7 @@ services:
         };
     }
 
-    private static IReadOnlyList<(string RelativePath, string Content)> BuildSymfonySagaPatternFiles()
+    internal static IReadOnlyList<(string RelativePath, string Content)> BuildSymfonySagaPatternFiles()
     {
         return new[]
         {

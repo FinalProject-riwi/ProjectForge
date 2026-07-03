@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>ProjectForge.Worker</RootNamespace>
+    <!--
+      Deliberately no EF Core, no Octokit, no MVC — this is a thin process-execution shim.
+      Every worker image (dotnet/node/python/php/java) publishes this SAME project; only the
+      Dockerfile differs per worker (which language toolchain gets installed on top of the
+      common ASP.NET Core base). See docker/Dockerfile.Worker.*.
+    -->
+  </PropertyGroup>
+</Project>

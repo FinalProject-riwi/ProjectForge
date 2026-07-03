@@ -30,7 +30,7 @@ public partial class ProjectGeneratorService
         }
     }
 
-    private static IEnumerable<(string Command, string? WorkingDir)> GetScaffoldCommands(
+    internal static IEnumerable<(string Command, string? WorkingDir)> GetScaffoldCommands(
         WizardConfig cfg, string projectName, string path)
     {
         var safeName = GetValidDotNetProjectName(projectName);
@@ -96,7 +96,7 @@ public partial class ProjectGeneratorService
 
     // ─── Paso 2b: Base files de JS/TS ─────────────────────────────────────────
 
-    private static string GetValidDotNetProjectName(string projectName)
+    internal static string GetValidDotNetProjectName(string projectName)
     {
         var safeName = System.Text.RegularExpressions.Regex.Replace(projectName.Trim(), @"[^\w]", "");
         if (string.IsNullOrEmpty(safeName))
@@ -169,7 +169,7 @@ bootstrap();
         }
     }
 
-    private static string BuildExpressServerJs(DatabaseType db)
+    internal static string BuildExpressServerJs(DatabaseType db)
     {
         var (healthCheck, extraRequire) = db switch
         {
@@ -205,10 +205,10 @@ app.listen(process.env.PORT || 3000);
 """;
     }
 
-    private static string BuildJavaScriptDbConfig(DatabaseType db, string dbName, bool isTypeScript) =>
+    internal static string BuildJavaScriptDbConfig(DatabaseType db, string dbName, bool isTypeScript) =>
         isTypeScript ? BuildTypeScriptDbConfig(db, dbName) : BuildPlainJavaScriptDbConfig(db, dbName);
 
-    private static string BuildPlainJavaScriptDbConfig(DatabaseType db, string dbName) => db switch
+    internal static string BuildPlainJavaScriptDbConfig(DatabaseType db, string dbName) => db switch
     {
         DatabaseType.PostgreSQL => """
 const { Pool } = require('pg');
@@ -267,7 +267,7 @@ module.exports = { db };
 """
     };
 
-    private static string BuildTypeScriptDbConfig(DatabaseType db, string dbName) => db switch
+    internal static string BuildTypeScriptDbConfig(DatabaseType db, string dbName) => db switch
     {
         DatabaseType.PostgreSQL => """
 import { Pool } from 'pg';
@@ -315,7 +315,7 @@ export const db = new Database(process.env.SQLITE_PATH || './app.db');
 """
     };
 
-    private static string BuildJavaScriptDbEnvFile(DatabaseType db, string dbName) => db switch
+    internal static string BuildJavaScriptDbEnvFile(DatabaseType db, string dbName) => db switch
     {
         DatabaseType.PostgreSQL => $"DATABASE_URL=postgresql://postgres:secret@db:5432/{dbName}\nPORT=3000\n",
         DatabaseType.MySQL      => $"DATABASE_URL=mysql://root:secret@db:3306/{dbName}\nPORT=3000\n",
@@ -414,7 +414,7 @@ export const db = new Database(process.env.SQLITE_PATH || './app.db');
         }
     }
 
-    private static IReadOnlyList<(string RelativePath, string Content)> BuildPhpPatternFiles(
+    internal static IReadOnlyList<(string RelativePath, string Content)> BuildPhpPatternFiles(
         WizardConfig cfg,
         string pattern)
     {
@@ -433,7 +433,7 @@ export const db = new Database(process.env.SQLITE_PATH || './app.db');
         };
     }
 
-    private static IReadOnlyList<(string RelativePath, string Content)> BuildJavaScriptPatternFiles(
+    internal static IReadOnlyList<(string RelativePath, string Content)> BuildJavaScriptPatternFiles(
         FrameworkType framework,
         string pattern)
     {
@@ -452,7 +452,7 @@ export const db = new Database(process.env.SQLITE_PATH || './app.db');
         };
     }
 
-    private static async Task EnsureLaravelProviderRegistrationAsync(string path, string providerEntry, CancellationToken ct)
+    internal static async Task EnsureLaravelProviderRegistrationAsync(string path, string providerEntry, CancellationToken ct)
     {
         var providersFile = Path.Combine(path, "bootstrap", "providers.php");
         if (!File.Exists(providersFile))
@@ -475,7 +475,7 @@ export const db = new Database(process.env.SQLITE_PATH || './app.db');
         await File.WriteAllTextAsync(providersFile, updated, ct);
     }
 
-    private static async Task ScaffoldLaravelMicroservicesWorkspaceAsync(string path, CancellationToken ct)
+    internal async Task ScaffoldLaravelMicroservicesWorkspaceAsync(string path, CancellationToken ct)
     {
         Directory.CreateDirectory(Path.Combine(path, "services"));
 
@@ -493,7 +493,7 @@ export const db = new Database(process.env.SQLITE_PATH || './app.db');
         }
     }
 
-    private static async Task ScaffoldSymfonyMicroservicesWorkspaceAsync(string path, CancellationToken ct)
+    internal async Task ScaffoldSymfonyMicroservicesWorkspaceAsync(string path, CancellationToken ct)
     {
         Directory.CreateDirectory(Path.Combine(path, "services"));
 
@@ -511,33 +511,20 @@ export const db = new Database(process.env.SQLITE_PATH || './app.db');
         }
     }
 
-    private static async Task<ShellResult> RunComposerCommandAsync(IEnumerable<string> arguments, string workingDirectory, CancellationToken ct)
+    // Used to spawn its own raw Process with FileName="composer", bypassing IShellExecutor
+    // entirely — which meant composer would still need to be installed locally even after every
+    // other command got routed to per-language worker containers. Routing through _shell.RunAsync
+    // sends it to the php-worker like every other PHP command.
+    internal async Task<ShellResult> RunComposerCommandAsync(IEnumerable<string> arguments, string workingDirectory, CancellationToken ct)
     {
-        var process = new System.Diagnostics.Process
-        {
-            StartInfo = new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = "composer",
-                WorkingDirectory = workingDirectory,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            }
-        };
-
-        foreach (var argument in arguments)
-            process.StartInfo.ArgumentList.Add(argument);
-
-        process.Start();
-        var stdout = await process.StandardOutput.ReadToEndAsync(ct);
-        var stderr = await process.StandardError.ReadToEndAsync(ct);
-        await process.WaitForExitAsync(ct);
-
-        return new ShellResult(process.ExitCode, stdout, stderr);
+        var command = "composer " + string.Join(" ", arguments.Select(QuoteShellArgument));
+        return await _shell.RunAsync(command, workingDirectory, ct);
     }
 
-    private static IReadOnlyList<(string RelativePath, string Content)> BuildJavaScriptCqrsPatternFiles(FrameworkType framework)
+    private static string QuoteShellArgument(string argument) =>
+        argument.Contains(' ') ? $"\"{argument.Replace("\"", "\\\"")}\"" : argument;
+
+    internal static IReadOnlyList<(string RelativePath, string Content)> BuildJavaScriptCqrsPatternFiles(FrameworkType framework)
     {
         var isNest = framework is FrameworkType.NestJs or FrameworkType.NestTs;
         if (isNest)
@@ -614,7 +601,7 @@ module.exports = { GetAllItemsQuery, GetAllItemsHandler };
         };
     }
 
-    private static IReadOnlyList<(string RelativePath, string Content)> BuildJavaScriptEventSourcingPatternFiles(FrameworkType framework)
+    internal static IReadOnlyList<(string RelativePath, string Content)> BuildJavaScriptEventSourcingPatternFiles(FrameworkType framework)
     {
         return new[]
         {
@@ -675,7 +662,7 @@ module.exports = { BaseAggregate };
         };
     }
 
-    private static IReadOnlyList<(string RelativePath, string Content)> BuildJavaScriptMediatorPatternFiles(FrameworkType framework)
+    internal static IReadOnlyList<(string RelativePath, string Content)> BuildJavaScriptMediatorPatternFiles(FrameworkType framework)
     {
         return new[]
         {
@@ -713,7 +700,7 @@ module.exports = { CreateItemRequest, GetAllItemsRequest };
         };
     }
 
-    private static IReadOnlyList<(string RelativePath, string Content)> BuildJavaScriptRepositoryPatternFiles(FrameworkType framework)
+    internal static IReadOnlyList<(string RelativePath, string Content)> BuildJavaScriptRepositoryPatternFiles(FrameworkType framework)
     {
         var isNest = framework is FrameworkType.NestJs or FrameworkType.NestTs;
         if (isNest)
@@ -766,7 +753,7 @@ module.exports = { ItemRepository };
         };
     }
 
-    private static IReadOnlyList<(string RelativePath, string Content)> BuildJavaScriptCleanArchitecturePatternFiles(FrameworkType framework)
+    internal static IReadOnlyList<(string RelativePath, string Content)> BuildJavaScriptCleanArchitecturePatternFiles(FrameworkType framework)
     {
         return new[]
         {
@@ -808,7 +795,7 @@ module.exports = {};
         };
     }
 
-    private static IReadOnlyList<(string RelativePath, string Content)> BuildJavaScriptHexagonalPatternFiles(FrameworkType framework)
+    internal static IReadOnlyList<(string RelativePath, string Content)> BuildJavaScriptHexagonalPatternFiles(FrameworkType framework)
     {
         return new[]
         {
@@ -857,7 +844,7 @@ module.exports = { Item };
         };
     }
 
-    private static IReadOnlyList<(string RelativePath, string Content)> BuildJavaScriptDddPatternFiles(FrameworkType framework)
+    internal static IReadOnlyList<(string RelativePath, string Content)> BuildJavaScriptDddPatternFiles(FrameworkType framework)
     {
         return new[]
         {
@@ -895,7 +882,7 @@ module.exports = { ValueObject };
         };
     }
 
-    private static IReadOnlyList<(string RelativePath, string Content)> BuildJavaScriptMicroservicesPatternFiles(FrameworkType framework)
+    internal static IReadOnlyList<(string RelativePath, string Content)> BuildJavaScriptMicroservicesPatternFiles(FrameworkType framework)
     {
         return new[]
         {
@@ -944,7 +931,7 @@ server.listen(process.env.PORT || 3002, () =>
         };
     }
 
-    private static IReadOnlyList<(string RelativePath, string Content)> BuildJavaScriptSagaPatternFiles(FrameworkType framework)
+    internal static IReadOnlyList<(string RelativePath, string Content)> BuildJavaScriptSagaPatternFiles(FrameworkType framework)
     {
         var isNest = framework is FrameworkType.NestJs or FrameworkType.NestTs;
         if (isNest)
@@ -1001,6 +988,6 @@ module.exports = { OrderSaga };
         };
     }
 
-    private static string NormalizePatternToken(string value)
+    internal static string NormalizePatternToken(string value)
         => new string(value.Where(char.IsLetterOrDigit).ToArray()).ToLowerInvariant();
 }

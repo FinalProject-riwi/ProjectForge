@@ -8,7 +8,7 @@ namespace ProjectForge.Application.Services;
 
 public partial class ProjectGeneratorService
 {
-    private static IReadOnlyList<(string RelativePath, string Content)> BuildPhpDddPatternFiles(FrameworkType framework)
+    internal static IReadOnlyList<(string RelativePath, string Content)> BuildPhpDddPatternFiles(FrameworkType framework)
     {
         if (framework == FrameworkType.Symfony)
         {
@@ -137,7 +137,7 @@ final class Project extends AggregateRoot
         $this->description = self::normalizeDescription($description);
     }
 
-    private static function normalizeDescription(?string $description): ?string
+    internal static function normalizeDescription(?string $description): ?string
     {
         $description = trim((string) $description);
 
@@ -625,7 +625,7 @@ final class Project extends AggregateRoot
         $this->description = self::normalizeDescription($description);
     }
 
-    private static function normalizeDescription(?string $description): ?string
+    internal static function normalizeDescription(?string $description): ?string
     {
         $description = trim((string) $description);
         return $description === '' ? null : $description;
@@ -925,12 +925,12 @@ return new class extends Migration
         };
     }
 
-    private static IReadOnlyList<(string RelativePath, string Content)> BuildPhpCleanArchitecturePatternFiles(FrameworkType framework)
+    internal static IReadOnlyList<(string RelativePath, string Content)> BuildPhpCleanArchitecturePatternFiles(FrameworkType framework)
         => framework == FrameworkType.Symfony
             ? BuildSymfonyCleanArchitecturePatternFiles()
             : BuildPhpDddPatternFiles(framework);
 
-    private static IReadOnlyList<(string RelativePath, string Content)> BuildPhpHexagonalPatternFiles(FrameworkType framework)
+    internal static IReadOnlyList<(string RelativePath, string Content)> BuildPhpHexagonalPatternFiles(FrameworkType framework)
         => framework switch
         {
             FrameworkType.Laravel => BuildLaravelHexagonalPatternFiles(),
@@ -938,7 +938,7 @@ return new class extends Migration
             _ => BuildPhpDddPatternFiles(framework)
         };
 
-    private static IReadOnlyList<(string RelativePath, string Content)> BuildPhpRepositoryPatternFiles(FrameworkType framework)
+    internal static IReadOnlyList<(string RelativePath, string Content)> BuildPhpRepositoryPatternFiles(FrameworkType framework)
         => framework switch
         {
             FrameworkType.Laravel => BuildLaravelRepositoryPatternFiles(),
@@ -950,7 +950,7 @@ return new class extends Migration
     // "Mediator" or "Saga" for PHP silently produced the DDD Aggregate/Entity/UseCase scaffold
     // instead, with no actual command/query split, mediator class, or saga/compensation code
     // (every other language here — DotNet/Java/Python/JS/TS — has a real implementation).
-    private static IReadOnlyList<(string RelativePath, string Content)> BuildPhpCqrsPatternFiles(FrameworkType framework)
+    internal static IReadOnlyList<(string RelativePath, string Content)> BuildPhpCqrsPatternFiles(FrameworkType framework)
         => framework switch
         {
             FrameworkType.Laravel => BuildLaravelCqrsPatternFiles(),
@@ -958,7 +958,7 @@ return new class extends Migration
             _ => BuildPhpDddPatternFiles(framework)
         };
 
-    private static IReadOnlyList<(string RelativePath, string Content)> BuildPhpEventSourcingPatternFiles(FrameworkType framework)
+    internal static IReadOnlyList<(string RelativePath, string Content)> BuildPhpEventSourcingPatternFiles(FrameworkType framework)
         => framework switch
         {
             FrameworkType.Laravel => BuildLaravelEventSourcingPatternFiles(),
@@ -966,7 +966,7 @@ return new class extends Migration
             _ => BuildPhpDddPatternFiles(framework)
         };
 
-    private static IReadOnlyList<(string RelativePath, string Content)> BuildPhpMediatorPatternFiles(FrameworkType framework)
+    internal static IReadOnlyList<(string RelativePath, string Content)> BuildPhpMediatorPatternFiles(FrameworkType framework)
         => framework switch
         {
             FrameworkType.Laravel => BuildLaravelMediatorPatternFiles(),
@@ -974,7 +974,7 @@ return new class extends Migration
             _ => BuildPhpDddPatternFiles(framework)
         };
 
-    private static IReadOnlyList<(string RelativePath, string Content)> BuildPhpSagaPatternFiles(FrameworkType framework)
+    internal static IReadOnlyList<(string RelativePath, string Content)> BuildPhpSagaPatternFiles(FrameworkType framework)
         => framework switch
         {
             FrameworkType.Laravel => BuildLaravelSagaPatternFiles(),
@@ -982,7 +982,7 @@ return new class extends Migration
             _ => BuildPhpDddPatternFiles(framework)
         };
 
-    private static IReadOnlyList<(string RelativePath, string Content)> BuildPhpMicroservicesPatternFiles(
+    internal static IReadOnlyList<(string RelativePath, string Content)> BuildPhpMicroservicesPatternFiles(
         FrameworkType framework,
         DatabaseType database)
         => framework switch

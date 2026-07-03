@@ -6,7 +6,7 @@ public partial class ProjectGeneratorService
 {
     // ─── Java: scaffold por DB ────────────────────────────────────────────────
 
-    private static string BuildJavaApplicationProperties(DatabaseType db, string dbName)
+    internal static string BuildJavaApplicationProperties(DatabaseType db, string dbName)
     {
         var dsn = db switch
         {
@@ -54,20 +54,20 @@ management.endpoints.web.exposure.include=health,info
         };
     }
 
-    private static string GetJavaDbUser(DatabaseType db) => db switch
+    internal static string GetJavaDbUser(DatabaseType db) => db switch
     {
         DatabaseType.MySQL     => "root",
         DatabaseType.SqlServer => "sa",
         _                      => "postgres"
     };
 
-    private static string GetJavaDbPassword(DatabaseType db) => db switch
+    internal static string GetJavaDbPassword(DatabaseType db) => db switch
     {
         DatabaseType.SqlServer => "YourStrong!Passw0rd",
         _                      => "secret"
     };
 
-    private static string GetJavaDriver(DatabaseType db) => db switch
+    internal static string GetJavaDriver(DatabaseType db) => db switch
     {
         DatabaseType.MySQL     => "com.mysql.cj.jdbc.Driver",
         DatabaseType.SqlServer => "com.microsoft.sqlserver.jdbc.SQLServerDriver",
@@ -76,7 +76,7 @@ management.endpoints.web.exposure.include=health,info
 
     // ─── Quarkus: scaffold por DB ─────────────────────────────────────────────
 
-    private static string BuildQuarkusApplicationProperties(DatabaseType db, string dbName) => db switch
+    internal static string BuildQuarkusApplicationProperties(DatabaseType db, string dbName) => db switch
     {
         DatabaseType.MongoDB => $"""
 quarkus.application.name={dbName}
@@ -102,28 +102,28 @@ quarkus.hibernate-orm.database.generation=update
 """
     };
 
-    private static string GetQuarkusDbKind(DatabaseType db) => db switch
+    internal static string GetQuarkusDbKind(DatabaseType db) => db switch
     {
         DatabaseType.MySQL     => "mysql",
         DatabaseType.SqlServer => "mssql",
         _                      => "postgresql"
     };
 
-    private static string GetJdbcUrl(DatabaseType db, string dbName) => db switch
+    internal static string GetJdbcUrl(DatabaseType db, string dbName) => db switch
     {
         DatabaseType.MySQL     => $"jdbc:mysql://db:3306/{dbName}",
         DatabaseType.SqlServer => $"jdbc:sqlserver://sqlserver:1433;databaseName={dbName};encrypt=false;trustServerCertificate=true",
         _                      => $"jdbc:postgresql://db:5432/{dbName}"
     };
 
-    private static string GetQuarkusJdbcExtension(DatabaseType db) => db switch
+    internal static string GetQuarkusJdbcExtension(DatabaseType db) => db switch
     {
         DatabaseType.MySQL     => "quarkus-jdbc-mysql",
         DatabaseType.SqlServer => "quarkus-jdbc-mssql",
         _                      => "quarkus-jdbc-postgresql"
     };
 
-    private static async Task InjectQuarkusDbDependencyAsync(string pomPath, DatabaseType db, CancellationToken ct)
+    internal static async Task InjectQuarkusDbDependencyAsync(string pomPath, DatabaseType db, CancellationToken ct)
     {
         var content = await File.ReadAllTextAsync(pomPath, ct);
         var marker  = "</dependencies>";
@@ -162,7 +162,7 @@ quarkus.hibernate-orm.database.generation=update
             await File.WriteAllTextAsync(pomPath, content.Replace(marker, snippet + marker), ct);
     }
 
-    private static string BuildQuarkusEnvFile(DatabaseType db, string dbName) => db switch
+    internal static string BuildQuarkusEnvFile(DatabaseType db, string dbName) => db switch
     {
         DatabaseType.MongoDB => $"QUARKUS_MONGODB_CONNECTION_STRING=mongodb://mongo:27017\nQUARKUS_MONGODB_DATABASE={dbName}\n",
         DatabaseType.Redis   => "QUARKUS_REDIS_HOSTS=redis://redis:6379\n",
@@ -172,7 +172,7 @@ quarkus.hibernate-orm.database.generation=update
 
     // ─── Micronaut: scaffold por DB ───────────────────────────────────────────
 
-    private static string BuildMicronautApplicationProperties(DatabaseType db, string dbName) => db switch
+    internal static string BuildMicronautApplicationProperties(DatabaseType db, string dbName) => db switch
     {
         DatabaseType.MongoDB => $"""
 micronaut.application.name={dbName}
@@ -196,14 +196,14 @@ datasources.default.driver-class-name={GetJavaDriver(db)}
 """
     };
 
-    private static (string GroupId, string ArtifactId) GetJavaJdbcDriverCoords(DatabaseType db) => db switch
+    internal static (string GroupId, string ArtifactId) GetJavaJdbcDriverCoords(DatabaseType db) => db switch
     {
         DatabaseType.MySQL     => ("com.mysql", "mysql-connector-j"),
         DatabaseType.SqlServer => ("com.microsoft.sqlserver", "mssql-jdbc"),
         _                      => ("org.postgresql", "postgresql")
     };
 
-    private static async Task InjectMicronautDbDependencyAsync(string pomPath, DatabaseType db, CancellationToken ct)
+    internal static async Task InjectMicronautDbDependencyAsync(string pomPath, DatabaseType db, CancellationToken ct)
     {
         var content = await File.ReadAllTextAsync(pomPath, ct);
         var marker  = "</dependencies>";
@@ -242,7 +242,7 @@ datasources.default.driver-class-name={GetJavaDriver(db)}
             await File.WriteAllTextAsync(pomPath, content.Replace(marker, snippet + marker), ct);
     }
 
-    private static string BuildMicronautEnvFile(DatabaseType db, string dbName) => db switch
+    internal static string BuildMicronautEnvFile(DatabaseType db, string dbName) => db switch
     {
         DatabaseType.MongoDB => $"MONGODB_URI=mongodb://mongo:27017/{dbName}\n",
         DatabaseType.Redis   => "REDIS_URI=redis://redis:6379\n",
@@ -250,7 +250,7 @@ datasources.default.driver-class-name={GetJavaDriver(db)}
         _ => $"DATASOURCES_DEFAULT_URL={GetJdbcUrl(db, dbName)}\nDATASOURCES_DEFAULT_USERNAME={GetJavaDbUser(db)}\nDATASOURCES_DEFAULT_PASSWORD={GetJavaDbPassword(db)}\n"
     };
 
-    private static string BuildJavaPomXml(string projectName, DatabaseType db, IList<string> libs)
+    internal static string BuildJavaPomXml(string projectName, DatabaseType db, IList<string> libs)
     {
         var dbDependencies = db switch
         {
@@ -359,7 +359,7 @@ datasources.default.driver-class-name={GetJavaDriver(db)}
 
     // ─── Python: scaffold por DB ──────────────────────────────────────────────
 
-    private static string BuildPythonRequirementsTxt(FrameworkType framework, DatabaseType db, IList<string> libs)
+    internal static string BuildPythonRequirementsTxt(FrameworkType framework, DatabaseType db, IList<string> libs)
     {
         var packages = new List<string>();
 
@@ -411,7 +411,7 @@ datasources.default.driver-class-name={GetJavaDriver(db)}
         return string.Join("\n", packages) + "\n";
     }
 
-    private static IReadOnlyList<string> GetFastApiDbPackages(DatabaseType db) => db switch
+    internal static IReadOnlyList<string> GetFastApiDbPackages(DatabaseType db) => db switch
     {
         DatabaseType.PostgreSQL => new[] { "sqlalchemy>=2.0.0", "asyncpg>=0.29.0" },
         DatabaseType.MySQL      => new[] { "sqlalchemy>=2.0.0", "aiomysql>=0.2.0" },
@@ -424,7 +424,7 @@ datasources.default.driver-class-name={GetJavaDriver(db)}
 
     // Flask (WSGI) is synchronous — it needs the sync SQLAlchemy driver + the Flask-SQLAlchemy
     // extension, not the asyncio drivers FastAPI uses.
-    private static IReadOnlyList<string> GetFlaskDbPackages(DatabaseType db) => db switch
+    internal static IReadOnlyList<string> GetFlaskDbPackages(DatabaseType db) => db switch
     {
         DatabaseType.PostgreSQL => new[] { "sqlalchemy>=2.0.0", "flask-sqlalchemy>=3.1.0", "psycopg2-binary>=2.9.9" },
         DatabaseType.MySQL      => new[] { "sqlalchemy>=2.0.0", "flask-sqlalchemy>=3.1.0", "pymysql>=1.1.0" },
@@ -435,14 +435,14 @@ datasources.default.driver-class-name={GetJavaDriver(db)}
         _                       => Array.Empty<string>()
     };
 
-    private static string BuildPythonDatabaseConfig(FrameworkType fw, DatabaseType db, string dbName) =>
+    internal static string BuildPythonDatabaseConfig(FrameworkType fw, DatabaseType db, string dbName) =>
         fw == FrameworkType.Flask
             ? BuildFlaskDatabaseConfig(db, dbName)
             : BuildAsyncPythonDatabaseConfig(db, dbName);
 
     // Flask (WSGI) is synchronous — it can't use the asyncio-only motor/aioredis/async-SQLAlchemy
     // clients built below for FastAPI.
-    private static string BuildFlaskDatabaseConfig(DatabaseType db, string dbName) => db switch
+    internal static string BuildFlaskDatabaseConfig(DatabaseType db, string dbName) => db switch
     {
         DatabaseType.MongoDB => $$"""
 from pymongo import MongoClient
@@ -469,7 +469,7 @@ db = SQLAlchemy()
 """
     };
 
-    private static string BuildAsyncPythonDatabaseConfig(DatabaseType db, string dbName) => db switch
+    internal static string BuildAsyncPythonDatabaseConfig(DatabaseType db, string dbName) => db switch
     {
         DatabaseType.PostgreSQL => $"""
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
@@ -586,7 +586,7 @@ DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://postgres:secret@d
     // and the plain DB_HOST/DB_PORT/... vars (read by Django's settings.py) — this file is
     // written once and shared by whichever framework ends up needing it, so it must satisfy
     // both readers regardless of which one is active.
-    private static string BuildPythonEnvFile(DatabaseType db, string dbName) => db switch
+    internal static string BuildPythonEnvFile(DatabaseType db, string dbName) => db switch
     {
         DatabaseType.PostgreSQL  => $"DATABASE_URL=postgresql+asyncpg://postgres:secret@db:5432/{dbName}\nDB_HOST=db\nDB_PORT=5432\nDB_NAME={dbName}\nDB_USER=postgres\nDB_PASSWORD=secret\nDEBUG=true\n",
         DatabaseType.MySQL       => $"DATABASE_URL=mysql+aiomysql://root:secret@db:3306/{dbName}\nDB_HOST=db\nDB_PORT=3306\nDB_NAME={dbName}\nDB_USER=root\nDB_PASSWORD=secret\nDEBUG=true\n",

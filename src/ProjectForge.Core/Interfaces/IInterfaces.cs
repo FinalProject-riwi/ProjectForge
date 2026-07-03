@@ -26,7 +26,7 @@ public interface IProjectRepository : IRepository<Project>
 public interface ITemplateRepository : IRepository<ProjectTemplate>
 {
     Task<IEnumerable<ProjectTemplate>> GetByArchitectureAsync(ArchitectureType arch);
-    Task<ProjectTemplate?> GetTemplateAsync(ArchitectureType arch, string templateType, DatabaseType? db = null, InfrastructureType? infra = null);
+    Task<ProjectTemplate?> GetTemplateAsync(ArchitectureType arch, string templateType, DatabaseType? db = null, InfrastructureType? infra = null, FrameworkType? framework = null);
     Task<IEnumerable<ProjectTemplate>> GetInfraTemplatesAsync(InfrastructureType infra, DatabaseType db);
 }
 

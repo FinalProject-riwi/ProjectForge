@@ -61,7 +61,12 @@ builder.Services.AddScoped<IAiSuggestionCacheRepository, AiSuggestionCacheReposi
 builder.Services.AddScoped<IGenerationHubNotifier, SignalRGenerationHubNotifier>();
 
 // ─── Servicios ────────────────────────────────────────────────────────────────
-builder.Services.AddScoped<IShellExecutor, ShellExecutor>();
+// ShellExecutor stays registered as itself (concrete type) — RoutedShellExecutor uses it as the
+// local-process fallback for tools with no worker configured (git) or when no Workers:* URLs are
+// set at all (e.g. local "dotnet run" dev without Docker Compose).
+builder.Services.AddScoped<ShellExecutor>();
+builder.Services.AddHttpClient("projectforge-worker");
+builder.Services.AddScoped<IShellExecutor, RoutedShellExecutor>();
 builder.Services.AddScoped<IGitHubService, GitHubService>();
 builder.Services.AddScoped<IEncryptionService, AesEncryptionService>();
 builder.Services.AddScoped<IAiSuggestionService, MultiProviderAiSuggestionService>();

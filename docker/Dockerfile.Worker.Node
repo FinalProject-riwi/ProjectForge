@@ -1,0 +1,25 @@
+# ─── Stage 1: Build the worker app ────────────────────────────────────────────
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /src
+
+COPY src/ProjectForge.Worker/ProjectForge.Worker.csproj src/ProjectForge.Worker/
+RUN dotnet restore src/ProjectForge.Worker/ProjectForge.Worker.csproj
+
+COPY src/ProjectForge.Worker/ src/ProjectForge.Worker/
+RUN dotnet publish src/ProjectForge.Worker/ProjectForge.Worker.csproj \
+    -c Release -o /app/publish /p:UseAppHost=false
+
+# ─── Stage 2: Runtime ─────────────────────────────────────────────────────────
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
+WORKDIR /app
+
+# ── Node.js 22 (LTS) via NodeSource — same version/install recipe the monolithic image used ──
+RUN apt-get update && apt-get install -y --no-install-recommends curl gnupg ca-certificates \
+    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && npm install -g @nestjs/cli create-next-app \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=build /app/publish .
+EXPOSE 8080
+ENTRYPOINT ["dotnet", "ProjectForge.Worker.dll"]

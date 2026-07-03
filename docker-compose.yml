@@ -23,11 +23,29 @@ services:
       - Encryption__Key=${ENCRYPTION_KEY:-DefaultKeyChangeThisInProduction32}
       - Generation__WorkspacePath=/workspaces
       - ASPNETCORE_DataProtection__KeysPath=/dataprotection-keys
+      # Per-language scaffolding workers — RoutedShellExecutor routes "dotnet"/"npm"/"composer"/
+      # "python"/"java" commands here over HTTP instead of running them in this container, which
+      # no longer has any of those toolchains installed (see docker/Dockerfile).
+      - Workers__DotNet=http://dotnet-worker:8080
+      - Workers__Node=http://node-worker:8080
+      - Workers__Python=http://python-worker:8080
+      - Workers__Php=http://php-worker:8080
+      - Workers__Java=http://java-worker:8080
     volumes:
       - workspaces:/workspaces
       - dataprotection-keys:/dataprotection-keys
     depends_on:
       sqlserver:
+        condition: service_healthy
+      dotnet-worker:
+        condition: service_healthy
+      node-worker:
+        condition: service_healthy
+      python-worker:
+        condition: service_healthy
+      php-worker:
+        condition: service_healthy
+      java-worker:
         condition: service_healthy
     restart: on-failure
     networks:
@@ -55,14 +73,121 @@ services:
       - ElevenLabs__VoiceId=${ELEVENLABS_VOICE_ID:-21m00Tcm4TlvDq8ikWAM}
       - Encryption__Key=${ENCRYPTION_KEY:-DefaultKeyChangeThisInProduction32}
       - Generation__WorkspacePath=/workspaces
+      # Same workers as "web" — API's own image never had any language toolchain installed
+      # (it was always the slim ASP.NET runtime), so its generation endpoint used to be broken
+      # the moment it tried to run "dotnet new"/"npm"/etc.; this is what actually fixes that.
+      - Workers__DotNet=http://dotnet-worker:8080
+      - Workers__Node=http://node-worker:8080
+      - Workers__Python=http://python-worker:8080
+      - Workers__Php=http://php-worker:8080
+      - Workers__Java=http://java-worker:8080
     volumes:
       - workspaces:/workspaces
     depends_on:
       sqlserver:
         condition: service_healthy
+      dotnet-worker:
+        condition: service_healthy
+      node-worker:
+        condition: service_healthy
+      python-worker:
+        condition: service_healthy
+      php-worker:
+        condition: service_healthy
+      java-worker:
+        condition: service_healthy
       # Opcional: esperar al web para que aplique migraciones primero
       web:
         condition: service_started
+    restart: on-failure
+    networks:
+      - projectforge-net
+
+  # ── Workers de scaffolding por lenguaje ────────────────────────────────────
+  # Cada uno expone POST /execute + GET /health (src/ProjectForge.Worker) y solo instala el
+  # toolchain de un lenguaje encima de la misma imagen base — reemplaza al Dockerfile monolítico
+  # que antes instalaba los 5 toolchains en el mismo contenedor que corría la app web.
+  dotnet-worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.Worker.DotNet
+    container_name: projectforge-dotnet-worker
+    volumes:
+      - workspaces:/workspaces
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    restart: on-failure
+    networks:
+      - projectforge-net
+
+  node-worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.Worker.Node
+    container_name: projectforge-node-worker
+    volumes:
+      - workspaces:/workspaces
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    restart: on-failure
+    networks:
+      - projectforge-net
+
+  python-worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.Worker.Python
+    container_name: projectforge-python-worker
+    volumes:
+      - workspaces:/workspaces
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    restart: on-failure
+    networks:
+      - projectforge-net
+
+  php-worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.Worker.Php
+    container_name: projectforge-php-worker
+    volumes:
+      - workspaces:/workspaces
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    restart: on-failure
+    networks:
+      - projectforge-net
+
+  java-worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.Worker.Java
+    container_name: projectforge-java-worker
+    volumes:
+      - workspaces:/workspaces
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
     restart: on-failure
     networks:
       - projectforge-net

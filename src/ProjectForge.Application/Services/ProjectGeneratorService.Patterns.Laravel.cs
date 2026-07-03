@@ -8,7 +8,7 @@ namespace ProjectForge.Application.Services;
 
 public partial class ProjectGeneratorService
 {
-    private static IReadOnlyList<(string RelativePath, string Content)> BuildLaravelRepositoryPatternFiles()
+    internal static IReadOnlyList<(string RelativePath, string Content)> BuildLaravelRepositoryPatternFiles()
     {
         return new[]
         {
@@ -209,7 +209,7 @@ return new class extends Migration
         };
     }
 
-    private static IReadOnlyList<(string RelativePath, string Content)> BuildLaravelMicroservicesPatternFiles(DatabaseType database)
+    internal static IReadOnlyList<(string RelativePath, string Content)> BuildLaravelMicroservicesPatternFiles(DatabaseType database)
     {
         var dbConnection = GetLaravelDatabaseConnection(database);
         var projectsDbEnv = GetLaravelMicroservicesDbEnvironment(database, "projects");
@@ -381,7 +381,7 @@ jobs:
         };
     }
 
-    private static string BuildLaravelMicroservicesDockerfile(DatabaseType database) =>
+    internal static string BuildLaravelMicroservicesDockerfile(DatabaseType database) =>
         database switch
         {
             DatabaseType.SqlServer => """
@@ -464,7 +464,7 @@ CMD ["php", "-S", "0.0.0.0:8080", "-t", "public"]
 """
         };
 
-    private static string BuildLaravelMicroservicesCompose(DatabaseType database) =>
+    internal static string BuildLaravelMicroservicesCompose(DatabaseType database) =>
         database switch
         {
             DatabaseType.MySQL => """
@@ -816,7 +816,7 @@ volumes:
 """
         };
 
-    private static string GetLaravelDatabaseConnection(DatabaseType database) => database switch
+    internal static string GetLaravelDatabaseConnection(DatabaseType database) => database switch
     {
         DatabaseType.MySQL => "mysql",
         DatabaseType.PostgreSQL => "pgsql",
@@ -826,7 +826,7 @@ volumes:
         _ => "sqlite"
     };
 
-    private static string GetLaravelMicroservicesDbEnvironment(DatabaseType database, string serviceName)
+    internal static string GetLaravelMicroservicesDbEnvironment(DatabaseType database, string serviceName)
     {
         var connection = GetLaravelDatabaseConnection(database);
         var databaseName = $"{serviceName}_db";
@@ -950,7 +950,7 @@ RABBITMQ_PASSWORD=guest
         };
     }
 
-    private static IReadOnlyList<(string RelativePath, string Content)> BuildLaravelEventSourcingPatternFiles()
+    internal static IReadOnlyList<(string RelativePath, string Content)> BuildLaravelEventSourcingPatternFiles()
     {
         return new[]
         {
@@ -1195,7 +1195,7 @@ final class Project extends AggregateRoot
         $this->description = $event->newDescription;
     }
 
-    private static function normalizeDescription(?string $description): ?string
+    internal static function normalizeDescription(?string $description): ?string
     {
         $description = trim((string) $description);
 
@@ -1741,7 +1741,7 @@ return new class extends Migration
         };
     }
 
-    private static IReadOnlyList<(string RelativePath, string Content)> BuildLaravelHexagonalPatternFiles()
+    internal static IReadOnlyList<(string RelativePath, string Content)> BuildLaravelHexagonalPatternFiles()
     {
         return new[]
         {
@@ -1780,7 +1780,7 @@ final class Project
         $this->description = self::normalizeDescription($description);
     }
 
-    private static function normalizeName(string $name): string
+    internal static function normalizeName(string $name): string
     {
         $name = trim($name);
         if (mb_strlen($name) < 3) {
@@ -1790,7 +1790,7 @@ final class Project
         return $name;
     }
 
-    private static function normalizeDescription(?string $description): ?string
+    internal static function normalizeDescription(?string $description): ?string
     {
         $description = trim((string) $description);
 
@@ -2215,7 +2215,7 @@ return new class extends Migration
         };
     }
 
-    private static IReadOnlyList<(string RelativePath, string Content)> BuildLaravelCqrsPatternFiles()
+    internal static IReadOnlyList<(string RelativePath, string Content)> BuildLaravelCqrsPatternFiles()
     {
         return new[]
         {
@@ -2306,7 +2306,7 @@ return new class extends Migration
         };
     }
 
-    private static IReadOnlyList<(string RelativePath, string Content)> BuildLaravelMediatorPatternFiles()
+    internal static IReadOnlyList<(string RelativePath, string Content)> BuildLaravelMediatorPatternFiles()
     {
         return new[]
         {
@@ -2380,7 +2380,7 @@ final class MediatorServiceProvider extends ServiceProvider
         };
     }
 
-    private static IReadOnlyList<(string RelativePath, string Content)> BuildLaravelSagaPatternFiles()
+    internal static IReadOnlyList<(string RelativePath, string Content)> BuildLaravelSagaPatternFiles()
     {
         return new[]
         {
