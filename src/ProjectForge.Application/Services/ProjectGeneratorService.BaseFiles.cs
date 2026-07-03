@@ -13,31 +13,59 @@ public partial class ProjectGeneratorService
     {
         if (cfg.Architecture != ArchitectureType.Java) return;
 
-        var safeName = project.Name.Replace(" ", "");
-        var dbName   = $"{project.Name.ToLower().Replace(" ", "_")}_db";
-        var libs     = JsonSerializer.Deserialize<List<string>>(cfg.LibrariesJson) ?? [];
+        var dbName = $"{project.Name.ToLower().Replace(" ", "_")}_db";
+        var libs   = JsonSerializer.Deserialize<List<string>>(cfg.LibrariesJson) ?? [];
 
-        await EmitLogAsync(project, "Scaffold", "🏗️  Generando archivos base Java/Spring Boot...", ct: ct);
+        await EmitLogAsync(project, "Scaffold", $"🏗️  Generando archivos base Java/{cfg.Framework}...", ct: ct);
 
-        // src/main/resources/application.properties
         var resourcesPath = Path.Combine(path, "src", "main", "resources");
         Directory.CreateDirectory(resourcesPath);
-        await File.WriteAllTextAsync(
-            Path.Combine(resourcesPath, "application.properties"),
-            BuildJavaApplicationProperties(cfg.Database, dbName), ct);
-
-        // pom.xml — only if the generated project doesn't already have one
-        // (Spring Initializr already creates one; for Quarkus/Micronaut too)
         var pomPath = Path.Combine(path, "pom.xml");
-        if (!File.Exists(pomPath))
+
+        // Quarkus/Micronaut use entirely different config keys and Maven dependency
+        // coordinates than Spring Boot (quarkus.*/datasources.default.* vs spring.datasource.*,
+        // io.quarkus/io.micronaut.sql artifacts vs org.springframework.boot ones). Writing the
+        // Spring-flavored application.properties/pom dependencies into a Quarkus or Micronaut
+        // project used to leave the DB completely unconfigured — and for MongoDB/Redis it broke
+        // the Maven build outright, since spring-boot-starter-data-mongodb/redis can't resolve
+        // without the spring-boot-starter-parent BOM that a Quarkus/Micronaut pom.xml doesn't have.
+        switch (cfg.Framework)
         {
-            await File.WriteAllTextAsync(pomPath, BuildJavaPomXml(project.Name, cfg.Database, libs), ct);
-            await EmitLogAsync(project, "Scaffold", "✅ pom.xml generado", ct: ct);
-        }
-        else
-        {
-            // Inject DB dependency into existing pom.xml if not present
-            await InjectJavaDbDependencyAsync(pomPath, cfg.Database, ct);
+            case FrameworkType.Quarkus:
+                await File.WriteAllTextAsync(
+                    Path.Combine(resourcesPath, "application.properties"),
+                    BuildQuarkusApplicationProperties(cfg.Database, dbName), ct);
+                await InjectQuarkusDbDependencyAsync(pomPath, cfg.Database, ct);
+                await File.WriteAllTextAsync(Path.Combine(path, ".env"), BuildQuarkusEnvFile(cfg.Database, dbName), ct);
+                break;
+
+            case FrameworkType.Micronaut:
+                await File.WriteAllTextAsync(
+                    Path.Combine(resourcesPath, "application.properties"),
+                    BuildMicronautApplicationProperties(cfg.Database, dbName), ct);
+                await InjectMicronautDbDependencyAsync(pomPath, cfg.Database, ct);
+                await File.WriteAllTextAsync(Path.Combine(path, ".env"), BuildMicronautEnvFile(cfg.Database, dbName), ct);
+                break;
+
+            default: // Spring Boot
+                await File.WriteAllTextAsync(
+                    Path.Combine(resourcesPath, "application.properties"),
+                    BuildJavaApplicationProperties(cfg.Database, dbName), ct);
+
+                // pom.xml — only if the generated project doesn't already have one
+                if (!File.Exists(pomPath))
+                {
+                    await File.WriteAllTextAsync(pomPath, BuildJavaPomXml(project.Name, cfg.Database, libs), ct);
+                    await EmitLogAsync(project, "Scaffold", "✅ pom.xml generado", ct: ct);
+                }
+                else
+                {
+                    // Inject DB dependency into existing pom.xml if not present
+                    await InjectJavaDbDependencyAsync(pomPath, cfg.Database, ct);
+                }
+
+                await File.WriteAllTextAsync(Path.Combine(path, ".env"), BuildJavaEnvFile(cfg.Database, dbName), ct);
+                break;
         }
 
         // Dockerfile
@@ -47,9 +75,6 @@ public partial class ProjectGeneratorService
             await File.WriteAllTextAsync(dockerfilePath, BuildJavaDockerfile(), ct);
             await EmitLogAsync(project, "Scaffold", "✅ Dockerfile Java generado", ct: ct);
         }
-
-        // .env
-        await File.WriteAllTextAsync(Path.Combine(path, ".env"), BuildJavaEnvFile(cfg.Database, dbName), ct);
 
         await EmitLogAsync(project, "Scaffold", "✅ Archivos base Java generados", ct: ct);
     }
@@ -156,13 +181,17 @@ ENTRYPOINT ["java","-jar","app.jar"]
         await File.WriteAllTextAsync(Path.Combine(path, ".env"), BuildPythonEnvFile(cfg.Database, dbName), ct);
         await File.WriteAllTextAsync(Path.Combine(path, ".env.example"), BuildPythonEnvFile(cfg.Database, dbName), ct);
 
-        // app/database.py
+        // app/database.py — Django owns its DB config in settings.py (see ScaffoldDjangoAsync),
+        // so writing a SQLAlchemy database.py here would just be dead/misleading code for it.
         var appPath = Path.Combine(path, "app");
         Directory.CreateDirectory(appPath);
 
-        var dbConfigPath = Path.Combine(appPath, "database.py");
-        if (!File.Exists(dbConfigPath))
-            await File.WriteAllTextAsync(dbConfigPath, BuildPythonDatabaseConfig(cfg.Database, dbName), ct);
+        if (cfg.Framework != FrameworkType.Django)
+        {
+            var dbConfigPath = Path.Combine(appPath, "database.py");
+            if (!File.Exists(dbConfigPath))
+                await File.WriteAllTextAsync(dbConfigPath, BuildPythonDatabaseConfig(cfg.Framework, cfg.Database, dbName), ct);
+        }
 
         // app/main.py (framework entry point) — always write the DB-aware version
         var mainPath = Path.Combine(appPath, "main.py");
@@ -170,7 +199,7 @@ ENTRYPOINT ["java","-jar","app.jar"]
             var mainContent = cfg.Framework switch
             {
                 FrameworkType.FastAPI => BuildFastApiMain(cfg.Database, dbName),
-                FrameworkType.Django  => "",  // django-admin creates it
+                FrameworkType.Django  => "",  // Django's own manage.py/settings.py drive the app
                 FrameworkType.Flask   => BuildFlaskMain(cfg.Database, dbName),
                 _                     => BuildFastApiMain(cfg.Database, dbName)
             };
@@ -178,10 +207,14 @@ ENTRYPOINT ["java","-jar","app.jar"]
                 await File.WriteAllTextAsync(mainPath, mainContent, ct);
         }
 
-        // app/models.py
-        var modelsPath = Path.Combine(appPath, "models.py");
-        if (!File.Exists(modelsPath))
-            await File.WriteAllTextAsync(modelsPath, BuildPythonModels(cfg.Database), ct);
+        // app/models.py — same reasoning as database.py: Django models are declared per-app
+        // using django.db.models, not the SQLAlchemy declarative Base used here.
+        if (cfg.Framework != FrameworkType.Django)
+        {
+            var modelsPath = Path.Combine(appPath, "models.py");
+            if (!File.Exists(modelsPath))
+                await File.WriteAllTextAsync(modelsPath, BuildPythonModels(cfg.Framework, cfg.Database), ct);
+        }
 
         // Dockerfile
         var dockerfilePath = Path.Combine(path, "Dockerfile");
@@ -245,30 +278,105 @@ ENTRYPOINT ["java","-jar","app.jar"]
             "    return {\"status\": \"ok\"}\n";
     }
 
-    private static string BuildFlaskMain(DatabaseType db, string dbName) => $"""
-from flask import Flask, jsonify
-from dotenv import load_dotenv
-
-load_dotenv()
-
-app = Flask(__name__)
-app.config["SQLALCHEMY_DATABASE_URI"] = __import__("os").getenv("DATABASE_URL", "sqlite:///{dbName}.db")
-
-@app.route("/")
-def root():
-    return jsonify(message="Hello from ProjectForge!", db="{db}")
-
-@app.route("/health")
-def health():
-    return jsonify(status="ok")
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8000, debug=True)
-""";
-
-    private static string BuildPythonModels(DatabaseType db) => db switch
+    // Flask (WSGI, synchronous) needs framework-appropriate wiring per DB type — the old
+    // implementation only ever set app.config["SQLALCHEMY_DATABASE_URI"] and never called
+    // db.init_app()/db.create_all(), so the config value was dead and no table was ever
+    // created; for MongoDB/Redis it routed a mongodb://... or redis://... URL through the
+    // *relational* SQLALCHEMY_DATABASE_URI key, which SQLAlchemy can't parse at all.
+    private static string BuildFlaskMain(DatabaseType db, string dbName) => db switch
     {
-        DatabaseType.MongoDB => """
+        DatabaseType.MongoDB => BuildFlaskMongoMain(db),
+        DatabaseType.Redis   => BuildFlaskRedisMain(db),
+        _                    => BuildFlaskRelationalMain(db, dbName)
+    };
+
+    private static string BuildFlaskRelationalMain(DatabaseType db, string dbName)
+    {
+        string uriLine;
+        if (db == DatabaseType.SQLite)
+        {
+            uriLine = $"app.config[\"SQLALCHEMY_DATABASE_URI\"] = os.getenv(\"DATABASE_URL\", \"sqlite:///{dbName}.db\")";
+        }
+        else
+        {
+            var (dialect, defaultHost, defaultPort, defaultUser, defaultPassword) = db switch
+            {
+                DatabaseType.PostgreSQL => ("postgresql+psycopg2", "db", "5432", "postgres", "secret"),
+                DatabaseType.MySQL      => ("mysql+pymysql", "db", "3306", "root", "secret"),
+                DatabaseType.SqlServer  => ("mssql+pyodbc", "sqlserver", "1433", "sa", "YourStrong!Passw0rd"),
+                _                       => ("postgresql+psycopg2", "db", "5432", "postgres", "secret")
+            };
+
+            uriLine =
+                "app.config[\"SQLALCHEMY_DATABASE_URI\"] = (\n" +
+                $"    f\"{dialect}://{{os.getenv('DB_USER', '{defaultUser}')}}:{{os.getenv('DB_PASSWORD', '{defaultPassword}')}}\"\n" +
+                $"    f\"@{{os.getenv('DB_HOST', '{defaultHost}')}}:{{os.getenv('DB_PORT', '{defaultPort}')}}/{{os.getenv('DB_NAME', '{dbName}')}}\"\n" +
+                ")";
+        }
+
+        return
+            "from flask import Flask, jsonify\n" +
+            "from dotenv import load_dotenv\n" +
+            "import os\n\n" +
+            "from app.database import db\n\n" +
+            "load_dotenv()\n\n" +
+            "app = Flask(__name__)\n" +
+            uriLine + "\n" +
+            "app.config[\"SQLALCHEMY_TRACK_MODIFICATIONS\"] = False\n" +
+            "db.init_app(app)\n\n" +
+            "with app.app_context():\n" +
+            "    db.create_all()\n\n" +
+            "@app.route(\"/\")\n" +
+            "def root():\n" +
+            $"    return jsonify(message=\"Hello from ProjectForge!\", db=\"{db}\")\n\n" +
+            "@app.route(\"/health\")\n" +
+            "def health():\n" +
+            "    return jsonify(status=\"ok\")\n\n" +
+            "if __name__ == \"__main__\":\n" +
+            "    app.run(host=\"0.0.0.0\", port=8000, debug=True)\n";
+    }
+
+    private static string BuildFlaskMongoMain(DatabaseType db) =>
+        "from flask import Flask, jsonify\n" +
+        "from dotenv import load_dotenv\n" +
+        "from app.database import db as mongo_db\n\n" +
+        "load_dotenv()\n\n" +
+        "app = Flask(__name__)\n\n" +
+        "@app.route(\"/\")\n" +
+        "def root():\n" +
+        $"    return jsonify(message=\"Hello from ProjectForge!\", db=\"{db}\")\n\n" +
+        "@app.route(\"/health\")\n" +
+        "def health():\n" +
+        "    return jsonify(status=\"ok\")\n\n" +
+        "if __name__ == \"__main__\":\n" +
+        "    app.run(host=\"0.0.0.0\", port=8000, debug=True)\n";
+
+    private static string BuildFlaskRedisMain(DatabaseType db) =>
+        "from flask import Flask, jsonify\n" +
+        "from dotenv import load_dotenv\n" +
+        "from app.database import redis_client\n\n" +
+        "load_dotenv()\n\n" +
+        "app = Flask(__name__)\n\n" +
+        "@app.route(\"/\")\n" +
+        "def root():\n" +
+        $"    return jsonify(message=\"Hello from ProjectForge!\", db=\"{db}\")\n\n" +
+        "@app.route(\"/health\")\n" +
+        "def health():\n" +
+        "    redis_client.ping()\n" +
+        "    return jsonify(status=\"ok\")\n\n" +
+        "if __name__ == \"__main__\":\n" +
+        "    app.run(host=\"0.0.0.0\", port=8000, debug=True)\n";
+
+    private static string BuildPythonModels(FrameworkType fw, DatabaseType db)
+    {
+        if (db == DatabaseType.MongoDB)
+        {
+            // beanie/motor are asyncio-only and can't be driven from sync Flask views.
+            return fw == FrameworkType.Flask
+                ? "# MongoDB is schemaless — use app.database.db.items directly (a pymongo Collection),\n" +
+                  "# e.g. app.database.db.items.insert_one({...}). Kept as the conventional place\n" +
+                  "# to add validation helpers if/when you need them.\n"
+                : """
 from beanie import Document
 from pydantic import Field
 from typing import Optional
@@ -281,8 +389,28 @@ class Item(Document):
 
     class Settings:
         name = "items"
-""",
-        _ => """
+""";
+        }
+
+        if (db == DatabaseType.Redis)
+        {
+            return "# Redis is a key-value store — there's no relational \"model\" to declare here.\n" +
+                   "# Use app.database.redis_client (Flask) / app.database.get_redis() (FastAPI) directly.\n";
+        }
+
+        return fw == FrameworkType.Flask
+            ? """
+from app.database import db
+
+class Item(db.Model):
+    __tablename__ = "items"
+
+    id          = db.Column(db.Integer, primary_key=True, index=True)
+    name        = db.Column(db.String(255), nullable=False)
+    description = db.Column(db.String(1000), nullable=True)
+    created_at  = db.Column(db.DateTime, server_default=db.func.now())
+"""
+            : """
 from sqlalchemy import Column, Integer, String, DateTime, func
 from app.database import Base
 
@@ -293,8 +421,8 @@ class Item(Base):
     name        = Column(String(255), nullable=False)
     description = Column(String(1000), nullable=True)
     created_at  = Column(DateTime, server_default=func.now())
-"""
-    };
+""";
+    }
 
     private static string BuildPythonDockerfile(FrameworkType fw)
     {
@@ -490,7 +618,7 @@ ENTRYPOINT [\"dotnet\", \"{safeName}.dll\"]
 
         var dotIndex = versionText.IndexOf('.');
         if (dotIndex > 0)
-            versionText = versionText[..dotIndex + 2];
+            versionText = versionText[..(dotIndex + 2)];
 
         return versionText switch
         {

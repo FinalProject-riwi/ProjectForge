@@ -165,6 +165,11 @@ public partial class ProjectGeneratorService : IProjectGeneratorService
         return missing;
     }
 
+    // Python and JS scaffolding on Windows dev machines (README's "dotnet run" local flow,
+    // no Docker) needs "python"/"pip", not "python3"/"pip3" — the python.org Windows
+    // installer doesn't ship a python3.exe/pip3.exe alias the way Linux distros do.
+    private static string PythonExecutable => OperatingSystem.IsWindows() ? "python" : "python3";
+
     private static List<(string ToolName, string CheckCmd, string InstallHint)> GetRequiredToolChecks(WizardConfig cfg)
     {
         var checks = new List<(string, string, string)>();
@@ -175,23 +180,25 @@ public partial class ProjectGeneratorService : IProjectGeneratorService
                 checks.Add(("dotnet CLI", "dotnet --version", "https://dotnet.microsoft.com/download"));
                 break;
 
+            // Java scaffolding is entirely file-based (no "java"/"mvn" process is ever run by
+            // the generator itself — mvn only runs later, inside the generated Dockerfile, when
+            // someone builds that image). Requiring them here used to hard-block every Java
+            // project on any host that doesn't happen to have a JDK/Maven globally installed,
+            // even though nothing in the generation pipeline needs them.
             case ArchitectureType.Java:
-                checks.Add(("Java JDK 17+", "java -version", "https://adoptium.net/"));
-                checks.Add(("Maven", "mvn -version", "https://maven.apache.org/install.html"));
                 break;
 
+            // Python scaffolding is also file-based except for InstallLibrariesAsync's
+            // "pip install" step, which only runs when the user picked extra libraries — so
+            // pip is the one real host dependency. The previous checks additionally required
+            // django/fastapi/flask to already be importable in the HOST's own global Python
+            // environment, which has nothing to do with whether the generated project (which
+            // ships its own requirements.txt) will work — that check tested the wrong thing
+            // and could block generation on any host that hadn't manually preinstalled those
+            // packages globally.
             case ArchitectureType.Python:
-                checks.Add(("Python 3", "python3 --version", "https://www.python.org/downloads/"));
-                checks.Add(("pip3", "pip3 --version", "Se instala con Python 3.4+"));
-                if (cfg.Framework == FrameworkType.Django)
-                    checks.Add(("Django", "python3 -c \"import django; print(django.__version__)\"",
-                        "pip3 install django"));
-                if (cfg.Framework == FrameworkType.FastAPI)
-                    checks.Add(("FastAPI", "python3 -c \"import fastapi; print(fastapi.__version__)\"",
-                        "pip3 install fastapi uvicorn"));
-                if (cfg.Framework == FrameworkType.Flask)
-                    checks.Add(("Flask", "python3 -c \"import flask; print(flask.__version__)\"",
-                        "pip3 install flask"));
+                checks.Add(("Python 3", $"{PythonExecutable} --version", "https://www.python.org/downloads/"));
+                checks.Add(("pip", $"{PythonExecutable} -m pip --version", "Se instala con Python 3.4+"));
                 break;
 
             case ArchitectureType.Php:

@@ -621,7 +621,11 @@ framework:
         arch switch
         {
             ArchitectureType.DotNet => libs.Select(l => $"dotnet add package {l}"),
-            ArchitectureType.Python => new[] { $"pip install {string.Join(" ", libs)}" },
+            // "python -m pip install" avoids relying on a bare "pip"/"pip3" executable being on
+            // PATH separately from the interpreter — it's the same invocation the pre-flight
+            // check in GetRequiredToolChecks verifies, so a passed check can't be followed by a
+            // "pip: command not found" failure here.
+            ArchitectureType.Python => new[] { $"{PythonExecutable} -m pip install {string.Join(" ", libs)}" },
             ArchitectureType.JavaScript or ArchitectureType.TypeScript => new[] { $"npm install {string.Join(" ", libs)}" },
             ArchitectureType.Php => new[] { $"composer require {string.Join(" ", libs)}" },
             // Java: Maven packages are declared in pom.xml; we log instructions instead of running mvn

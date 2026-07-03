@@ -12,7 +12,10 @@ public partial class ProjectGeneratorService
     {
         if (cfg.Architecture != ArchitectureType.Python) return;
 
-        var safeName = project.Name.Replace(" ", "_").ToLowerInvariant();
+        // Must be a valid Python identifier — Django's manage.py imports it as a module
+        // (DJANGO_SETTINGS_MODULE = '{name}.settings'), which fails for names containing
+        // hyphens or starting with a digit.
+        var safeName = ToPythonIdentifier(project.Name);
 
         switch (cfg.Framework)
         {
@@ -20,7 +23,7 @@ public partial class ProjectGeneratorService
                 await ScaffoldFastApiAsync(path, safeName, ct);
                 break;
             case FrameworkType.Django:
-                await ScaffoldDjangoAsync(path, safeName, ct);
+                await ScaffoldDjangoAsync(path, safeName, cfg.Database, ct);
                 break;
             case FrameworkType.Flask:
                 await ScaffoldFlaskAsync(path, safeName, ct);
@@ -72,7 +75,7 @@ public partial class ProjectGeneratorService
             "__pycache__/\n*.pyc\nvenv/\n.env\n.env.*\n*.egg-info/\ndist/\n");
     }
 
-    private static async Task ScaffoldDjangoAsync(string path, string name, CancellationToken ct)
+    private static async Task ScaffoldDjangoAsync(string path, string name, DatabaseType db, CancellationToken ct)
     {
         var projectDir = Path.Combine(path, name);
         Directory.CreateDirectory(projectDir);
@@ -84,9 +87,7 @@ public partial class ProjectGeneratorService
         Directory.CreateDirectory(Path.Combine(path, "app", "handlers"));
 
         await WriteAsync(Path.Combine(path, "requirements.txt"), ct,
-            "Django>=5.0\n" +
-            "djangorestframework>=3.15.0\n" +
-            "python-dotenv>=1.0.0\n");
+            BuildDjangoRequirementsTxt(db));
 
         await WriteAsync(Path.Combine(path, "manage.py"), ct,
             "#!/usr/bin/env python\n" +
@@ -129,12 +130,8 @@ public partial class ProjectGeneratorService
             "]\n\n" +
             "ROOT_URLCONF = '" + name + ".urls'\n" +
             "DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'\n" +
-            "DATABASES = {\n" +
-            "    'default': {\n" +
-            "        'ENGINE': 'django.db.backends.sqlite3',\n" +
-            "        'NAME': BASE_DIR / 'db.sqlite3',\n" +
-            "    }\n" +
-            "}\n" +
+            BuildDjangoDatabasesBlock(db) +
+            BuildDjangoExtrasBlock(db) +
             "STATIC_URL = '/static/'\n";
         await WriteAsync(Path.Combine(projectDir, "settings.py"), ct, settings);
 
@@ -145,8 +142,7 @@ public partial class ProjectGeneratorService
             "    path('admin/', admin.site.urls),\n" +
             "]\n");
 
-        await WriteAsync(Path.Combine(path, ".env"), ct,
-            "SECRET_KEY=change-me-in-production\nDEBUG=True\n");
+        await WriteAsync(Path.Combine(path, ".env"), ct, BuildDjangoEnvFile(db));
         await WriteAsync(Path.Combine(path, ".gitignore"), ct,
             "__pycache__/\n*.pyc\nvenv/\n.env\ndb.sqlite3\n");
     }
@@ -201,6 +197,9 @@ public partial class ProjectGeneratorService
         var className = string.Concat(
             project.Name.Split(' ', '-')
                 .Select(w => w.Length > 0 ? char.ToUpper(w[0]) + w[1..] : w));
+        // A class name can't start with a digit (e.g. project "3-tier-app" → "3TierApp" is invalid Java).
+        if (className.Length == 0 || char.IsDigit(className[0]))
+            className = "App" + className;
         var artifact = project.Name.ToLowerInvariant().Replace(" ", "-");
         var bootVersion = cfg.FrameworkVersion ?? "3.3.5";
 
@@ -223,7 +222,7 @@ public partial class ProjectGeneratorService
     private static async Task ScaffoldSpringBootAsync(
         string path, string className, string artifact, string bootVersion, CancellationToken ct)
     {
-        var pkg = "com.example." + artifact.Replace("-", "");
+        var pkg = "com.example." + ToJavaPackageSegment(artifact);
         var pkgPath = pkg.Replace(".", Path.DirectorySeparatorChar.ToString());
         var srcMain = Path.Combine(path, "src", "main", "java", pkgPath);
         var srcTest = Path.Combine(path, "src", "test", "java", pkgPath);
@@ -282,7 +281,7 @@ public partial class ProjectGeneratorService
     private static async Task ScaffoldQuarkusAsync(
         string path, string className, string artifact, CancellationToken ct)
     {
-        var pkg = "com.example." + artifact.Replace("-", "");
+        var pkg = "com.example." + ToJavaPackageSegment(artifact);
         var pkgPath = pkg.Replace(".", Path.DirectorySeparatorChar.ToString());
         Directory.CreateDirectory(Path.Combine(path, "src", "main", "java", pkgPath));
         Directory.CreateDirectory(Path.Combine(path, "src", "main", "resources"));
@@ -338,7 +337,7 @@ public partial class ProjectGeneratorService
     private static async Task ScaffoldMicronautAsync(
         string path, string className, string artifact, CancellationToken ct)
     {
-        var pkg = "com.example." + artifact.Replace("-", "");
+        var pkg = "com.example." + ToJavaPackageSegment(artifact);
         var pkgPath = pkg.Replace(".", Path.DirectorySeparatorChar.ToString());
         Directory.CreateDirectory(Path.Combine(path, "src", "main", "java", pkgPath));
 
@@ -389,5 +388,127 @@ public partial class ProjectGeneratorService
     {
         Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
         await File.WriteAllTextAsync(filePath, content, ct);
+    }
+
+    // A Java package segment can't start with a digit (e.g. artifact "3-tier-app" → "3tierapp"
+    // would produce the illegal package "com.example.3tierapp").
+    private static string ToJavaPackageSegment(string artifact)
+    {
+        var segment = artifact.Replace("-", "");
+        if (segment.Length == 0 || char.IsDigit(segment[0]))
+            segment = "app" + segment;
+        return segment;
+    }
+
+    // ─── Django: DB-aware settings ────────────────────────────────────────────
+
+    private static string BuildDjangoRequirementsTxt(DatabaseType db)
+    {
+        var packages = new List<string> { "Django>=5.0", "djangorestframework>=3.15.0", "python-dotenv>=1.0.0" };
+        packages.AddRange(GetDjangoDbPackages(db));
+        return string.Join("\n", packages) + "\n";
+    }
+
+    private static IReadOnlyList<string> GetDjangoDbPackages(DatabaseType db) => db switch
+    {
+        DatabaseType.PostgreSQL => new[] { "psycopg2-binary>=2.9.9" },
+        DatabaseType.MySQL      => new[] { "mysqlclient>=2.2.0" },
+        DatabaseType.SqlServer  => new[] { "mssql-django>=1.5", "pyodbc>=5.0.0" },
+        // Django's ORM has no first-party MongoDB/Redis backend — 'default' stays on SQLite
+        // and these are used directly (pymongo client / django-redis cache), see
+        // BuildDjangoDatabasesBlock/BuildDjangoExtrasBlock below.
+        DatabaseType.MongoDB    => new[] { "pymongo>=4.7.0" },
+        DatabaseType.Redis      => new[] { "django-redis>=5.4.0", "redis>=5.0.0" },
+        _                       => Array.Empty<string>()
+    };
+
+    // Fixes a real generation bug: settings.py used to hardcode sqlite3 regardless of the
+    // database picked in the wizard, so selecting Postgres/MySQL/SqlServer for a Django
+    // project silently produced a SQLite app instead.
+    private static string BuildDjangoDatabasesBlock(DatabaseType db) => db switch
+    {
+        DatabaseType.PostgreSQL =>
+            "DATABASES = {\n" +
+            "    'default': {\n" +
+            "        'ENGINE': 'django.db.backends.postgresql',\n" +
+            "        'NAME': os.getenv('DB_NAME', 'app_db'),\n" +
+            "        'USER': os.getenv('DB_USER', 'postgres'),\n" +
+            "        'PASSWORD': os.getenv('DB_PASSWORD', 'secret'),\n" +
+            "        'HOST': os.getenv('DB_HOST', 'db'),\n" +
+            "        'PORT': os.getenv('DB_PORT', '5432'),\n" +
+            "    }\n" +
+            "}\n",
+        DatabaseType.MySQL =>
+            "DATABASES = {\n" +
+            "    'default': {\n" +
+            "        'ENGINE': 'django.db.backends.mysql',\n" +
+            "        'NAME': os.getenv('DB_NAME', 'app_db'),\n" +
+            "        'USER': os.getenv('DB_USER', 'root'),\n" +
+            "        'PASSWORD': os.getenv('DB_PASSWORD', 'secret'),\n" +
+            "        'HOST': os.getenv('DB_HOST', 'db'),\n" +
+            "        'PORT': os.getenv('DB_PORT', '3306'),\n" +
+            "    }\n" +
+            "}\n",
+        DatabaseType.SqlServer =>
+            "DATABASES = {\n" +
+            "    'default': {\n" +
+            "        'ENGINE': 'mssql',  # pip package: mssql-django\n" +
+            "        'NAME': os.getenv('DB_NAME', 'app_db'),\n" +
+            "        'USER': os.getenv('DB_USER', 'sa'),\n" +
+            "        'PASSWORD': os.getenv('DB_PASSWORD', 'YourStrong!Passw0rd'),\n" +
+            "        'HOST': os.getenv('DB_HOST', 'sqlserver'),\n" +
+            "        'PORT': os.getenv('DB_PORT', '1433'),\n" +
+            "        'OPTIONS': {'driver': 'ODBC Driver 18 for SQL Server', 'extra_params': 'TrustServerCertificate=yes'},\n" +
+            "    }\n" +
+            "}\n",
+        // MongoDB/Redis aren't relational stores Django's ORM can target — 'default' keeps
+        // using SQLite for Django's own auth/sessions/admin tables (see BuildDjangoExtrasBlock
+        // for the actual MongoDB/Redis wiring).
+        _ =>
+            "DATABASES = {\n" +
+            "    'default': {\n" +
+            "        'ENGINE': 'django.db.backends.sqlite3',\n" +
+            "        'NAME': BASE_DIR / 'db.sqlite3',\n" +
+            "    }\n" +
+            "}\n"
+    };
+
+    private static string BuildDjangoExtrasBlock(DatabaseType db) => db switch
+    {
+        DatabaseType.MongoDB =>
+            "\n# MongoDB is used as a document store via pymongo; Django's ORM (DATABASES above)\n" +
+            "# keeps using SQLite for its own auth/sessions/admin tables.\n" +
+            "MONGODB_URL = os.getenv('MONGODB_URL', 'mongodb://mongo:27017/app_db')\n\n",
+        DatabaseType.Redis =>
+            "\nCACHES = {\n" +
+            "    'default': {\n" +
+            "        'BACKEND': 'django_redis.cache.RedisCache',\n" +
+            "        'LOCATION': os.getenv('REDIS_URL', 'redis://redis:6379/0'),\n" +
+            "        'OPTIONS': {'CLIENT_CLASS': 'django_redis.client.DefaultClient'},\n" +
+            "    }\n" +
+            "}\n\n",
+        _ => "\n"
+    };
+
+    private static string BuildDjangoEnvFile(DatabaseType db) => db switch
+    {
+        DatabaseType.PostgreSQL => "SECRET_KEY=change-me-in-production\nDEBUG=True\nDB_HOST=db\nDB_PORT=5432\nDB_NAME=app_db\nDB_USER=postgres\nDB_PASSWORD=secret\n",
+        DatabaseType.MySQL      => "SECRET_KEY=change-me-in-production\nDEBUG=True\nDB_HOST=db\nDB_PORT=3306\nDB_NAME=app_db\nDB_USER=root\nDB_PASSWORD=secret\n",
+        DatabaseType.SqlServer  => "SECRET_KEY=change-me-in-production\nDEBUG=True\nDB_HOST=sqlserver\nDB_PORT=1433\nDB_NAME=app_db\nDB_USER=sa\nDB_PASSWORD=YourStrong!Passw0rd\n",
+        DatabaseType.MongoDB    => "SECRET_KEY=change-me-in-production\nDEBUG=True\nMONGODB_URL=mongodb://mongo:27017/app_db\n",
+        DatabaseType.Redis      => "SECRET_KEY=change-me-in-production\nDEBUG=True\nREDIS_URL=redis://redis:6379/0\n",
+        _                       => "SECRET_KEY=change-me-in-production\nDEBUG=True\n"
+    };
+
+    // Turns a project name into a valid Python module/package identifier: letters, digits and
+    // underscores only, never starting with a digit. Project names are allowed to contain
+    // hyphens (e.g. "my-app"), but "import my-app" / "my-app.settings" is a Python syntax error —
+    // Django's manage.py builds exactly that import path from this name.
+    private static string ToPythonIdentifier(string name, string fallback = "app")
+    {
+        var chars = name.Select(c => char.IsLetterOrDigit(c) ? char.ToLowerInvariant(c) : '_').ToArray();
+        var collapsed = System.Text.RegularExpressions.Regex.Replace(new string(chars), "_+", "_").Trim('_');
+        if (collapsed.Length == 0) return fallback;
+        return char.IsDigit(collapsed[0]) ? "_" + collapsed : collapsed;
     }
 }

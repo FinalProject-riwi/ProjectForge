@@ -580,12 +580,16 @@ public class ApiV1Controller : ControllerBase
                 tools.Add(new(".NET SDK",  "dotnet", "https://dotnet.microsoft.com/download", "SDK de .NET para compilar y ejecutar la aplicación"));
                 break;
             case "java":
-                tools.Add(new("Java JDK 21+", "java", "https://adoptium.net/",                       "JDK para compilar y ejecutar aplicaciones Java"));
-                tools.Add(new("Maven (mvn)",   "mvn",  "https://maven.apache.org/download.cgi",        "Gestor de dependencias y build para proyectos Java"));
+                // Java scaffolding writes pom.xml/*.java by hand — java/mvn aren't invoked
+                // during generation itself, only later if you build the generated Dockerfile
+                // outside Docker, so they're informational here rather than hard requirements.
+                tools.Add(new("Java JDK 21+", "java", "https://adoptium.net/",                       "Necesario solo si compilas el proyecto generado fuera de Docker"));
+                tools.Add(new("Maven (mvn)",   "mvn",  "https://maven.apache.org/download.cgi",        "Necesario solo si compilas el proyecto generado fuera de Docker"));
                 break;
             case "python":
-                tools.Add(new("Python 3.10+", "python3", "https://www.python.org/downloads/",           "Intérprete de Python"));
-                tools.Add(new("pip3",          "pip3",    "https://pip.pypa.io/en/stable/installation/", "Gestor de paquetes de Python"));
+                var pythonCmd = OperatingSystem.IsWindows() ? "python" : "python3";
+                tools.Add(new("Python 3.10+", pythonCmd, "https://www.python.org/downloads/",            "Intérprete de Python"));
+                tools.Add(new("pip",          pythonCmd, "https://pip.pypa.io/en/stable/installation/",  "Gestor de paquetes de Python (python -m pip)"));
                 break;
             case "php":
                 tools.Add(new("PHP 8.2+",  "php",      "https://www.php.net/downloads",           "Intérprete de PHP"));
