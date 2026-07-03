@@ -325,7 +325,7 @@
     const username = (dashInit.dataset.username || 'amigo').split(' ')[0];
 
     setTimeout(() => {
-      va.speak(`¡Hola ${username}! Soy tu asistente de ProjectForge. Cuéntame qué tipo de proyecto quieres crear.`);
+      va.speak(`¡Hola ${username}! Soy tu asistente de TabBuilder. Cuéntame qué tipo de proyecto quieres crear.`);
     }, 700);
 
     window.__voiceDashboardListen = async function () {

@@ -135,9 +135,13 @@
         }
 
         const connection = new signalR.HubConnectionBuilder()
-            .withUrl('/hubs/generation')
-            .withAutomaticReconnect([2000, 3000, 5000, 10000])
-            .configureLogging(signalR.LogLevel.Warning)
+            .withUrl('/hubs/generation', {
+                skipNegotiation: false,
+                transport: signalR.HttpTransportType.WebSockets | signalR.HttpTransportType.LongPolling,
+                withCredentials: true
+            })
+            .withAutomaticReconnect([1000, 2000, 3000, 5000, 10000, 15000, 30000])
+            .configureLogging(signalR.LogLevel.Information)
             .build();
 
         connection.on('ReceiveLog', function(log) {
@@ -202,7 +206,7 @@
                 addLine('🔌 Conectando a /hubs/generation...', 'info');
                 await connection.start();
                 setConnected();
-                addLine('✅ Conexión establecida', 'success');
+                addLine('✅ Conexión establecida con el servidor', 'success');
 
                 await connection.invoke('JoinProjectRoom', projectId.toString());
                 addLine('📡 Escuchando eventos del proyecto #' + projectId + '...', 'info');
@@ -227,14 +231,16 @@
                     if (data.success === false && currentProgress < 100) showCompletion(false);
                 })
                 .catch(function(err) {
-                    addLine('❌ Error HTTP al iniciar generación: ' + err.message, 'error');
+                    addLine('❌ Error HTTP al iniciar generación: ' + (err.message || err), 'error');
+                    setDisconnected('Error en servidor');
                 });
-
-            } catch(err) {
-                setDisconnected('Error de conexión');
-                addLine('❌ No se pudo conectar: ' + err.message, 'error');
-                addLine('ℹ️ Reintentando en 4 segundos...', 'info');
-                setTimeout(startGeneration, 4000);
+            } catch (err) {
+                var errorMsg = err.message || String(err);
+                addLine('❌ Error de conexión SignalR: ' + errorMsg, 'error');
+                setDisconnected('Error: ' + errorMsg);
+                
+                // Sugerir al usuario que recargue y reintente
+                addLine('💡 Recarga la página (F5) y vuelve a intentar.', 'info');
             }
         }
 

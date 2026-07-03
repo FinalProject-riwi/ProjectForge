@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OAuth;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using ProjectForge.Application.AI;
@@ -171,8 +172,37 @@ builder.Services.AddAuthentication(options =>
 });
 
 builder.Services.AddAuthorization();
+
+// ─── CORS para SignalR en producción ────────────────────────────────────────
+// Permite la conexión desde el mismo origen y WebSocket
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("SignalRCorsPolicy", policyBuilder =>
+    {
+        policyBuilder
+            .AllowAnyMethod()
+            .AllowAnyHeader()
+            .AllowCredentials()  // ← CRÍTICO para SignalR con autenticación
+            .WithOrigins(
+                "https://tabbuilderr.duckdns.org",
+                "http://localhost:5000",
+                "http://localhost:3000",
+                "https://localhost:5001"
+            );
+    });
+});
+
 builder.Services.AddControllersWithViews();
-builder.Services.AddSignalR();
+
+// ─── SignalR con configuración para producción ──────────────────────────────
+builder.Services.AddSignalR(opts =>
+{
+    opts.MaximumReceiveMessageSize = 32 * 1024 * 1024; // 32 MB para archivos grandes
+    opts.KeepAliveInterval = TimeSpan.FromSeconds(15);
+    opts.ClientTimeoutInterval = TimeSpan.FromSeconds(30);
+    opts.HandshakeTimeout = TimeSpan.FromSeconds(15);
+});
+
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
@@ -251,12 +281,20 @@ if (!string.IsNullOrWhiteSpace(httpsPort))
 }
 app.UseStaticFiles();
 app.UseRouting();
+
+// ─── CORS debe aplicarse después de UseRouting pero antes de los endpoints ──
+app.UseCors("SignalRCorsPolicy");
+
 app.UseSession();
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllerRoute("default", "{controller=Home}/{action=Index}/{id?}");
 app.MapControllers(); // Maps [ApiController] attribute-based routes (e.g. ApiV1Controller)
-app.MapHub<ProjectForge.Web.Hubs.GenerationHub>("/hubs/generation");
+app.MapHub<ProjectForge.Web.Hubs.GenerationHub>("/hubs/generation", opts =>
+{
+    opts.Transports = HttpTransportType.WebSockets 
+                     | HttpTransportType.LongPolling;
+});
 
 await app.RunAsync();
