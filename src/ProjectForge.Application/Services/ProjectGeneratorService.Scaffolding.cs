@@ -33,7 +33,7 @@ public partial class ProjectGeneratorService
     private static IEnumerable<(string Command, string? WorkingDir)> GetScaffoldCommands(
         WizardConfig cfg, string projectName, string path)
     {
-        var safeName = projectName.Replace(" ", "");
+        var safeName = GetValidDotNetProjectName(projectName);
 
         return cfg.Architecture switch
         {
@@ -91,6 +91,16 @@ public partial class ProjectGeneratorService
     }
 
     // ─── Paso 2b: Base files de JS/TS ─────────────────────────────────────────
+
+    private static string GetValidDotNetProjectName(string projectName)
+    {
+        var safeName = System.Text.RegularExpressions.Regex.Replace(projectName.Trim(), @"[^\w]", "");
+        if (string.IsNullOrEmpty(safeName))
+            return "ProjectForgeApp";
+        if (char.IsDigit(safeName[0]))
+            safeName = "Project" + safeName;
+        return safeName;
+    }
 
     private async Task ScaffoldJavaScriptBaseFilesAsync(Project project, WizardConfig cfg, string path, CancellationToken ct)
     {

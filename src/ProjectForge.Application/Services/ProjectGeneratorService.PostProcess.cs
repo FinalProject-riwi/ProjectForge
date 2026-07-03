@@ -608,10 +608,12 @@ framework:
         {
             await EmitLogAsync(project, "Dependencies", $"$ {cmd}", ct: ct);
             var result = await _shell.RunAsync(cmd, path, ct);
-            if (result.Success)
-                await EmitLogAsync(project, "Dependencies", "✅ Instalado", ct: ct);
-            else
-                await EmitLogAsync(project, "Dependencies", $"⚠️ Advertencia: {result.Stderr}", isError: true, ct: ct);
+            if (!result.Success)
+            {
+                await EmitLogAsync(project, "Dependencies", $"❌ Instalación falló: {result.Stderr}", isError: true, ct: ct);
+                throw new InvalidOperationException($"Instalación de dependencias falló: {result.Stderr}");
+            }
+            await EmitLogAsync(project, "Dependencies", "✅ Instalado", ct: ct);
         }
     }
 
@@ -760,19 +762,29 @@ framework:
         await EmitLogAsync(project, "GitHub", $"✅ Repositorio creado: {repoUrl}", ct: ct);
 
         await EmitLogAsync(project, "GitHub", "$ git init && git add . && git commit", ct: ct);
-        await _shell.RunAsync("git init", path, ct);
-        await _shell.RunAsync("git config user.email \"projectforge@noreply.github.com\"", path, ct);
-        await _shell.RunAsync("git config user.name \"ProjectForge\"", path, ct);
-        await _shell.RunAsync("git add .", path, ct);
-        await _shell.RunAsync("git commit -m \"chore: initial scaffold by ProjectForge\"", path, ct);
-        await _shell.RunAsync($"git remote add origin {repoUrl}", path, ct);
-        await _shell.RunAsync("git branch -M main", path, ct);
+        await RunGitCommandAsync(project, "git init", path, ct);
+        await RunGitCommandAsync(project, "git config user.email \"projectforge@noreply.github.com\"", path, ct);
+        await RunGitCommandAsync(project, "git config user.name \"ProjectForge\"", path, ct);
+        await RunGitCommandAsync(project, "git add .", path, ct);
+        await RunGitCommandAsync(project, "git commit -m \"chore: initial scaffold by ProjectForge\"", path, ct);
+        await RunGitCommandAsync(project, $"git remote add origin {repoUrl}", path, ct);
+        await RunGitCommandAsync(project, "git branch -M main", path, ct);
 
         await EmitLogAsync(project, "GitHub", "$ git push -u origin main", ct: ct);
         await _github.PushToRepositoryAsync(path, repoUrl, token);
         await EmitLogAsync(project, "GitHub", "🚀 Push completado. ¡Proyecto en GitHub!", ct: ct);
 
         return repoUrl;
+    }
+
+    private async Task RunGitCommandAsync(Project project, string command, string path, CancellationToken ct)
+    {
+        var result = await _shell.RunAsync(command, path, ct);
+        if (!result.Success)
+        {
+            await EmitLogAsync(project, "GitHub", $"❌ Comando git falló: {result.Stderr}", isError: true, ct: ct);
+            throw new InvalidOperationException($"Git command failed: {result.Stderr}");
+        }
     }
 
     private static bool ShouldCreatePrivateRepo(WizardConfig cfg)

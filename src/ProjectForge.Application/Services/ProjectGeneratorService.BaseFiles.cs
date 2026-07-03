@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using ProjectForge.Core.Entities;
 using ProjectForge.Core.Enums;
 
@@ -348,8 +349,10 @@ def test_placeholder():
     {
         if (cfg.Architecture != ArchitectureType.DotNet) return;
 
-        var safeName = project.Name.Replace(" ", "");
-        var dbName   = $"{project.Name.ToLower().Replace(" ", "_")}_db";
+        var safeName = GetValidDotNetProjectName(project.Name);
+        var namespaceName = GetValidDotNetNamespace(project.Name);
+        var dbName   = GetValidDatabaseName(project.Name);
+        var sdkVersion = GetDotNetSdkVersion(cfg.FrameworkVersion);
 
         await EmitLogAsync(project, "Scaffold", "🏗️  Configurando archivos .NET...", ct: ct);
 
@@ -371,14 +374,23 @@ def test_placeholder():
             if (!string.IsNullOrEmpty(connString))
             {
                 var json = await File.ReadAllTextAsync(appSettingsPath, ct);
-                // Inject ConnectionStrings section if missing
-                if (!json.Contains("\"ConnectionStrings\""))
+                try
                 {
-                    json = json.TrimEnd();
-                    if (json.EndsWith("}"))
-                        json = json[..^1].TrimEnd().TrimEnd(',') +
-                               $",\n  \"ConnectionStrings\": {{\n    \"Default\": \"{connString}\"\n  }}\n}}";
-                    await File.WriteAllTextAsync(appSettingsPath, json, ct);
+                    var rootNode = JsonNode.Parse(json)?.AsObject();
+                    if (rootNode != null && rootNode["ConnectionStrings"] == null)
+                    {
+                        var connectionNode = JsonNode.Parse($"{{\"Default\": \"{connString}\"}}")?.AsObject();
+                        if (connectionNode != null)
+                        {
+                            rootNode["ConnectionStrings"] = connectionNode;
+                            await File.WriteAllTextAsync(appSettingsPath,
+                                rootNode.ToJsonString(new JsonSerializerOptions { WriteIndented = true }), ct);
+                        }
+                    }
+                }
+                catch
+                {
+                    // Ignorar si el JSON no es válido o no se puede parsear.
                 }
             }
         }
@@ -402,9 +414,6 @@ def test_placeholder():
                                       or DatabaseType.SqlServer  or DatabaseType.SQLite;
         if (needsEfCore)
         {
-            var infraDir = Path.Combine(path, "src", "Infrastructure", "Data");
-            // For non-Clean-Arch projects the folder is just 'Data' or 'Infrastructure'
-            // Try to place it relative to where the project already is
             var projectFiles = Directory.GetFiles(path, "*.csproj", SearchOption.AllDirectories);
             var projectDir   = projectFiles.Length > 0
                 ? Path.GetDirectoryName(projectFiles[0])!
@@ -415,14 +424,18 @@ def test_placeholder():
             var ctxPath = Path.Combine(dataDir, "AppDbContext.cs");
             if (!File.Exists(ctxPath))
             {
-                var ns = safeName;
                 await File.WriteAllTextAsync(ctxPath, $$"""
 using Microsoft.EntityFrameworkCore;
 
-namespace {{ns}}.Data;
+namespace {{namespaceName}}.Data;
 
-public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
+public class AppDbContext : DbContext
 {
+    public AppDbContext(DbContextOptions<AppDbContext> options)
+        : base(options)
+    {
+    }
+
     // Add your DbSet<TEntity> properties here
     // public DbSet<Item> Items { get; set; }
 
@@ -445,25 +458,65 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             var csprojRelative = projectFiles.Length > 0
                 ? Path.GetRelativePath(path, projectFiles[0]).Replace("\\", "/")
                 : $"{safeName}/{safeName}.csproj";
-            var projDir = Path.GetDirectoryName(csprojRelative) ?? safeName;
 
             var dockerfile = $"""
-FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:{sdkVersion} AS build
 WORKDIR /src
 COPY . .
 RUN dotnet restore "{csprojRelative}"
 RUN dotnet publish "{csprojRelative}" -c Release -o /app/publish
 
-FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
+FROM mcr.microsoft.com/dotnet/aspnet:{sdkVersion} AS final
 WORKDIR /app
 COPY --from=build /app/publish .
 EXPOSE 8080
-ENTRYPOINT ["dotnet", "{safeName}.dll"]
+ENTRYPOINT [\"dotnet\", \"{safeName}.dll\"]
 """;
             await File.WriteAllTextAsync(dockerfilePath, dockerfile, ct);
             await EmitLogAsync(project, "Scaffold", "✅ Dockerfile .NET generado", ct: ct);
         }
 
         await EmitLogAsync(project, "Scaffold", "✅ Archivos base .NET generados", ct: ct);
+    }
+
+    private static string GetDotNetSdkVersion(string frameworkVersion)
+    {
+        if (string.IsNullOrWhiteSpace(frameworkVersion))
+            return "10.0";
+
+        var versionText = frameworkVersion.Trim();
+        if (versionText.StartsWith("net", StringComparison.OrdinalIgnoreCase))
+            versionText = versionText[3..];
+
+        var dotIndex = versionText.IndexOf('.');
+        if (dotIndex > 0)
+            versionText = versionText[..dotIndex + 2];
+
+        return versionText switch
+        {
+            "7" or "7.0" => "7.0",
+            "8" or "8.0" => "8.0",
+            "9" or "9.0" => "9.0",
+            "10" or "10.0" => "10.0",
+            _ => "10.0"
+        };
+    }
+
+    private static string GetValidDotNetNamespace(string projectName)
+    {
+        var candidate = System.Text.RegularExpressions.Regex.Replace(projectName.Trim(), @"[^\w]", "");
+        if (string.IsNullOrWhiteSpace(candidate))
+            return "ProjectForge";
+        if (char.IsDigit(candidate[0]))
+            candidate = "Project" + candidate;
+        return candidate;
+    }
+
+    private static string GetValidDatabaseName(string projectName)
+    {
+        var safeName = System.Text.RegularExpressions.Regex.Replace(projectName.Trim().ToLowerInvariant(), @"[^a-z0-9_]", "_");
+        if (string.IsNullOrWhiteSpace(safeName))
+            return "projectforge_db";
+        return safeName;
     }
 }
