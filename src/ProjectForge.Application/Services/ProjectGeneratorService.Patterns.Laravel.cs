@@ -597,6 +597,174 @@ services:
       - "5672:5672"
       - "15672:15672"
 """,
+            // Previously fell into the SQLite default below — no sqlserver/mongo/redis container
+            // was ever started, even though .env.example and the Dockerfile (which already
+            // installs the matching PECL extension) both expected one.
+            DatabaseType.SqlServer => """
+version: '3.9'
+services:
+  gateway:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      PROJECTS_SERVICE_URL: http://projects-service:8080
+      NOTIFICATIONS_SERVICE_URL: http://notifications-service:8080
+    depends_on:
+      - projects-service
+      - notifications-service
+      - rabbitmq
+
+  projects-service:
+    build: ./services/projects
+    ports:
+      - "8081:8080"
+    environment:
+      DB_CONNECTION: sqlsrv
+      DB_HOST: sqlserver
+      DB_PORT: 1433
+      DB_DATABASE: projects_db
+      DB_USERNAME: sa
+      DB_PASSWORD: YourStrong!Passw0rd
+      QUEUE_CONNECTION: rabbitmq
+    depends_on:
+      - sqlserver
+      - rabbitmq
+
+  notifications-service:
+    build: ./services/notifications
+    ports:
+      - "8082:8080"
+    environment:
+      DB_CONNECTION: sqlsrv
+      DB_HOST: sqlserver
+      DB_PORT: 1433
+      DB_DATABASE: notifications_db
+      DB_USERNAME: sa
+      DB_PASSWORD: YourStrong!Passw0rd
+      QUEUE_CONNECTION: rabbitmq
+    depends_on:
+      - sqlserver
+      - rabbitmq
+
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: Y
+      SA_PASSWORD: YourStrong!Passw0rd
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+""",
+            DatabaseType.MongoDB => """
+version: '3.9'
+services:
+  gateway:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      PROJECTS_SERVICE_URL: http://projects-service:8080
+      NOTIFICATIONS_SERVICE_URL: http://notifications-service:8080
+    depends_on:
+      - projects-service
+      - notifications-service
+      - rabbitmq
+
+  projects-service:
+    build: ./services/projects
+    ports:
+      - "8081:8080"
+    environment:
+      DB_CONNECTION: mongodb
+      DB_HOST: mongo
+      DB_PORT: 27017
+      DB_DATABASE: projects_db
+      MONGODB_URI: mongodb://mongo:27017/projects_db
+      QUEUE_CONNECTION: rabbitmq
+    depends_on:
+      - mongo
+      - rabbitmq
+
+  notifications-service:
+    build: ./services/notifications
+    ports:
+      - "8082:8080"
+    environment:
+      DB_CONNECTION: mongodb
+      DB_HOST: mongo
+      DB_PORT: 27017
+      DB_DATABASE: notifications_db
+      MONGODB_URI: mongodb://mongo:27017/notifications_db
+      QUEUE_CONNECTION: rabbitmq
+    depends_on:
+      - mongo
+      - rabbitmq
+
+  mongo:
+    image: mongo:7
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+""",
+            DatabaseType.Redis => """
+version: '3.9'
+services:
+  gateway:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      PROJECTS_SERVICE_URL: http://projects-service:8080
+      NOTIFICATIONS_SERVICE_URL: http://notifications-service:8080
+    depends_on:
+      - projects-service
+      - notifications-service
+      - rabbitmq
+
+  projects-service:
+    build: ./services/projects
+    ports:
+      - "8081:8080"
+    environment:
+      DB_CONNECTION: redis
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      CACHE_STORE: redis
+      QUEUE_CONNECTION: rabbitmq
+    depends_on:
+      - redis
+      - rabbitmq
+
+  notifications-service:
+    build: ./services/notifications
+    ports:
+      - "8082:8080"
+    environment:
+      DB_CONNECTION: redis
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      CACHE_STORE: redis
+      QUEUE_CONNECTION: rabbitmq
+    depends_on:
+      - redis
+      - rabbitmq
+
+  redis:
+    image: redis:7-alpine
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+""",
             _ => """
 version: '3.9'
 services:
@@ -695,6 +863,70 @@ DB_PORT=5432
 DB_DATABASE={databaseName}
 DB_USERNAME=postgres
 DB_PASSWORD=secret
+QUEUE_CONNECTION=rabbitmq
+RABBITMQ_HOST=rabbitmq
+RABBITMQ_PORT=5672
+RABBITMQ_USER=guest
+RABBITMQ_PASSWORD=guest
+""",
+            // Previously fell into the SQLite default below with DB_CONNECTION overridden to
+            // "sqlsrv"/"mongodb"/"redis" but DB_DATABASE still pointing at a .sqlite file path —
+            // an internally inconsistent env file that couldn't actually reach the selected
+            // database. BuildLaravelMicroservicesDockerfile already installs the sqlsrv/mongodb
+            // PECL extensions for these DBs; this now matches it with real connection details.
+            DatabaseType.SqlServer => $"""
+APP_NAME={serviceName}
+APP_ENV=local
+APP_KEY=
+APP_DEBUG=true
+APP_URL=http://localhost:{(serviceName == "projects" ? 8081 : 8082)}
+DB_CONNECTION={connection}
+DB_HOST=sqlserver
+DB_PORT=1433
+DB_DATABASE={databaseName}
+DB_USERNAME=sa
+DB_PASSWORD=YourStrong!Passw0rd
+DB_ENCRYPT=false
+DB_TRUST_SERVER_CERTIFICATE=true
+QUEUE_CONNECTION=rabbitmq
+RABBITMQ_HOST=rabbitmq
+RABBITMQ_PORT=5672
+RABBITMQ_USER=guest
+RABBITMQ_PASSWORD=guest
+""",
+            DatabaseType.MongoDB => $"""
+APP_NAME={serviceName}
+APP_ENV=local
+APP_KEY=
+APP_DEBUG=true
+APP_URL=http://localhost:{(serviceName == "projects" ? 8081 : 8082)}
+DB_CONNECTION={connection}
+DB_HOST=mongo
+DB_PORT=27017
+DB_DATABASE={databaseName}
+MONGODB_URI=mongodb://mongo:27017/{databaseName}
+QUEUE_CONNECTION=rabbitmq
+RABBITMQ_HOST=rabbitmq
+RABBITMQ_PORT=5672
+RABBITMQ_USER=guest
+RABBITMQ_PASSWORD=guest
+""",
+            DatabaseType.Redis => $"""
+APP_NAME={serviceName}
+APP_ENV=local
+APP_KEY=
+APP_DEBUG=true
+APP_URL=http://localhost:{(serviceName == "projects" ? 8081 : 8082)}
+DB_CONNECTION={connection}
+DB_HOST=redis
+DB_PORT=6379
+CACHE_STORE=redis
+CACHE_DRIVER=redis
+SESSION_DRIVER=redis
+REDIS_CLIENT=phpredis
+REDIS_HOST=redis
+REDIS_PORT=6379
+REDIS_DB=0
 QUEUE_CONNECTION=rabbitmq
 RABBITMQ_HOST=rabbitmq
 RABBITMQ_PORT=5672
@@ -1979,6 +2211,219 @@ return new class extends Migration
         Schema::dropIfExists('projects');
     }
 };
+"""),
+        };
+    }
+
+    private static IReadOnlyList<(string RelativePath, string Content)> BuildLaravelCqrsPatternFiles()
+    {
+        return new[]
+        {
+            ("app/Application/Commands/CreateItemCommand.php", """
+<?php
+
+namespace App\Application\Commands;
+
+final class CreateItemCommand
+{
+    public function __construct(
+        public readonly string $name,
+        public readonly ?string $description = null
+    ) {}
+}
+"""),
+            ("app/Application/Commands/CreateItemHandler.php", """
+<?php
+
+namespace App\Application\Commands;
+
+use App\Models\Item;
+
+final class CreateItemHandler
+{
+    public function handle(CreateItemCommand $command): Item
+    {
+        return Item::query()->create([
+            'name' => $command->name,
+            'description' => $command->description,
+        ]);
+    }
+}
+"""),
+            ("app/Application/Queries/GetAllItemsQuery.php", """
+<?php
+
+namespace App\Application\Queries;
+
+use App\Models\Item;
+use Illuminate\Support\Collection;
+
+final class GetAllItemsQuery
+{
+    public function handle(): Collection
+    {
+        return Item::query()->orderByDesc('created_at')->get();
+    }
+}
+"""),
+            ("app/Models/Item.php", """
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+final class Item extends Model
+{
+    protected $fillable = ['name', 'description'];
+}
+"""),
+            ("database/migrations/2026_01_01_000001_create_items_table.php", """
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('items', function (Blueprint $table) {
+            $table->id();
+            $table->string('name');
+            $table->text('description')->nullable();
+            $table->timestamps();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('items');
+    }
+};
+"""),
+        };
+    }
+
+    private static IReadOnlyList<(string RelativePath, string Content)> BuildLaravelMediatorPatternFiles()
+    {
+        return new[]
+        {
+            ("app/Application/Mediator/Mediator.php", """
+<?php
+
+namespace App\Application\Mediator;
+
+final class Mediator
+{
+    /** @var array<class-string, callable> */
+    private array $handlers = [];
+
+    public function register(string $requestClass, callable $handler): void
+    {
+        $this->handlers[$requestClass] = $handler;
+    }
+
+    public function send(object $request): mixed
+    {
+        $handler = $this->handlers[$request::class] ?? null;
+        if ($handler === null) {
+            throw new \InvalidArgumentException("No handler registered for " . $request::class);
+        }
+
+        return $handler($request);
+    }
+}
+"""),
+            ("app/Application/Mediator/Messages/CreateItemRequest.php", """
+<?php
+
+namespace App\Application\Mediator\Messages;
+
+final class CreateItemRequest
+{
+    public function __construct(
+        public readonly string $name,
+        public readonly ?string $description = null
+    ) {}
+}
+"""),
+            ("app/Providers/MediatorServiceProvider.php", """
+<?php
+
+namespace App\Providers;
+
+use App\Application\Mediator\Mediator;
+use App\Application\Mediator\Messages\CreateItemRequest;
+use App\Models\Item;
+use Illuminate\Support\ServiceProvider;
+
+final class MediatorServiceProvider extends ServiceProvider
+{
+    public function register(): void
+    {
+        $this->app->singleton(Mediator::class, function () {
+            $mediator = new Mediator();
+            $mediator->register(CreateItemRequest::class, function (CreateItemRequest $request) {
+                return Item::query()->create([
+                    'name' => $request->name,
+                    'description' => $request->description,
+                ]);
+            });
+
+            return $mediator;
+        });
+    }
+}
+"""),
+        };
+    }
+
+    private static IReadOnlyList<(string RelativePath, string Content)> BuildLaravelSagaPatternFiles()
+    {
+        return new[]
+        {
+            ("app/Application/Sagas/OrderSaga.php", """
+<?php
+
+namespace App\Application\Sagas;
+
+/**
+ * Coordinates the order creation workflow across multiple steps, compensating
+ * (rolling back) already-completed steps in reverse order if a later step fails.
+ */
+final class OrderSaga
+{
+    public function execute(string $customerId, array $items, array $paymentInfo): bool
+    {
+        $orderId = (string) \Illuminate\Support\Str::uuid();
+        $reservationId = null;
+
+        try {
+            $this->createOrder($orderId, $customerId, $items);
+            $reservationId = $this->reserveInventory($orderId, $items);
+            $this->processPayment($orderId, $paymentInfo);
+            $this->confirmOrder($orderId);
+
+            return true;
+        } catch (\Throwable $e) {
+            if ($reservationId !== null) {
+                $this->releaseInventory($reservationId);
+            }
+            $this->cancelOrder($orderId);
+
+            return false;
+        }
+    }
+
+    private function createOrder(string $orderId, string $customerId, array $items): void {}
+    private function reserveInventory(string $orderId, array $items): string { return (string) \Illuminate\Support\Str::uuid(); }
+    private function processPayment(string $orderId, array $paymentInfo): void {}
+    private function confirmOrder(string $orderId): void {}
+    private function cancelOrder(string $orderId): void {}
+    private function releaseInventory(string $reservationId): void {}
+}
 """),
         };
     }

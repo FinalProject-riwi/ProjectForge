@@ -5,50 +5,11 @@ namespace ProjectForge.Application.Services;
 public partial class ProjectGeneratorService
 {
     private static IReadOnlyList<(string RelativePath, string Content)> BuildDotNetPatternFiles(
-        FrameworkType framework, string pattern)
+        FrameworkType framework, DatabaseType database, string pattern)
     {
         return NormalizePatternToken(pattern) switch
         {
-            "repository" => new[]
-            {
-                ("src/Domain/Interfaces/IRepository.cs", """
-using System.Linq.Expressions;
-
-namespace Domain.Interfaces;
-
-public interface IRepository<T> where T : class
-{
-    Task<T?> GetByIdAsync(int id, CancellationToken ct = default);
-    Task<IEnumerable<T>> GetAllAsync(CancellationToken ct = default);
-    Task<IEnumerable<T>> FindAsync(Expression<Func<T, bool>> predicate, CancellationToken ct = default);
-    Task AddAsync(T entity, CancellationToken ct = default);
-    void Update(T entity);
-    void Remove(T entity);
-    Task<int> SaveChangesAsync(CancellationToken ct = default);
-}
-"""),
-                ("src/Infrastructure/Repositories/BaseRepository.cs", """
-using Domain.Interfaces;
-using Microsoft.EntityFrameworkCore;
-using System.Linq.Expressions;
-
-namespace Infrastructure.Repositories;
-
-public class BaseRepository<T>(DbContext context) : IRepository<T> where T : class
-{
-    protected readonly DbContext _context = context;
-    protected readonly DbSet<T> _set = context.Set<T>();
-
-    public async Task<T?> GetByIdAsync(int id, CancellationToken ct = default) => await _set.FindAsync([id], ct);
-    public async Task<IEnumerable<T>> GetAllAsync(CancellationToken ct = default) => await _set.ToListAsync(ct);
-    public async Task<IEnumerable<T>> FindAsync(Expression<Func<T, bool>> predicate, CancellationToken ct = default) => await _set.Where(predicate).ToListAsync(ct);
-    public async Task AddAsync(T entity, CancellationToken ct = default) => await _set.AddAsync(entity, ct);
-    public void Update(T entity) => _set.Update(entity);
-    public void Remove(T entity) => _set.Remove(entity);
-    public async Task<int> SaveChangesAsync(CancellationToken ct = default) => await _context.SaveChangesAsync(ct);
-}
-"""),
-            },
+            "repository" => BuildDotNetRepositoryPatternFiles(framework, database),
             "cqrs" => new[]
             {
                 ("src/Application/Commands/CreateItemCommand.cs", """
@@ -120,57 +81,7 @@ public class Result<T>
 }
 """),
             },
-            "hexagonalarchitecture" => new[]
-            {
-                ("src/Core/Ports/IItemPort.cs", """
-namespace Core.Ports;
-
-public interface IItemPort
-{
-    Task<Item?> FindByIdAsync(int id, CancellationToken ct = default);
-    Task<IEnumerable<Item>> FindAllAsync(CancellationToken ct = default);
-    Task SaveAsync(Item item, CancellationToken ct = default);
-}
-"""),
-                ("src/Core/Domain/Item.cs", """
-namespace Core.Domain;
-
-public class Item
-{
-    public int Id { get; init; }
-    public string Name { get; private set; } = string.Empty;
-    public string Description { get; private set; } = string.Empty;
-
-    public static Item Create(string name, string description)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        return new Item { Name = name, Description = description };
-    }
-
-    public void Update(string name, string description) { Name = name; Description = description; }
-}
-"""),
-                ("src/Infrastructure/Adapters/ItemEfAdapter.cs", """
-using Core.Ports;
-using Core.Domain;
-using Microsoft.EntityFrameworkCore;
-
-namespace Infrastructure.Adapters;
-
-public class ItemEfAdapter(AppDbContext ctx) : IItemPort
-{
-    public async Task<Item?> FindByIdAsync(int id, CancellationToken ct = default) =>
-        await ctx.Items.FindAsync([id], ct);
-    public async Task<IEnumerable<Item>> FindAllAsync(CancellationToken ct = default) =>
-        await ctx.Items.ToListAsync(ct);
-    public async Task SaveAsync(Item item, CancellationToken ct = default)
-    {
-        ctx.Items.Add(item);
-        await ctx.SaveChangesAsync(ct);
-    }
-}
-"""),
-            },
+            "hexagonalarchitecture" => BuildDotNetHexagonalPatternFiles(framework, database),
             "domaindrivendesign" => new[]
             {
                 ("src/Domain/Aggregates/AggregateRoot.cs", """
@@ -246,8 +157,32 @@ public class LoggingBehavior<TRequest, TResponse>(ILogger<LoggingBehavior<TReque
 }
 """),
             },
+            // Dropping a second top-level-statements gateway/Program.cs directly into the main
+            // project used to break the build for EVERY DotNet framework: the SDK-style .csproj
+            // globs **/*.cs by default, so both Program.cs files landed in the same compilation
+            // -> CS8802 "Only one compilation unit can have top-level statements". Giving the
+            // gateway its own gateway.csproj fixes this two ways at once: the .NET SDK
+            // automatically excludes any subfolder that contains its own project file from the
+            // parent's default item glob, AND the Yarp.ReverseProxy package (referenced by
+            // AddReverseProxy() below but never installed anywhere before) now has somewhere to
+            // live without needing a NuGet-package pass over the main project too.
             "microservices" => new[]
             {
+                ("gateway/gateway.csproj", """
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Yarp.ReverseProxy" Version="2.2.0" />
+  </ItemGroup>
+
+</Project>
+"""),
                 ("gateway/Program.cs", """
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddReverseProxy()
@@ -276,6 +211,11 @@ app.Run();
 }
 """),
             },
+            // System.Windows.Input.ICommand needs a desktop UI SDK (WPF/WinForms) — it isn't
+            // referenced by ASP.NET Core Web API/MVC/Minimal API or Blazor projects, so the
+            // previous RelayCommand.cs failed to compile in every DotNet framework this wizard
+            // actually offers. This defines its own ICommand-shaped interface instead, which
+            // works the same way from a Blazor component's @onclick without any extra package.
             "mvvm" => new[]
             {
                 ("src/Presentation/ViewModels/ItemViewModel.cs", """
@@ -307,17 +247,24 @@ public class ItemViewModel : INotifyPropertyChanged
         => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
 }
 """),
-                ("src/Presentation/Commands/RelayCommand.cs", """
-using System.Windows.Input;
-
+                ("src/Presentation/Commands/IRelayCommand.cs", """
 namespace Presentation.Commands;
 
-public class RelayCommand(Action<object?> execute, Func<object?, bool>? canExecute = null) : ICommand
+// Framework-agnostic stand-in for System.Windows.Input.ICommand, which requires a desktop
+// UI SDK (WPF/WinForms) that ASP.NET Core / Blazor projects don't reference.
+public interface IRelayCommand
+{
+    bool CanExecute(object? parameter);
+    void Execute(object? parameter);
+}
+"""),
+                ("src/Presentation/Commands/RelayCommand.cs", """
+namespace Presentation.Commands;
+
+public class RelayCommand(Action<object?> execute, Func<object?, bool>? canExecute = null) : IRelayCommand
 {
     public bool CanExecute(object? parameter) => canExecute?.Invoke(parameter) ?? true;
     public void Execute(object? parameter) => execute(parameter);
-    public event EventHandler? CanExecuteChanged;
-    public void RaiseCanExecuteChanged() => CanExecuteChanged?.Invoke(this, EventArgs.Empty);
 }
 """),
             },
@@ -379,6 +326,300 @@ public record ReleaseInventoryCommand(Guid ReservationId) : IRequest;
             _ => Array.Empty<(string, string)>()
         };
     }
+
+    // The Repository/Hexagonal pattern files used to hardcode EF Core (DbContext/AppDbContext)
+    // regardless of the selected database or framework. That broke two ways:
+    //  - MongoDB/Redis: Microsoft.EntityFrameworkCore is never referenced for those databases
+    //    (see GetImplicitLibraries), so "using Microsoft.EntityFrameworkCore;" failed to resolve.
+    //  - BlazorWasm: runs entirely in the browser sandbox with no raw socket access, so it can
+    //    never open an EF Core/Npgsql/SqlClient/Mongo/Redis connection no matter which database
+    //    was picked — data access has to go through an HTTP API instead.
+    private static IReadOnlyList<(string RelativePath, string Content)> BuildDotNetRepositoryPatternFiles(
+        FrameworkType framework, DatabaseType database)
+    {
+        if (framework == FrameworkType.BlazorWasm)
+            return BuildDotNetHttpRepositoryFiles();
+
+        return database switch
+        {
+            DatabaseType.MongoDB => BuildDotNetMongoRepositoryFiles(),
+            DatabaseType.Redis => BuildDotNetRedisRepositoryFiles(),
+            _ => new[]
+            {
+                ("src/Domain/Interfaces/IRepository.cs", """
+using System.Linq.Expressions;
+
+namespace Domain.Interfaces;
+
+public interface IRepository<T> where T : class
+{
+    Task<T?> GetByIdAsync(int id, CancellationToken ct = default);
+    Task<IEnumerable<T>> GetAllAsync(CancellationToken ct = default);
+    Task<IEnumerable<T>> FindAsync(Expression<Func<T, bool>> predicate, CancellationToken ct = default);
+    Task AddAsync(T entity, CancellationToken ct = default);
+    void Update(T entity);
+    void Remove(T entity);
+    Task<int> SaveChangesAsync(CancellationToken ct = default);
+}
+"""),
+                ("src/Infrastructure/Repositories/BaseRepository.cs", """
+using Domain.Interfaces;
+using Microsoft.EntityFrameworkCore;
+using System.Linq.Expressions;
+
+namespace Infrastructure.Repositories;
+
+public class BaseRepository<T>(DbContext context) : IRepository<T> where T : class
+{
+    protected readonly DbContext _context = context;
+    protected readonly DbSet<T> _set = context.Set<T>();
+
+    public async Task<T?> GetByIdAsync(int id, CancellationToken ct = default) => await _set.FindAsync([id], ct);
+    public async Task<IEnumerable<T>> GetAllAsync(CancellationToken ct = default) => await _set.ToListAsync(ct);
+    public async Task<IEnumerable<T>> FindAsync(Expression<Func<T, bool>> predicate, CancellationToken ct = default) => await _set.Where(predicate).ToListAsync(ct);
+    public async Task AddAsync(T entity, CancellationToken ct = default) => await _set.AddAsync(entity, ct);
+    public void Update(T entity) => _set.Update(entity);
+    public void Remove(T entity) => _set.Remove(entity);
+    public async Task<int> SaveChangesAsync(CancellationToken ct = default) => await _context.SaveChangesAsync(ct);
+}
+"""),
+            }
+        };
+    }
+
+    private static IReadOnlyList<(string RelativePath, string Content)> BuildDotNetHexagonalPatternFiles(
+        FrameworkType framework, DatabaseType database)
+    {
+        if (framework == FrameworkType.BlazorWasm)
+            return BuildDotNetHttpRepositoryFiles();
+
+        return database switch
+        {
+            DatabaseType.MongoDB => BuildDotNetMongoRepositoryFiles(),
+            DatabaseType.Redis => BuildDotNetRedisRepositoryFiles(),
+            _ => new[]
+            {
+                ("src/Core/Ports/IItemPort.cs", """
+namespace Core.Ports;
+
+public interface IItemPort
+{
+    Task<Item?> FindByIdAsync(int id, CancellationToken ct = default);
+    Task<IEnumerable<Item>> FindAllAsync(CancellationToken ct = default);
+    Task SaveAsync(Item item, CancellationToken ct = default);
+}
+"""),
+                ("src/Core/Domain/Item.cs", """
+namespace Core.Domain;
+
+public class Item
+{
+    public int Id { get; init; }
+    public string Name { get; private set; } = string.Empty;
+    public string Description { get; private set; } = string.Empty;
+
+    public static Item Create(string name, string description)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        return new Item { Name = name, Description = description };
+    }
+
+    public void Update(string name, string description) { Name = name; Description = description; }
+}
+"""),
+                ("src/Infrastructure/Adapters/ItemEfAdapter.cs", """
+using Core.Ports;
+using Core.Domain;
+using Microsoft.EntityFrameworkCore;
+
+namespace Infrastructure.Adapters;
+
+public class ItemEfAdapter(AppDbContext ctx) : IItemPort
+{
+    public async Task<Item?> FindByIdAsync(int id, CancellationToken ct = default) =>
+        await ctx.Items.FindAsync([id], ct);
+    public async Task<IEnumerable<Item>> FindAllAsync(CancellationToken ct = default) =>
+        await ctx.Items.ToListAsync(ct);
+    public async Task SaveAsync(Item item, CancellationToken ct = default)
+    {
+        ctx.Items.Add(item);
+        await ctx.SaveChangesAsync(ct);
+    }
+}
+"""),
+            }
+        };
+    }
+
+    private static IReadOnlyList<(string RelativePath, string Content)> BuildDotNetHttpRepositoryFiles() => new[]
+    {
+        ("src/Services/IItemService.cs", """
+namespace Services;
+
+public record ItemDto(int Id, string Name, string Description);
+
+public interface IItemService
+{
+    Task<IEnumerable<ItemDto>> GetAllAsync(CancellationToken ct = default);
+    Task<ItemDto?> GetByIdAsync(int id, CancellationToken ct = default);
+    Task<ItemDto> CreateAsync(ItemDto item, CancellationToken ct = default);
+}
+"""),
+        ("src/Services/ItemService.cs", """
+using System.Net.Http.Json;
+
+namespace Services;
+
+// Blazor WebAssembly runs entirely in the browser and can't open a direct database
+// connection — no raw sockets, no native drivers. Data access always goes through an HTTP
+// API instead. Point HttpClient.BaseAddress (registered in Program.cs) at your backend
+// (e.g. an ASP.NET Core Web API project) rather than a database.
+public class ItemService(HttpClient http) : IItemService
+{
+    public async Task<IEnumerable<ItemDto>> GetAllAsync(CancellationToken ct = default) =>
+        await http.GetFromJsonAsync<IEnumerable<ItemDto>>("api/items", ct) ?? [];
+
+    public async Task<ItemDto?> GetByIdAsync(int id, CancellationToken ct = default) =>
+        await http.GetFromJsonAsync<ItemDto>($"api/items/{id}", ct);
+
+    public async Task<ItemDto> CreateAsync(ItemDto item, CancellationToken ct = default)
+    {
+        var response = await http.PostAsJsonAsync("api/items", item, ct);
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync<ItemDto>(ct))!;
+    }
+}
+"""),
+    };
+
+    private static IReadOnlyList<(string RelativePath, string Content)> BuildDotNetMongoRepositoryFiles() => new[]
+    {
+        ("src/Domain/Item.cs", """
+namespace Domain;
+
+public class Item
+{
+    public string Id { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+}
+"""),
+        ("src/Domain/Interfaces/IItemRepository.cs", """
+namespace Domain.Interfaces;
+
+using Domain;
+
+public interface IItemRepository
+{
+    Task<Item?> GetByIdAsync(string id, CancellationToken ct = default);
+    Task<IEnumerable<Item>> GetAllAsync(CancellationToken ct = default);
+    Task AddAsync(Item item, CancellationToken ct = default);
+    Task UpdateAsync(Item item, CancellationToken ct = default);
+    Task RemoveAsync(string id, CancellationToken ct = default);
+}
+"""),
+        ("src/Infrastructure/Repositories/ItemRepository.cs", """
+using Domain;
+using Domain.Interfaces;
+using MongoDB.Driver;
+
+namespace Infrastructure.Repositories;
+
+// Register the MongoDB client in Program.cs, e.g.:
+//   builder.Services.AddSingleton<IMongoClient>(_ => new MongoClient(builder.Configuration.GetConnectionString("Default")));
+//   builder.Services.AddScoped(sp => sp.GetRequiredService<IMongoClient>().GetDatabase("{{DB_NAME}}"));
+public class ItemRepository(IMongoDatabase database) : IItemRepository
+{
+    private readonly IMongoCollection<Item> _items = database.GetCollection<Item>("items");
+
+    public async Task<Item?> GetByIdAsync(string id, CancellationToken ct = default) =>
+        await (await _items.FindAsync(i => i.Id == id, cancellationToken: ct)).FirstOrDefaultAsync(ct);
+
+    public async Task<IEnumerable<Item>> GetAllAsync(CancellationToken ct = default) =>
+        await (await _items.FindAsync(FilterDefinition<Item>.Empty, cancellationToken: ct)).ToListAsync(ct);
+
+    public Task AddAsync(Item item, CancellationToken ct = default) =>
+        _items.InsertOneAsync(item, cancellationToken: ct);
+
+    public Task UpdateAsync(Item item, CancellationToken ct = default) =>
+        _items.ReplaceOneAsync(i => i.Id == item.Id, item, cancellationToken: ct);
+
+    public Task RemoveAsync(string id, CancellationToken ct = default) =>
+        _items.DeleteOneAsync(i => i.Id == id, ct);
+}
+"""),
+    };
+
+    private static IReadOnlyList<(string RelativePath, string Content)> BuildDotNetRedisRepositoryFiles() => new[]
+    {
+        ("src/Domain/Item.cs", """
+namespace Domain;
+
+public class Item
+{
+    public string Id { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+}
+"""),
+        ("src/Domain/Interfaces/IItemRepository.cs", """
+namespace Domain.Interfaces;
+
+using Domain;
+
+public interface IItemRepository
+{
+    Task<Item?> GetByIdAsync(string id, CancellationToken ct = default);
+    Task<IEnumerable<Item>> GetAllAsync(CancellationToken ct = default);
+    Task AddAsync(Item item, CancellationToken ct = default);
+    Task UpdateAsync(Item item, CancellationToken ct = default);
+    Task RemoveAsync(string id, CancellationToken ct = default);
+}
+"""),
+        ("src/Infrastructure/Repositories/ItemRepository.cs", """
+using System.Text.Json;
+using Domain;
+using Domain.Interfaces;
+using StackExchange.Redis;
+
+namespace Infrastructure.Repositories;
+
+// Register the Redis connection in Program.cs, e.g.:
+//   builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
+//       ConnectionMultiplexer.Connect(builder.Configuration.GetConnectionString("Default")!));
+public class ItemRepository(IConnectionMultiplexer redis) : IItemRepository
+{
+    private readonly IDatabase _db = redis.GetDatabase();
+    private static string Key(string id) => $"item:{id}";
+
+    public async Task<Item?> GetByIdAsync(string id, CancellationToken ct = default)
+    {
+        var value = await _db.StringGetAsync(Key(id));
+        return value.HasValue ? JsonSerializer.Deserialize<Item>(value!) : null;
+    }
+
+    public async Task<IEnumerable<Item>> GetAllAsync(CancellationToken ct = default)
+    {
+        var server = redis.GetServer(redis.GetEndPoints()[0]);
+        var items = new List<Item>();
+        await foreach (var key in server.KeysAsync(pattern: "item:*"))
+        {
+            var value = await _db.StringGetAsync(key);
+            if (value.HasValue) items.Add(JsonSerializer.Deserialize<Item>(value!)!);
+        }
+        return items;
+    }
+
+    public Task AddAsync(Item item, CancellationToken ct = default) =>
+        _db.StringSetAsync(Key(item.Id), JsonSerializer.Serialize(item));
+
+    public Task UpdateAsync(Item item, CancellationToken ct = default) => AddAsync(item, ct);
+
+    public Task RemoveAsync(string id, CancellationToken ct = default) =>
+        _db.KeyDeleteAsync(Key(id));
+}
+"""),
+    };
 
     private static IReadOnlyList<(string RelativePath, string Content)> BuildJavaPatternFiles(
         FrameworkType framework, string pattern)

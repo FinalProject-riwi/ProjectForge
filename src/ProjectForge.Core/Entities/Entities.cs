@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using ProjectForge.Core.Enums;
 using ProjectForge.Core.Exceptions;
 
@@ -98,15 +97,14 @@ public class Project : BaseEntity
     private static int RequirePositiveId(int value, string parameterName) =>
         value > 0 ? value : throw new DomainException($"{parameterName} must be greater than zero.");
 
-    // Único punto de entrada para el nombre del proyecto (Wizard MVC y REST API convergen aquí).
-    // Sin este saneo, el nombre viaja sin filtrar hasta comandos de shell (dotnet new -n, npm init)
-    // y hasta identificadores Java/Python generados — un nombre como "foo & calc" inyectaría
-    // comandos en cmd.exe, y uno como "3-app" rompería el import de un paquete Python.
-    private static string NormalizeName(string name)
-    {
-        if (string.IsNullOrWhiteSpace(name)) return string.Empty;
-        return Regex.Replace(name.Trim(), @"[^\w\-]", "-");
-    }
+    // Kept as a display name (spaces allowed, only trimmed) — every place that turns this into
+    // a shell argument or a source-code identifier (GetValidDotNetProjectName, ToJavaPackageSegment,
+    // ToPythonIdentifier, GetValidDatabaseName, ...) sanitizes independently at its own point of
+    // use, since each has different rules (Maven artifact ids, Python identifiers, DB names...).
+    // An earlier version of this method also stripped/hyphenated the stored Name, but that
+    // mutated the project's *display* name too (turning e.g. "Project Forge" into
+    // "Project-Forge") for no added safety, since the point-of-use sanitizers already cover it.
+    private static string NormalizeName(string name) => string.IsNullOrWhiteSpace(name) ? string.Empty : name.Trim();
 }
 
 public class WizardConfig : BaseEntity

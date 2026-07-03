@@ -946,8 +946,17 @@ return new class extends Migration
             _ => BuildPhpDddPatternFiles(framework)
         };
 
+    // These three used to just alias to BuildPhpDddPatternFiles(framework) — selecting "CQRS",
+    // "Mediator" or "Saga" for PHP silently produced the DDD Aggregate/Entity/UseCase scaffold
+    // instead, with no actual command/query split, mediator class, or saga/compensation code
+    // (every other language here — DotNet/Java/Python/JS/TS — has a real implementation).
     private static IReadOnlyList<(string RelativePath, string Content)> BuildPhpCqrsPatternFiles(FrameworkType framework)
-        => BuildPhpDddPatternFiles(framework);
+        => framework switch
+        {
+            FrameworkType.Laravel => BuildLaravelCqrsPatternFiles(),
+            FrameworkType.Symfony => BuildSymfonyCqrsPatternFiles(),
+            _ => BuildPhpDddPatternFiles(framework)
+        };
 
     private static IReadOnlyList<(string RelativePath, string Content)> BuildPhpEventSourcingPatternFiles(FrameworkType framework)
         => framework switch
@@ -958,10 +967,20 @@ return new class extends Migration
         };
 
     private static IReadOnlyList<(string RelativePath, string Content)> BuildPhpMediatorPatternFiles(FrameworkType framework)
-        => BuildPhpDddPatternFiles(framework);
+        => framework switch
+        {
+            FrameworkType.Laravel => BuildLaravelMediatorPatternFiles(),
+            FrameworkType.Symfony => BuildSymfonyMediatorPatternFiles(),
+            _ => BuildPhpDddPatternFiles(framework)
+        };
 
     private static IReadOnlyList<(string RelativePath, string Content)> BuildPhpSagaPatternFiles(FrameworkType framework)
-        => BuildPhpDddPatternFiles(framework);
+        => framework switch
+        {
+            FrameworkType.Laravel => BuildLaravelSagaPatternFiles(),
+            FrameworkType.Symfony => BuildSymfonySagaPatternFiles(),
+            _ => BuildPhpDddPatternFiles(framework)
+        };
 
     private static IReadOnlyList<(string RelativePath, string Content)> BuildPhpMicroservicesPatternFiles(
         FrameworkType framework,

@@ -13,7 +13,11 @@ public partial class ProjectGeneratorService
     {
         if (cfg.Architecture != ArchitectureType.Java) return;
 
-        var dbName = $"{project.Name.ToLower().Replace(" ", "_")}_db";
+        // GetValidDatabaseName strips anything that isn't [a-z0-9_] — a raw
+        // "{project.Name}.ToLower().Replace(" ", "_")" would let other punctuation straight
+        // into JDBC connection strings (e.g. "jdbc:postgresql://db:5432/{dbName}"), where stray
+        // characters like '&' or '?' can corrupt the URL or inject bogus query parameters.
+        var dbName = $"{GetValidDatabaseName(project.Name)}_db";
         var libs   = JsonSerializer.Deserialize<List<string>>(cfg.LibrariesJson) ?? [];
 
         await EmitLogAsync(project, "Scaffold", $"🏗️  Generando archivos base Java/{cfg.Framework}...", ct: ct);
@@ -168,7 +172,7 @@ ENTRYPOINT ["java","-jar","app.jar"]
     {
         if (cfg.Architecture != ArchitectureType.Python) return;
 
-        var dbName = $"{project.Name.ToLower().Replace(" ", "_")}_db";
+        var dbName = $"{GetValidDatabaseName(project.Name)}_db";
         var libs   = JsonSerializer.Deserialize<List<string>>(cfg.LibrariesJson) ?? [];
 
         await EmitLogAsync(project, "Scaffold", "🏗️  Generando archivos base Python...", ct: ct);
@@ -481,78 +485,88 @@ def test_placeholder():
         var namespaceName = GetValidDotNetNamespace(project.Name);
         var dbName   = GetValidDatabaseName(project.Name);
         var sdkVersion = GetDotNetSdkVersion(cfg.FrameworkVersion);
+        var isBlazorWasm = cfg.Framework == FrameworkType.BlazorWasm;
 
         await EmitLogAsync(project, "Scaffold", "🏗️  Configurando archivos .NET...", ct: ct);
 
-        // ── 1. appsettings.json — inject ConnectionStrings.Default ────────────
-        var appSettingsPath = Path.Combine(path, "appsettings.json");
-        if (File.Exists(appSettingsPath))
+        // Blazor WebAssembly runs entirely inside the browser sandbox: it can't open a raw
+        // TCP/database connection, so wiring a DB connection string or EF Core context into it
+        // is dead code at best. At worst it's a real credential leak — a WASM app's
+        // appsettings.json ships inside wwwroot and is downloaded and readable by every visitor,
+        // so embedding "Password=secret" there publishes the DB password to the whole internet.
+        // Data access for BlazorWasm should go through an HTTP API instead (see the Repository/
+        // Hexagonal pattern files, which emit an HttpClient-based implementation for it).
+        if (!isBlazorWasm)
         {
-            var connString = cfg.Database switch
+            // ── 1. appsettings.json — inject ConnectionStrings.Default ────────────
+            var appSettingsPath = Path.Combine(path, "appsettings.json");
+            if (File.Exists(appSettingsPath))
             {
-                DatabaseType.PostgreSQL => $"Host=db;Database={dbName};Username=postgres;Password=secret",
-                DatabaseType.MySQL      => $"Server=db;Database={dbName};User=root;Password=secret;",
-                DatabaseType.SqlServer  => $"Server=sqlserver;Database={dbName};User Id=sa;Password=YourStrong!Passw0rd;Encrypt=False;TrustServerCertificate=True;",
-                DatabaseType.SQLite     => $"Data Source={dbName}.db",
-                DatabaseType.MongoDB    => $"mongodb://mongo:27017/{dbName}",
-                DatabaseType.Redis      => "localhost:6379",
-                _                       => ""
-            };
-
-            if (!string.IsNullOrEmpty(connString))
-            {
-                var json = await File.ReadAllTextAsync(appSettingsPath, ct);
-                try
+                var connString = cfg.Database switch
                 {
-                    var rootNode = JsonNode.Parse(json)?.AsObject();
-                    if (rootNode != null && rootNode["ConnectionStrings"] == null)
+                    DatabaseType.PostgreSQL => $"Host=db;Database={dbName};Username=postgres;Password=secret",
+                    DatabaseType.MySQL      => $"Server=db;Database={dbName};User=root;Password=secret;",
+                    DatabaseType.SqlServer  => $"Server=sqlserver;Database={dbName};User Id=sa;Password=YourStrong!Passw0rd;Encrypt=False;TrustServerCertificate=True;",
+                    DatabaseType.SQLite     => $"Data Source={dbName}.db",
+                    DatabaseType.MongoDB    => $"mongodb://mongo:27017/{dbName}",
+                    DatabaseType.Redis      => "localhost:6379",
+                    _                       => ""
+                };
+
+                if (!string.IsNullOrEmpty(connString))
+                {
+                    var json = await File.ReadAllTextAsync(appSettingsPath, ct);
+                    try
                     {
-                        var connectionNode = JsonNode.Parse($"{{\"Default\": \"{connString}\"}}")?.AsObject();
-                        if (connectionNode != null)
+                        var rootNode = JsonNode.Parse(json)?.AsObject();
+                        if (rootNode != null && rootNode["ConnectionStrings"] == null)
                         {
-                            rootNode["ConnectionStrings"] = connectionNode;
-                            await File.WriteAllTextAsync(appSettingsPath,
-                                rootNode.ToJsonString(new JsonSerializerOptions { WriteIndented = true }), ct);
+                            var connectionNode = JsonNode.Parse($"{{\"Default\": \"{connString}\"}}")?.AsObject();
+                            if (connectionNode != null)
+                            {
+                                rootNode["ConnectionStrings"] = connectionNode;
+                                await File.WriteAllTextAsync(appSettingsPath,
+                                    rootNode.ToJsonString(new JsonSerializerOptions { WriteIndented = true }), ct);
+                            }
                         }
                     }
-                }
-                catch
-                {
-                    // Ignorar si el JSON no es válido o no se puede parsear.
+                    catch
+                    {
+                        // Ignorar si el JSON no es válido o no se puede parsear.
+                    }
                 }
             }
-        }
 
-        // ── 2. .env (local override) ──────────────────────────────────────────
-        var envContent = cfg.Database switch
-        {
-            DatabaseType.PostgreSQL => $"ConnectionStrings__Default=Host=localhost;Database={dbName};Username=postgres;Password=secret\n",
-            DatabaseType.MySQL      => $"ConnectionStrings__Default=Server=localhost;Database={dbName};User=root;Password=secret;\n",
-            DatabaseType.SqlServer  => $"ConnectionStrings__Default=Server=localhost;Database={dbName};User Id=sa;Password=YourStrong!Passw0rd;Encrypt=False;TrustServerCertificate=True;\n",
-            DatabaseType.SQLite     => $"ConnectionStrings__Default=Data Source={dbName}.db\n",
-            DatabaseType.MongoDB    => $"ConnectionStrings__Default=mongodb://localhost:27017/{dbName}\n",
-            DatabaseType.Redis      => "ConnectionStrings__Default=localhost:6379\n",
-            _                       => ""
-        };
-        if (!string.IsNullOrEmpty(envContent))
-            await File.WriteAllTextAsync(Path.Combine(path, ".env"), envContent, ct);
-
-        // ── 3. AppDbContext.cs (only for relational/EF Core targets) ──────────
-        var needsEfCore = cfg.Database is DatabaseType.PostgreSQL or DatabaseType.MySQL
-                                      or DatabaseType.SqlServer  or DatabaseType.SQLite;
-        if (needsEfCore)
-        {
-            var projectFiles = Directory.GetFiles(path, "*.csproj", SearchOption.AllDirectories);
-            var projectDir   = projectFiles.Length > 0
-                ? Path.GetDirectoryName(projectFiles[0])!
-                : path;
-
-            var dataDir = Path.Combine(projectDir, "Data");
-            Directory.CreateDirectory(dataDir);
-            var ctxPath = Path.Combine(dataDir, "AppDbContext.cs");
-            if (!File.Exists(ctxPath))
+            // ── 2. .env (local override) ──────────────────────────────────────────
+            var envContent = cfg.Database switch
             {
-                await File.WriteAllTextAsync(ctxPath, $$"""
+                DatabaseType.PostgreSQL => $"ConnectionStrings__Default=Host=localhost;Database={dbName};Username=postgres;Password=secret\n",
+                DatabaseType.MySQL      => $"ConnectionStrings__Default=Server=localhost;Database={dbName};User=root;Password=secret;\n",
+                DatabaseType.SqlServer  => $"ConnectionStrings__Default=Server=localhost;Database={dbName};User Id=sa;Password=YourStrong!Passw0rd;Encrypt=False;TrustServerCertificate=True;\n",
+                DatabaseType.SQLite     => $"ConnectionStrings__Default=Data Source={dbName}.db\n",
+                DatabaseType.MongoDB    => $"ConnectionStrings__Default=mongodb://localhost:27017/{dbName}\n",
+                DatabaseType.Redis      => "ConnectionStrings__Default=localhost:6379\n",
+                _                       => ""
+            };
+            if (!string.IsNullOrEmpty(envContent))
+                await File.WriteAllTextAsync(Path.Combine(path, ".env"), envContent, ct);
+
+            // ── 3. AppDbContext.cs (only for relational/EF Core targets) ──────────
+            var needsEfCore = cfg.Database is DatabaseType.PostgreSQL or DatabaseType.MySQL
+                                          or DatabaseType.SqlServer  or DatabaseType.SQLite;
+            if (needsEfCore)
+            {
+                var projectFiles = Directory.GetFiles(path, "*.csproj", SearchOption.AllDirectories);
+                var projectDir   = projectFiles.Length > 0
+                    ? Path.GetDirectoryName(projectFiles[0])!
+                    : path;
+
+                var dataDir = Path.Combine(projectDir, "Data");
+                Directory.CreateDirectory(dataDir);
+                var ctxPath = Path.Combine(dataDir, "AppDbContext.cs");
+                if (!File.Exists(ctxPath))
+                {
+                    await File.WriteAllTextAsync(ctxPath, $$"""
 using Microsoft.EntityFrameworkCore;
 
 namespace {{namespaceName}}.Data;
@@ -574,7 +588,14 @@ public class AppDbContext : DbContext
     }
 }
 """, ct);
-                await EmitLogAsync(project, "Scaffold", "✅ AppDbContext.cs generado", ct: ct);
+                    await EmitLogAsync(project, "Scaffold", "✅ AppDbContext.cs generado", ct: ct);
+                }
+
+                // AppDbContext.cs used to be generated but never registered — the project would
+                // compile, but DI would throw "Unable to resolve service for type AppDbContext"
+                // the moment anything tried to inject it, and `dotnet ef migrations add` would
+                // fail outright since it discovers the context through the DI registration.
+                await EnsureDotNetDbContextRegistrationAsync(projectDir, namespaceName, cfg.Database, ct);
             }
         }
 
@@ -587,7 +608,23 @@ public class AppDbContext : DbContext
                 ? Path.GetRelativePath(path, projectFiles[0]).Replace("\\", "/")
                 : $"{safeName}/{safeName}.csproj";
 
-            var dockerfile = $"""
+            // Standalone Blazor WebAssembly has no runnable server entry point — `dotnet publish`
+            // produces static files under wwwroot/ meant to be served by a plain web server, so
+            // "ENTRYPOINT dotnet {name}.dll" (correct for every other .NET template here) would
+            // build but the container would do nothing useful when started.
+            var dockerfile = isBlazorWasm
+                ? $"""
+FROM mcr.microsoft.com/dotnet/sdk:{sdkVersion} AS build
+WORKDIR /src
+COPY . .
+RUN dotnet restore "{csprojRelative}"
+RUN dotnet publish "{csprojRelative}" -c Release -o /app/publish
+
+FROM nginx:alpine AS final
+COPY --from=build /app/publish/wwwroot /usr/share/nginx/html
+EXPOSE 80
+"""
+                : $"""
 FROM mcr.microsoft.com/dotnet/sdk:{sdkVersion} AS build
 WORKDIR /src
 COPY . .
@@ -605,6 +642,39 @@ ENTRYPOINT [\"dotnet\", \"{safeName}.dll\"]
         }
 
         await EmitLogAsync(project, "Scaffold", "✅ Archivos base .NET generados", ct: ct);
+    }
+
+    private static async Task EnsureDotNetDbContextRegistrationAsync(
+        string projectDir, string namespaceName, DatabaseType database, CancellationToken ct)
+    {
+        var programPath = Path.Combine(projectDir, "Program.cs");
+        if (!File.Exists(programPath)) return;
+
+        var content = await File.ReadAllTextAsync(programPath, ct);
+        if (content.Contains("AddDbContext<AppDbContext>", StringComparison.Ordinal))
+            return;
+
+        const string marker = "var builder = WebApplication.CreateBuilder(args);";
+        var idx = content.IndexOf(marker, StringComparison.Ordinal);
+        if (idx < 0) return;
+
+        var optionsExpression = database switch
+        {
+            DatabaseType.MySQL => "options.UseMySql(builder.Configuration.GetConnectionString(\"Default\"), " +
+                                  "Microsoft.EntityFrameworkCore.ServerVersion.AutoDetect(builder.Configuration.GetConnectionString(\"Default\")))",
+            DatabaseType.SqlServer => "options.UseSqlServer(builder.Configuration.GetConnectionString(\"Default\"))",
+            DatabaseType.SQLite    => "options.UseSqlite(builder.Configuration.GetConnectionString(\"Default\"))",
+            _                      => "options.UseNpgsql(builder.Configuration.GetConnectionString(\"Default\"))"
+        };
+
+        var insertAt = idx + marker.Length;
+        var registration = $"\nbuilder.Services.AddDbContext<AppDbContext>(options => {optionsExpression});\n";
+        content = content.Insert(insertAt, registration);
+
+        if (!content.Contains("using Microsoft.EntityFrameworkCore;", StringComparison.Ordinal))
+            content = $"using Microsoft.EntityFrameworkCore;\nusing {namespaceName}.Data;\n\n" + content;
+
+        await File.WriteAllTextAsync(programPath, content, ct);
     }
 
     private static string GetDotNetSdkVersion(string frameworkVersion)

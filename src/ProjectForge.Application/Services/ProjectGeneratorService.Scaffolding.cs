@@ -73,9 +73,13 @@ public partial class ProjectGeneratorService
                     ($"npm install express", (string?)path),
                     ($"npm pkg set 'scripts.start=node src/server.js'", (string?)path),
                 },
-                FrameworkType.NestJs => new[] { ($"nest new {safeName} --language JS --package-manager npm --skip-git --directory . --skip-install", (string?)path) },
+                // No --skip-install: InstallLibrariesAsync only runs npm at all when the wizard's
+                // library-selection step isn't empty, so a project with zero extra libraries
+                // (a perfectly normal choice) used to end up with package.json but no
+                // node_modules at all — "npm run build"/"npm start" would fail immediately.
+                FrameworkType.NestJs => new[] { ($"nest new {safeName} --language JS --package-manager npm --skip-git --directory .", (string?)path) },
                 FrameworkType.NextJs => new[] { ($"npx create-next-app@latest . --js --app --eslint --src-dir --import-alias=@/* --no-git", (string?)path) },
-                FrameworkType.NestTs => new[] { ($"nest new {safeName} --language TS --package-manager npm --skip-git --directory . --skip-install", (string?)path) },
+                FrameworkType.NestTs => new[] { ($"nest new {safeName} --language TS --package-manager npm --skip-git --directory .", (string?)path) },
                 FrameworkType.NextTs => new[] { ($"npx create-next-app@latest . --ts --app --eslint --src-dir --import-alias=@/* --no-git", (string?)path) },
                 _ => new[] { ($"npm init -y", (string?)path) }
             },
@@ -110,24 +114,45 @@ public partial class ProjectGeneratorService
         var src = Path.Combine(path, "src");
         Directory.CreateDirectory(src);
 
+        var isTs = cfg.Architecture == ArchitectureType.TypeScript;
+        var dbName = GetValidDatabaseName(project.Name);
+
+        // Every other language this generator supports (DotNet/Java/Python/PHP) gets a DB
+        // driver dependency, a connection-config file and a .env with the connection string for
+        // whatever database was picked in the wizard. JavaScript/TypeScript used to get none of
+        // that for ANY framework/database combination — no npm package, no client, no env var —
+        // regardless of which of the 6 databases was selected.
+        if (cfg.Framework is FrameworkType.NodeJs or FrameworkType.ExpressJs or FrameworkType.NestJs or FrameworkType.NestTs)
+        {
+            var dbFileName = isTs ? "db.ts" : "db.js";
+            await File.WriteAllTextAsync(Path.Combine(src, dbFileName), BuildJavaScriptDbConfig(cfg.Database, dbName, isTs), ct);
+        }
+
+        var envContent = BuildJavaScriptDbEnvFile(cfg.Database, dbName);
+        await File.WriteAllTextAsync(Path.Combine(path, ".env"), envContent, ct);
+        await File.WriteAllTextAsync(Path.Combine(path, ".env.example"), envContent, ct);
+
         switch (cfg.Framework)
         {
             case FrameworkType.NodeJs:
-                await File.WriteAllTextAsync(Path.Combine(src, "index.js"), "console.log('ProjectForge');\n", ct);
+                await File.WriteAllTextAsync(Path.Combine(src, "index.js"), """
+console.log('ProjectForge');
+
+// See src/db.js for the database client configured for this project.
+require('./db');
+""", ct);
                 break;
             case FrameworkType.ExpressJs:
-                await File.WriteAllTextAsync(Path.Combine(src, "server.js"), """
-const express = require('express');
-const app = express();
-app.get('/', (_, res) => res.json({ ok: true }));
-app.listen(process.env.PORT || 3000);
-""", ct);
+                await File.WriteAllTextAsync(Path.Combine(src, "server.js"), BuildExpressServerJs(cfg.Database), ct);
                 break;
             case FrameworkType.NestJs:
             case FrameworkType.NestTs:
                 await File.WriteAllTextAsync(Path.Combine(src, "main.ts"), """
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+
+// See src/db.ts / src/db.js for the database client configured for this project — wire it
+// into a Nest provider (e.g. in AppModule) wherever you need it injected.
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -143,6 +168,163 @@ bootstrap();
                 break;
         }
     }
+
+    private static string BuildExpressServerJs(DatabaseType db)
+    {
+        var (healthCheck, extraRequire) = db switch
+        {
+            DatabaseType.PostgreSQL or DatabaseType.MySQL =>
+                ("await pool.query('SELECT 1');", "const { pool } = require('./db');"),
+            DatabaseType.SqlServer =>
+                ("await (await getPool()).request().query('SELECT 1');", "const { getPool } = require('./db');"),
+            DatabaseType.MongoDB =>
+                ("await connectDb();", "const { connectDb } = require('./db');"),
+            DatabaseType.Redis =>
+                ("await redis.ping();", "const { redis } = require('./db');"),
+            _ =>
+                ("db.prepare('SELECT 1').get();", "const { db } = require('./db');")
+        };
+
+        return $$"""
+const express = require('express');
+{{extraRequire}}
+const app = express();
+
+app.get('/', (_, res) => res.json({ ok: true }));
+
+app.get('/health', async (_, res) => {
+  try {
+    {{healthCheck}}
+    res.json({ status: 'ok' });
+  } catch (err) {
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
+app.listen(process.env.PORT || 3000);
+""";
+    }
+
+    private static string BuildJavaScriptDbConfig(DatabaseType db, string dbName, bool isTypeScript) =>
+        isTypeScript ? BuildTypeScriptDbConfig(db, dbName) : BuildPlainJavaScriptDbConfig(db, dbName);
+
+    private static string BuildPlainJavaScriptDbConfig(DatabaseType db, string dbName) => db switch
+    {
+        DatabaseType.PostgreSQL => """
+const { Pool } = require('pg');
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+module.exports = { pool };
+""",
+        DatabaseType.MySQL => """
+const mysql = require('mysql2/promise');
+
+const pool = mysql.createPool(process.env.DATABASE_URL);
+
+module.exports = { pool };
+""",
+        DatabaseType.SqlServer => """
+const sql = require('mssql');
+
+let poolPromise;
+function getPool() {
+  if (!poolPromise) poolPromise = sql.connect(process.env.DATABASE_URL);
+  return poolPromise;
+}
+
+module.exports = { getPool, sql };
+""",
+        DatabaseType.MongoDB => $$"""
+const { MongoClient } = require('mongodb');
+
+const client = new MongoClient(process.env.MONGODB_URL || 'mongodb://mongo:27017/{{dbName}}');
+let db = null;
+
+async function connectDb() {
+  if (!db) {
+    await client.connect();
+    db = client.db(process.env.DB_NAME || '{{dbName}}');
+  }
+  return db;
+}
+
+module.exports = { connectDb };
+""",
+        DatabaseType.Redis => """
+const Redis = require('ioredis');
+
+const redis = new Redis(process.env.REDIS_URL || 'redis://redis:6379');
+
+module.exports = { redis };
+""",
+        _ => """
+const Database = require('better-sqlite3');
+
+const db = new Database(process.env.SQLITE_PATH || './app.db');
+
+module.exports = { db };
+"""
+    };
+
+    private static string BuildTypeScriptDbConfig(DatabaseType db, string dbName) => db switch
+    {
+        DatabaseType.PostgreSQL => """
+import { Pool } from 'pg';
+
+export const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+""",
+        DatabaseType.MySQL => """
+import mysql from 'mysql2/promise';
+
+export const pool = mysql.createPool(process.env.DATABASE_URL as string);
+""",
+        DatabaseType.SqlServer => """
+import sql from 'mssql';
+
+let poolPromise: Promise<sql.ConnectionPool> | undefined;
+
+export function getPool(): Promise<sql.ConnectionPool> {
+  if (!poolPromise) poolPromise = sql.connect(process.env.DATABASE_URL as string);
+  return poolPromise;
+}
+""",
+        DatabaseType.MongoDB => $$"""
+import { MongoClient, Db } from 'mongodb';
+
+const client = new MongoClient(process.env.MONGODB_URL || 'mongodb://mongo:27017/{{dbName}}');
+let db: Db | null = null;
+
+export async function connectDb(): Promise<Db> {
+  if (!db) {
+    await client.connect();
+    db = client.db(process.env.DB_NAME || '{{dbName}}');
+  }
+  return db;
+}
+""",
+        DatabaseType.Redis => """
+import Redis from 'ioredis';
+
+export const redis = new Redis(process.env.REDIS_URL || 'redis://redis:6379');
+""",
+        _ => """
+import Database from 'better-sqlite3';
+
+export const db = new Database(process.env.SQLITE_PATH || './app.db');
+"""
+    };
+
+    private static string BuildJavaScriptDbEnvFile(DatabaseType db, string dbName) => db switch
+    {
+        DatabaseType.PostgreSQL => $"DATABASE_URL=postgresql://postgres:secret@db:5432/{dbName}\nPORT=3000\n",
+        DatabaseType.MySQL      => $"DATABASE_URL=mysql://root:secret@db:3306/{dbName}\nPORT=3000\n",
+        DatabaseType.SqlServer  => $"DATABASE_URL=Server=sqlserver,1433;Database={dbName};User Id=sa;Password=YourStrong!Passw0rd;Encrypt=false;TrustServerCertificate=true\nPORT=3000\n",
+        DatabaseType.MongoDB    => $"MONGODB_URL=mongodb://mongo:27017/{dbName}\nDB_NAME={dbName}\nPORT=3000\n",
+        DatabaseType.Redis      => "REDIS_URL=redis://redis:6379\nPORT=3000\n",
+        DatabaseType.SQLite     => $"SQLITE_PATH=./{dbName}.db\nPORT=3000\n",
+        _                       => "PORT=3000\n"
+    };
 
     private async Task ScaffoldPhpBaseFilesAsync(Project project, WizardConfig cfg, string path, CancellationToken ct)
     {
@@ -182,7 +364,7 @@ bootstrap();
             {
                 ArchitectureType.Php => BuildPhpPatternFiles(cfg, pattern),
                 ArchitectureType.JavaScript or ArchitectureType.TypeScript => BuildJavaScriptPatternFiles(cfg.Framework, pattern),
-                ArchitectureType.DotNet => BuildDotNetPatternFiles(cfg.Framework, pattern),
+                ArchitectureType.DotNet => BuildDotNetPatternFiles(cfg.Framework, cfg.Database, pattern),
                 ArchitectureType.Java => BuildJavaPatternFiles(cfg.Framework, pattern),
                 ArchitectureType.Python => BuildPythonPatternFiles(cfg.Framework, pattern),
                 _ => Array.Empty<(string RelativePath, string Content)>()

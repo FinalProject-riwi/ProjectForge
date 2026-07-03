@@ -197,10 +197,16 @@ public partial class ProjectGeneratorService
         var className = string.Concat(
             project.Name.Split(' ', '-')
                 .Select(w => w.Length > 0 ? char.ToUpper(w[0]) + w[1..] : w));
-        // A class name can't start with a digit (e.g. project "3-tier-app" → "3TierApp" is invalid Java).
+        // Project names can contain punctuation ("Foo & Bar", "café!") that Split(' ', '-')
+        // doesn't remove — strip anything that isn't a valid Java identifier character before
+        // writing it into "public class {className}Application", and a class name can't start
+        // with a digit either (e.g. project "3-tier-app" → "3TierApp" is invalid Java).
+        className = new string(className.Where(char.IsLetterOrDigit).ToArray());
         if (className.Length == 0 || char.IsDigit(className[0]))
             className = "App" + className;
-        var artifact = project.Name.ToLowerInvariant().Replace(" ", "-");
+        // Maven artifactId convention: lowercase letters, digits and hyphens only.
+        var artifact = System.Text.RegularExpressions.Regex.Replace(project.Name.ToLowerInvariant(), @"[^a-z0-9]+", "-").Trim('-');
+        if (string.IsNullOrEmpty(artifact)) artifact = "app";
         var bootVersion = cfg.FrameworkVersion ?? "3.3.5";
 
         switch (cfg.Framework)

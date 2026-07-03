@@ -1617,4 +1617,239 @@ volumes:
   notifications-db:
 """
         };
+
+    private static IReadOnlyList<(string RelativePath, string Content)> BuildSymfonyCqrsPatternFiles()
+    {
+        return new[]
+        {
+            ("src/Application/Command/CreateItemCommand.php", """
+<?php
+
+namespace App\Application\Command;
+
+final class CreateItemCommand
+{
+    public function __construct(
+        public readonly string $name,
+        public readonly ?string $description = null
+    ) {}
+}
+"""),
+            ("src/Application/Command/CreateItemHandler.php", """
+<?php
+
+namespace App\Application\Command;
+
+use App\Entity\Item;
+use Doctrine\ORM\EntityManagerInterface;
+
+final class CreateItemHandler
+{
+    public function __construct(private readonly EntityManagerInterface $entityManager) {}
+
+    public function __invoke(CreateItemCommand $command): Item
+    {
+        $item = new Item($command->name, $command->description);
+        $this->entityManager->persist($item);
+        $this->entityManager->flush();
+
+        return $item;
+    }
+}
+"""),
+            ("src/Application/Query/GetAllItemsQuery.php", """
+<?php
+
+namespace App\Application\Query;
+
+final class GetAllItemsQuery
+{
+}
+"""),
+            ("src/Application/Query/GetAllItemsHandler.php", """
+<?php
+
+namespace App\Application\Query;
+
+use App\Entity\Item;
+use Doctrine\ORM\EntityManagerInterface;
+
+final class GetAllItemsHandler
+{
+    public function __construct(private readonly EntityManagerInterface $entityManager) {}
+
+    /** @return Item[] */
+    public function __invoke(GetAllItemsQuery $query): array
+    {
+        return $this->entityManager->getRepository(Item::class)->findAll();
+    }
+}
+"""),
+            ("src/Entity/Item.php", """
+<?php
+
+namespace App\Entity;
+
+use Doctrine\ORM\Mapping as ORM;
+
+#[ORM\Entity]
+#[ORM\Table(name: 'items')]
+class Item
+{
+    #[ORM\Id]
+    #[ORM\GeneratedValue]
+    #[ORM\Column(type: 'integer')]
+    private ?int $id = null;
+
+    #[ORM\Column(type: 'string', length: 255)]
+    private string $name;
+
+    #[ORM\Column(type: 'text', nullable: true)]
+    private ?string $description;
+
+    public function __construct(string $name, ?string $description = null)
+    {
+        $this->name = $name;
+        $this->description = $description;
+    }
+
+    public function getId(): ?int { return $this->id; }
+    public function getName(): string { return $this->name; }
+    public function getDescription(): ?string { return $this->description; }
+}
+"""),
+        };
+    }
+
+    private static IReadOnlyList<(string RelativePath, string Content)> BuildSymfonyMediatorPatternFiles()
+    {
+        return new[]
+        {
+            ("src/Application/Mediator/Mediator.php", """
+<?php
+
+namespace App\Application\Mediator;
+
+final class Mediator
+{
+    /** @var array<class-string, callable> */
+    private array $handlers = [];
+
+    public function register(string $requestClass, callable $handler): void
+    {
+        $this->handlers[$requestClass] = $handler;
+    }
+
+    public function send(object $request): mixed
+    {
+        $handler = $this->handlers[$request::class] ?? null;
+        if ($handler === null) {
+            throw new \InvalidArgumentException('No handler registered for ' . $request::class);
+        }
+
+        return $handler($request);
+    }
+}
+"""),
+            ("src/Application/Mediator/Messages/CreateItemRequest.php", """
+<?php
+
+namespace App\Application\Mediator\Messages;
+
+final class CreateItemRequest
+{
+    public function __construct(
+        public readonly string $name,
+        public readonly ?string $description = null
+    ) {}
+}
+"""),
+            ("src/Application/Mediator/MediatorFactory.php", """
+<?php
+
+namespace App\Application\Mediator;
+
+use App\Application\Mediator\Messages\CreateItemRequest;
+use App\Entity\Item;
+use Doctrine\ORM\EntityManagerInterface;
+
+final class MediatorFactory
+{
+    public static function create(EntityManagerInterface $entityManager): Mediator
+    {
+        $mediator = new Mediator();
+        $mediator->register(CreateItemRequest::class, function (CreateItemRequest $request) use ($entityManager) {
+            $item = new Item($request->name, $request->description);
+            $entityManager->persist($item);
+            $entityManager->flush();
+
+            return $item;
+        });
+
+        return $mediator;
+    }
+}
+"""),
+            ("config/services.yaml", """
+services:
+    App\Application\Mediator\Mediator:
+        factory: ['App\Application\Mediator\MediatorFactory', 'create']
+        arguments: ['@doctrine.orm.entity_manager']
+"""),
+        };
+    }
+
+    private static IReadOnlyList<(string RelativePath, string Content)> BuildSymfonySagaPatternFiles()
+    {
+        return new[]
+        {
+            ("src/Application/Saga/OrderSaga.php", """
+<?php
+
+namespace App\Application\Saga;
+
+/**
+ * Coordinates the order creation workflow across multiple steps, compensating
+ * (rolling back) already-completed steps in reverse order if a later step fails.
+ */
+final class OrderSaga
+{
+    public function execute(string $customerId, array $items, array $paymentInfo): bool
+    {
+        $orderId = $this->generateId();
+        $reservationId = null;
+
+        try {
+            $this->createOrder($orderId, $customerId, $items);
+            $reservationId = $this->reserveInventory($orderId, $items);
+            $this->processPayment($orderId, $paymentInfo);
+            $this->confirmOrder($orderId);
+
+            return true;
+        } catch (\Throwable $e) {
+            if ($reservationId !== null) {
+                $this->releaseInventory($reservationId);
+            }
+            $this->cancelOrder($orderId);
+
+            return false;
+        }
+    }
+
+    // No extra composer package required (symfony/uid isn't part of symfony/skeleton by default).
+    private function generateId(): string
+    {
+        return bin2hex(random_bytes(16));
+    }
+
+    private function createOrder(string $orderId, string $customerId, array $items): void {}
+    private function reserveInventory(string $orderId, array $items): string { return $this->generateId(); }
+    private function processPayment(string $orderId, array $paymentInfo): void {}
+    private function confirmOrder(string $orderId): void {}
+    private function cancelOrder(string $orderId): void {}
+    private function releaseInventory(string $reservationId): void {}
+}
+"""),
+        };
+    }
 }

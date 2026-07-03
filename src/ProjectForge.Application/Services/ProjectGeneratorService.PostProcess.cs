@@ -18,10 +18,16 @@ public partial class ProjectGeneratorService
         var isLaravelMicroservices = isPhpMicroservices && cfg.Framework == FrameworkType.Laravel;
         var isSymfonyMicroservices = isPhpMicroservices && cfg.Framework == FrameworkType.Symfony;
 
+        // docker-compose.yml service/container names only allow [a-zA-Z0-9._-]+ — a project
+        // name with other punctuation (quotes, &, etc.) would otherwise produce a compose file
+        // that fails to parse or an image tag Docker rejects outright.
+        var appNameSlug = System.Text.RegularExpressions.Regex.Replace(project.Name.ToLowerInvariant(), @"[^a-z0-9-]+", "-").Trim('-');
+        if (string.IsNullOrEmpty(appNameSlug)) appNameSlug = "app";
+
         var vars = new Dictionary<string, string>
         {
-            ["APP_NAME"] = project.Name.ToLower().Replace(" ", "-"),
-            ["DB_NAME"] = $"{project.Name.ToLower().Replace(" ", "_")}_db",
+            ["APP_NAME"] = appNameSlug,
+            ["DB_NAME"] = $"{GetValidDatabaseName(project.Name)}_db",
             ["DB_PORT"] = GetDefaultDbPort(cfg.Database).ToString(),
             ["APP_PORT"] = GetDefaultAppPort(cfg.Architecture, cfg.Framework).ToString()
         };
@@ -35,11 +41,23 @@ public partial class ProjectGeneratorService
                 await EmitLogAsync(project, "Templates", "✅ docker-compose.yml generado", ct: ct);
             }
 
-            var dockerfile = await _templates.GetTemplateAsync(cfg.Architecture, "dockerfile", cfg.Database);
-            if (dockerfile != null)
+            // DotNet/Java/Python already write their own Dockerfile earlier in the pipeline
+            // (ScaffoldDotNetBaseFilesAsync / ScaffoldJavaBaseFilesAsync / ScaffoldPythonBaseFilesAsync),
+            // using the *real* assembly/entrypoint name and the *actually selected* runtime
+            // version. This used to overwrite it unconditionally with the generic catalog
+            // template, which hardcodes a mismatched name (APP_NAME here is lower-hyphenated,
+            // e.g. "my-app", while .NET's real output is PascalCase, e.g. "MyApp.dll") and a
+            // fixed SDK version — so every DotNet + Docker Compose container failed to start
+            // with "Could not execute because the specified command or file was not found."
+            var dockerfilePath = Path.Combine(path, "Dockerfile");
+            if (!File.Exists(dockerfilePath))
             {
-                await File.WriteAllTextAsync(Path.Combine(path, "Dockerfile"), InterpolateTemplate(dockerfile.Content, vars), ct);
-                await EmitLogAsync(project, "Templates", "✅ Dockerfile generado", ct: ct);
+                var dockerfile = await _templates.GetTemplateAsync(cfg.Architecture, "dockerfile", cfg.Database);
+                if (dockerfile != null)
+                {
+                    await File.WriteAllTextAsync(dockerfilePath, InterpolateTemplate(dockerfile.Content, vars), ct);
+                    await EmitLogAsync(project, "Templates", "✅ Dockerfile generado", ct: ct);
+                }
             }
         }
 
@@ -672,9 +690,33 @@ framework:
                     break;
             }
 
-            // CQRS uses MediatR
-            if (selectedPatterns.Any(p => NormalizePatternToken(p) == "cqrs"))
+            // CQRS, Mediator and Saga pattern files all generate code against MediatR
+            // (IRequest/IRequestHandler/IPipelineBehavior/IMediator) — only CQRS used to trigger
+            // the implicit package install, so picking "Mediator" or "Saga" alone produced a
+            // project referencing a NuGet package that was never added, failing to build.
+            if (selectedPatterns.Any(p => NormalizePatternToken(p) is "cqrs" or "mediator" or "saga"))
                 libraries.Add("MediatR");
+
+            return libraries;
+        }
+
+        // ── JavaScript/TypeScript implicit packages ─────────────────────────────
+        // Previously there was no branch here at all, so npm never installed a database
+        // driver regardless of which of the 6 databases was picked — see
+        // BuildJavaScriptDbConfig (Scaffolding.cs), which now generates client code that
+        // requires/imports exactly these packages.
+        if (cfg.Architecture is ArchitectureType.JavaScript or ArchitectureType.TypeScript &&
+            cfg.Framework is FrameworkType.NodeJs or FrameworkType.ExpressJs or FrameworkType.NestJs or FrameworkType.NestTs)
+        {
+            switch (cfg.Database)
+            {
+                case DatabaseType.PostgreSQL: libraries.Add("pg"); break;
+                case DatabaseType.MySQL:      libraries.Add("mysql2"); break;
+                case DatabaseType.SqlServer:  libraries.Add("mssql"); break;
+                case DatabaseType.MongoDB:    libraries.Add("mongodb"); break;
+                case DatabaseType.Redis:      libraries.Add("ioredis"); break;
+                case DatabaseType.SQLite:     libraries.Add("better-sqlite3"); break;
+            }
 
             return libraries;
         }
