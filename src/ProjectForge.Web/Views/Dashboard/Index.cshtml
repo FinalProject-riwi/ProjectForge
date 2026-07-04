@@ -1,32 +1,30 @@
 @using ProjectForge.Core.Entities
 @using ProjectForge.Core.Enums
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
 @model IEnumerable<Project>
 @{
     ViewData["Title"] = "Dashboard";
     Layout = "_Layout";
     var githubName = User.Identity?.Name ?? "amigo";
+    var agentId = Configuration["ElevenLabs:AgentId"] ?? "";
 }
 
-<!-- Voice assistant init marker — voice.js reads data-username -->
-<div id="voice-dashboard-init" data-username="@githubName" style="display:none"></div>
-
-<!-- Voice card: greets user + one-shot mic -->
+<!-- Voice card: greets user, ElevenLabs agent handles the conversation -->
 <div class="dashboard-voice-card">
     <div class="dashboard-voice-icon">🤖</div>
     <div class="dashboard-voice-body">
         <strong>Hola, @githubName! ¿Qué construimos hoy?</strong>
-        <p>Dime tu stack de una vez o crea el proyecto paso a paso.</p>
+        <p>Presiona el micrófono de abajo a la derecha y cuéntame tu stack, con calma.</p>
     </div>
-    <button class="voice-speak-btn" id="voice-dashboard-mic-btn" title="Hablar con la asistente">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-            <line x1="12" y1="19" x2="12" y2="23"/>
-            <line x1="8" y1="23" x2="16" y2="23"/>
-        </svg>
-        Hablar
-    </button>
 </div>
+
+@if (!string.IsNullOrWhiteSpace(agentId))
+{
+    <!-- ElevenLabs conversational agent — handles STT + understanding + TTS end-to-end -->
+    <elevenlabs-convai agent-id="@agentId" id="pf-voice-agent"></elevenlabs-convai>
+    <script src="https://unpkg.com/@@elevenlabs/convai-widget-embed" async type="text/javascript"></script>
+    <script src="~/js/voice-agent.js" asp-append-version="true" defer></script>
+}
 
 <div class="dashboard-header">
     <div>

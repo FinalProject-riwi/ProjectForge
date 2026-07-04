@@ -1,9 +1,10 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   ProjectForge — Voice Assistant  v4
+   ProjectForge — Wizard voice guidance  v5
    TTS  : ElevenLabs (eleven_multilingual_v2) → fallback SpeechSynthesis
    STT  : Web Speech API  (Chrome / Edge)
-   Scope: ONLY project creation — out-of-scope answered warmly and redirected.
-   Flow : Free natural speech → Groq parses → auto-generate → terminal
+   Scope: step-by-step manual voice mode inside /wizard only. The Dashboard's
+   free-form conversational voice now runs entirely through the ElevenLabs
+   agent widget — see voice-agent.js and Views/Dashboard/Index.cshtml.
    ═══════════════════════════════════════════════════════════════════════════ */
 (function () {
   'use strict';
@@ -63,11 +64,31 @@
     _initSTT() {
       try {
         this._rec = new SpeechRec();
-        this._rec.continuous     = false;
-        this._rec.interimResults = false;
+        // continuous: a breath/pause mid-sentence ("Python... con FastAPI...
+        // y Postgres") must NOT end the turn — we decide when to stop below.
+        this._rec.continuous     = true;
+        this._rec.interimResults = true;
         this._rec.lang           = STT_LANGS[0];
         this._rec.maxAlternatives = 3;
       } catch { this._rec = null; }
+    }
+
+    /* ── Unlock audio playback within a real user gesture (click) so later
+       programmatic play() calls — after awaits — aren't blocked by the
+       browser's autoplay policy, which otherwise shows up as "sometimes it
+       just doesn't speak". Must be called synchronously from the click
+       handler, before any await. ── */
+    unlockAudio() {
+      if (this._audioUnlocked) return;
+      this._audioUnlocked = true;
+      try { const a = new Audio(); a.volume = 0; a.play().catch(() => {}); } catch {}
+      if (hasTTS) {
+        try {
+          const u = new SpeechSynthesisUtterance(' ');
+          u.volume = 0;
+          window.speechSynthesis.speak(u);
+        } catch {}
+      }
     }
 
     /* ── TTS: ElevenLabs → SpeechSynthesis fallback ─────────────────────── */
@@ -102,14 +123,22 @@
 
     stopSpeaking() { this._cancelAudio(); window.speechSynthesis?.cancel(); this._setState('idle', 'Lista'); }
 
-    /* ── STT: listen ────────────────────────────────────────────────────── */
-    listen(timeoutMs = 12000) {
+    /* ── STT: listen ─────────────────────────────────────────────────────
+       Recognition runs in continuous mode (see _initSTT), so it keeps
+       listening across natural pauses. We only stop it ourselves after
+       `silenceMs` of genuine silence (no interim/final activity at all),
+       or after the hard `timeoutMs` ceiling as a safety net. ── */
+    listen(timeoutMs = 20000, silenceMs = 3000) {
       if (!hasSTT || !this._rec) return Promise.resolve(null);
       return new Promise(resolve => {
         let settled = false;
+        let finalText = '';
+        let silenceTimer = null;
+
         const done = val => {
           if (settled) return; settled = true;
-          clearTimeout(timer);
+          clearTimeout(silenceTimer); clearTimeout(hardTimer);
+          this._rec.onresult = this._rec.onerror = this._rec.onend = null;
           this._hideOverlay(); this._stopMic();
           // Try rotating language on failure for better recognition
           if (!val) this._recLangIdx = (this._recLangIdx + 1) % STT_LANGS.length;
@@ -117,22 +146,35 @@
           resolve(val);
         };
 
+        const armSilenceTimer = () => {
+          clearTimeout(silenceTimer);
+          silenceTimer = setTimeout(() => { try { this._rec?.stop(); } catch {} }, silenceMs);
+        };
+
         this._setState('listening', 'Escuchando...');
         this._showOverlay(() => { try { this._rec?.stop(); } catch {} done(null); });
         this._startMic();
 
-        const timer = setTimeout(() => { try { this._rec?.stop(); } catch {} }, timeoutMs);
+        const hardTimer = setTimeout(() => { try { this._rec?.stop(); } catch {} }, timeoutMs);
+        armSilenceTimer();
 
         this._rec.lang = STT_LANGS[this._recLangIdx];
         this._rec.onresult = e => {
-          // Use the best alternative with highest confidence
-          const best = [...Array(e.results[0].length)]
-            .map((_, i) => e.results[0][i])
-            .sort((a, b) => b.confidence - a.confidence)[0];
-          done(best?.transcript || null);
+          armSilenceTimer(); // any activity (interim or final) means they're still talking
+          for (let i = e.resultIndex; i < e.results.length; i++) {
+            const result = e.results[i];
+            if (!result.isFinal) continue;
+            const best = [...Array(result.length)]
+              .map((_, j) => result[j])
+              .sort((a, b) => b.confidence - a.confidence)[0];
+            if (best?.transcript) finalText += (finalText ? ' ' : '') + best.transcript.trim();
+          }
         };
-        this._rec.onerror = () => done(null);
-        this._rec.onend   = () => done(null);
+        this._rec.onerror = e => {
+          if (e.error === 'no-speech') return; // continuous mode: keep waiting, don't kill the turn
+          done(finalText.trim() || null);
+        };
+        this._rec.onend = () => done(finalText.trim() || null);
         try { this._rec.start(); } catch { done(null); }
       });
     }
@@ -198,7 +240,8 @@
     _onMicClick() {
       if (this._state === 'listening') { this.stopListening(); return; }
       if (this._state === 'speaking')  { this.stopSpeaking(); return; }
-      (window.__voiceWizardListen || window.__voiceDashboardListen || (() => {
+      this.unlockAudio();
+      (window.__voiceWizardListen || (() => {
         this.listen().then(t => t ? this.speak(`Dijiste: ${t}`) : this.setIdle());
       }))();
     }
@@ -306,118 +349,20 @@
     }
   }
 
+  /* This custom voice bar is only used by the Wizard's step-by-step manual
+     mode now — the Dashboard's conversational voice is handled entirely by
+     the ElevenLabs agent widget (see voice-agent.js). Skip creating it (and
+     its floating UI) anywhere else. */
+  if (!document.getElementById('voice-wizard-init')) return;
+
   /* ── Singleton ──────────────────────────────────────────────────────────── */
   window.voiceAssistant = new VoiceAssistant();
   const va = window.voiceAssistant;
 
-  /* Wizard state accessor — safe on non-wizard pages */
+  /* Wizard state accessor */
   const ws = () => window._wizardState;
   let _applyingConfig = false;
   const asyncSpeak = text => new Promise(resolve => va.speak(text, resolve));
-
-  /* ═══════════════════════════════════════════════════════════════════════════
-     DASHBOARD MODE
-     Free conversational voice → Groq parses → confirms → name → generate → terminal
-     ═══════════════════════════════════════════════════════════════════════════ */
-  const dashInit = document.getElementById('voice-dashboard-init');
-  if (dashInit) {
-    window.__voiceDashboardMode = true;
-    const username = (dashInit.dataset.username || 'amigo').split(' ')[0];
-
-    setTimeout(() => {
-      va.speak(`¡Hola ${username}! Soy tu asistente de TabBuilder. Cuéntame qué tipo de proyecto quieres crear.`);
-    }, 700);
-
-    window.__voiceDashboardListen = async function () {
-      /* ── Turn 1: user describes what they want ── */
-      const transcript = await va.listen(18000);
-      if (!transcript) { va.setIdle(); return; }
-
-      va.setState('thinking', 'Analizando...');
-
-      let data;
-      try {
-        const resp = await fetch('/wizard/api/voice-parse', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ transcript }),
-        });
-        data = await resp.json();
-      } catch {
-        va.speak('Tuve un problema de red. ¿Puedes intentarlo de nuevo?');
-        return;
-      }
-
-      /* ── Out of scope: gentle redirect ── */
-      if (!data.inScope) {
-        await asyncSpeak(data.outOfScopeReply || 'Solo puedo ayudarte a crear proyectos de software con ProjectForge. ¿Quieres que creemos uno?');
-        // Give them a chance to reply with a project request
-        const retry = await va.listen(12000);
-        if (retry) window.__voiceDashboardListen();  // restart flow with their new message
-        return;
-      }
-
-      /* ── Build a natural confirmation ── */
-      const archLabel = _archLabel(data.architecture);
-      const infraLabel = _infraLabel(data.infrastructure);
-      const fwLabel   = data.framework || archLabel;
-
-      /* ── If Groq already extracted a project name, skip that turn ── */
-      if (data.projectName && data.projectName.length >= 2) {
-        await asyncSpeak(`Perfecto. ${archLabel} con ${fwLabel}, ${data.database} y ${infraLabel}. Proyecto: ${data.projectName}. Generando...`);
-        await _generate(data, data.projectName);
-        return;
-      }
-
-      /* ── Ask for project name naturally ── */
-      await asyncSpeak(`Entendido. ${archLabel} con ${fwLabel} y ${data.database}. ¿Cómo quieres llamar el proyecto?`);
-
-      /* ── Turn 2: project name ── */
-      const nameRaw = await va.listen(12000);
-      if (!nameRaw) {
-        va.speak('No escuché el nombre. Puedes continuar en el wizard manualmente.');
-        return;
-      }
-
-      const projectName = _extractName(nameRaw);
-      if (!projectName) {
-        va.speak('No pude entender el nombre. Usa solo letras, números y guiones.');
-        return;
-      }
-
-      await asyncSpeak(`Generando ${projectName}...`);
-      await _generate(data, projectName);
-    };
-
-    document.getElementById('voice-dashboard-mic-btn')
-      ?.addEventListener('click', window.__voiceDashboardListen);
-  }
-
-  /* ── Background generation helper ──────────────────────────────────────── */
-  async function _generate(data, projectName) {
-    va.setState('thinking', 'Creando proyecto...');
-    try {
-      const resp = await fetch('/wizard/api/voice-generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          architecture:   data.architecture,
-          framework:      data.framework,
-          database:       data.database,
-          infrastructure: data.infrastructure || 'None',
-          projectName,
-        }),
-      });
-      const result = await resp.json();
-      if (result.success) {
-        window.location.href = result.redirectUrl;
-      } else {
-        va.speak('Algo salió mal al crear el proyecto. Puedes intentarlo en el wizard.');
-      }
-    } catch {
-      va.speak('Error de red. Intenta de nuevo o usa el wizard manualmente.');
-    }
-  }
 
   /* ── Extract a clean project name from natural speech ─────────────────── */
   function _extractName(raw) {
@@ -467,8 +412,9 @@
     });
 
     window.__voiceWizardListen = async function () {
+      va.unlockAudio();
       const text = await va.listen(12000);
-      if (!text) { va.setIdle(); return; }
+      if (!text) { va.speak('No logré escucharte bien. Intenta de nuevo.'); return; }
 
       /* Check scope even in wizard */
       va.setState('thinking', 'Procesando...');

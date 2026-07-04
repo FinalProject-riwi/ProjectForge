@@ -340,7 +340,7 @@ public class WizardController : Controller
     public async Task<IActionResult> TextToSpeech([FromQuery] string text)
     {
         if (string.IsNullOrWhiteSpace(text)) return BadRequest();
-        text = text.Length > 500 ? text[..500] : text;
+        text = TruncateAtSentence(text, 500);
 
         var apiKey  = _configuration["ElevenLabs:ApiKey"] ?? "";
         var voiceId = _configuration["ElevenLabs:VoiceId"] ?? "21m00Tcm4TlvDq8ikWAM";
@@ -355,23 +355,39 @@ public class WizardController : Controller
             {
                 text,
                 model_id = "eleven_multilingual_v2",
-                voice_settings = new { stability = 0.45, similarity_boost = 0.80, style = 0.25, use_speaker_boost = true }
+                // Lower stability + real style weight = more natural inflection/emotion
+                // instead of a flat, monotone read. use_speaker_boost keeps timbre clear.
+                voice_settings = new { stability = 0.38, similarity_boost = 0.85, style = 0.45, use_speaker_boost = true }
             };
-            using var req2 = new HttpRequestMessage(HttpMethod.Post, $"v1/text-to-speech/{voiceId}");
+            // /stream so audio starts playing before the full clip is generated.
+            // optimize_streaming_latency=0: keep full audio quality — the naturalness
+            // of the voice matters more here than shaving latency further.
+            using var req2 = new HttpRequestMessage(HttpMethod.Post, $"v1/text-to-speech/{voiceId}/stream?optimize_streaming_latency=0");
             req2.Headers.Add("xi-api-key", apiKey);
             req2.Content = System.Net.Http.Json.JsonContent.Create(payload);
 
-            using var resp = await client.SendAsync(req2);
+            var resp = await client.SendAsync(req2, HttpCompletionOption.ResponseHeadersRead);
             if (!resp.IsSuccessStatusCode) return StatusCode(502);
 
-            var audio = await resp.Content.ReadAsByteArrayAsync();
             Response.Headers.CacheControl = "no-store";
-            return File(audio, "audio/mpeg");
+            var stream = await resp.Content.ReadAsStreamAsync();
+            return File(stream, "audio/mpeg");
         }
         catch
         {
             return StatusCode(502);
         }
+    }
+
+    // Truncates to the last sentence boundary (. ! ? …) at or before maxLength,
+    // so ElevenLabs never receives (and speaks) a phrase cut off mid-word.
+    private static string TruncateAtSentence(string text, int maxLength)
+    {
+        if (text.Length <= maxLength) return text;
+
+        var cut = text[..maxLength];
+        var lastBoundary = cut.LastIndexOfAny(new[] { '.', '!', '?', '…' });
+        return lastBoundary > maxLength / 2 ? cut[..(lastBoundary + 1)] : cut;
     }
 
     // ── Voice auto-generate: parsed config → WizardConfig + Project ──────────────
