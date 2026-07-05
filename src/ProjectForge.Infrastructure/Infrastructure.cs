@@ -165,7 +165,7 @@ public class RoutedShellExecutor : IShellExecutor
         {
             "dotnet" => "Workers:DotNet",
             "npm" or "npx" or "nest" or "node" => "Workers:Node",
-            "composer" => "Workers:Php",
+            "php" or "composer" => "Workers:Php",
             "python" or "python3" or "pip" => "Workers:Python",
             "java" or "mvn" => "Workers:Java",
             _ => null

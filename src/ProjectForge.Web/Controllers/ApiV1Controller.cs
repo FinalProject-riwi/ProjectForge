@@ -28,6 +28,7 @@ public class ApiV1Controller : ControllerBase
     private readonly IProjectGeneratorService _generator;
     private readonly IProjectRepository _projects;
     private readonly IEncryptionService _encryption;
+    private readonly IShellExecutor _shell;
 
     public ApiV1Controller(
         AppDbContext db,
@@ -35,7 +36,8 @@ public class ApiV1Controller : ControllerBase
         ICreateProjectUseCase createProject,
         IProjectGeneratorService generator,
         IProjectRepository projects,
-        IEncryptionService encryption)
+        IEncryptionService encryption,
+        IShellExecutor shell)
     {
         _db = db;
         _ai = ai;
@@ -43,6 +45,7 @@ public class ApiV1Controller : ControllerBase
         _generator = generator;
         _projects = projects;
         _encryption = encryption;
+        _shell = shell;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -543,24 +546,17 @@ public class ApiV1Controller : ControllerBase
         });
     }
 
-    private static async Task<bool> IsToolInstalledAsync(string command)
+    // Routed through IShellExecutor (same as the actual generation pipeline) instead of a raw
+    // local "which"/"where" — under Docker Compose the web container itself never has any
+    // language toolchain installed (see docker/Dockerfile), only the per-language worker
+    // containers do. Checking locally always reported php/node/python/java as missing even
+    // when their worker was healthy and generation would have worked fine.
+    private async Task<bool> IsToolInstalledAsync(string command)
     {
         try
         {
-            var isWindows = OperatingSystem.IsWindows();
-            using var proc = new System.Diagnostics.Process();
-            proc.StartInfo = new System.Diagnostics.ProcessStartInfo
-            {
-                FileName    = isWindows ? "cmd.exe" : "/bin/bash",
-                Arguments   = isWindows ? $"/c where {command}" : $"-c \"which {command}\"",
-                RedirectStandardOutput = true,
-                RedirectStandardError  = true,
-                UseShellExecute  = false,
-                CreateNoWindow   = true
-            };
-            proc.Start();
-            await proc.WaitForExitAsync();
-            return proc.ExitCode == 0;
+            var result = await _shell.RunAsync($"{command} --version", Path.GetTempPath());
+            return result.Success;
         }
         catch { return false; }
     }

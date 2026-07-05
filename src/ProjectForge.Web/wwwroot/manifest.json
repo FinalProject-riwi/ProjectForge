@@ -1,6 +1,6 @@
 {
-  "name": "ProjectForge",
-  "short_name": "ProjectForge",
+  "name": "TabBuilder",
+  "short_name": "TabBuilder",
   "description": "Genera proyectos de software listos para producción con IA y GitHub.",
   "start_url": "/",
   "display": "standalone",

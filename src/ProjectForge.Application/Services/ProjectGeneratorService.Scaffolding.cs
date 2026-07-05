@@ -87,9 +87,30 @@ public partial class ProjectGeneratorService
             // Java: file-based scaffolding handled by ScaffoldJavaFilesInternalAsync
             ArchitectureType.Java => Array.Empty<(string, string?)>(),
 
-            // PHP: file-based scaffolding handled by ScaffoldPhpBaseFilesAsync
-            ArchitectureType.Php => Array.Empty<(string, string?)>(),
+            ArchitectureType.Php => GetPhpScaffoldCommands(cfg),
 
+            _ => Array.Empty<(string, string?)>()
+        };
+    }
+
+    // Runs "composer create-project" for the base Laravel/Symfony skeleton — same role as
+    // "dotnet new"/"nest new" above. This was previously missing entirely: nothing in the
+    // pipeline ever created composer.json/artisan/public/index.php (or bin/console for
+    // Symfony), so ScaffoldPhpBaseFilesAsync's DDD files, the design-pattern files, and
+    // ApplyTemplatesAsync's .env/database.php edits were all being layered onto an empty
+    // folder — every non-microservices PHP project generated a broken, non-runnable repo.
+    // Microservices workspaces create their own per-service projects instead (see
+    // ScaffoldLaravelMicroservicesWorkspaceAsync/ScaffoldSymfonyMicroservicesWorkspaceAsync),
+    // so the base project is skipped there to avoid creating an unused top-level skeleton.
+    private static IEnumerable<(string Command, string? WorkingDir)> GetPhpScaffoldCommands(WizardConfig cfg)
+    {
+        if (HasSelectedPattern(cfg, "microservices"))
+            return Array.Empty<(string, string?)>();
+
+        return cfg.Framework switch
+        {
+            FrameworkType.Laravel => new[] { ("composer create-project laravel/laravel . --no-interaction --prefer-dist", (string?)null) },
+            FrameworkType.Symfony => new[] { ("composer create-project symfony/skeleton . --no-interaction", (string?)null) },
             _ => Array.Empty<(string, string?)>()
         };
     }

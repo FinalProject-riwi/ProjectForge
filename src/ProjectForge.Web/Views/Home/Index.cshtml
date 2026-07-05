@@ -1,5 +1,5 @@
 @{
-    ViewData["Title"] = "ProjectForge — Genera proyectos listos para producción con IA";
+    ViewData["Title"] = "TabBuilder — Genera proyectos listos para producción con IA";
     Layout = "_Layout";
 }
 
@@ -9,7 +9,7 @@
 <section class="hero" aria-label="Sección principal">
     <!-- LEFT: copy -->
     <div class="hero-content">
-        <img src="~/img/logo.jpg" alt="ProjectForge" class="hero-logo" width="72" height="72" />
+        <img src="~/img/logo.jpg" alt="TabBuilder" class="hero-logo" width="72" height="72" />
 
         <div class="hero-eyebrow">
             <span class="hero-eyebrow-dot"></span>
@@ -23,7 +23,7 @@
 
         <p class="hero-subtitle">
             Elige tu stack, arquitectura e infraestructura. La IA sugiere patrones y librerías.
-            ProjectForge genera el código, lo sube a GitHub y configura tu CI/CD automáticamente.
+            TabBuilder genera el código, lo sube a GitHub y configura tu CI/CD automáticamente.
         </p>
 
         <div class="hero-actions">
@@ -68,7 +68,7 @@
                         <span class="term-dot yellow"></span>
                         <span class="term-dot green"></span>
                     </div>
-                    <span class="term-tab">projectforge — scaffold</span>
+                    <span class="term-tab">tabbuilder — scaffold</span>
                 </div>
                 <div class="hero-term-body" id="hero-term-body">
                     <!-- Lines injected by JS -->
@@ -110,7 +110,7 @@
      FEATURES
      ═══════════════════════════════════════════════════════════════════════ -->
 <section class="features-section" aria-labelledby="features-title">
-    <p class="section-eyebrow reveal">Qué hace ProjectForge</p>
+    <p class="section-eyebrow reveal">Qué hace TabBuilder</p>
     <h2 class="section-title reveal" id="features-title">Todo lo que necesitas para arrancar</h2>
     <p class="section-subtitle reveal">De cero a repositorio en menos de 2 minutos</p>
 
@@ -179,7 +179,7 @@
         @foreach (var (num, title, desc) in new[] {
             ("01", "Elige tu stack",        "Selecciona el lenguaje, framework, base de datos e infraestructura usando el wizard visual."),
             ("02", "La IA te asesora",      "Claude analiza tu selección y sugiere los patrones y librerías más adecuados para tu caso de uso."),
-            ("03", "ProjectForge genera",   "El motor genera la estructura de carpetas, archivos de configuración, Dockerfile, CI/CD y README."),
+            ("03", "TabBuilder genera",   "El motor genera la estructura de carpetas, archivos de configuración, Dockerfile, CI/CD y README."),
             ("04", "Push a GitHub",         "Con un clic, crea el repositorio en tu cuenta y hace el primer commit con todo el código generado."),
         })
         {
@@ -199,11 +199,11 @@
      ═══════════════════════════════════════════════════════════════════════ -->
 <section class="download-section" aria-labelledby="download-title">
     <p class="section-eyebrow reveal">Disponible en todas partes</p>
-    <h2 class="section-title reveal" id="download-title">Lleva ProjectForge contigo</h2>
+    <h2 class="section-title reveal" id="download-title">Lleva TabBuilder contigo</h2>
     <p class="section-subtitle reveal">Accede desde tu navegador o instala la app en tu dispositivo</p>
 
     <div class="download-badges">
-        <button class="download-btn reveal reveal-delay-1" id="pwa-install-btn" style="display:none" aria-label="Instalar ProjectForge como app de escritorio">
+        <button class="download-btn reveal reveal-delay-1" id="pwa-install-btn" style="display:none" aria-label="Instalar TabBuilder como app de escritorio">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
                 <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><circle cx="6.5" cy="6" r=".5" fill="currentColor"/><circle cx="9.5" cy="6" r=".5" fill="currentColor"/>
             </svg>
@@ -235,7 +235,7 @@
     </div>
 
     <p style="margin-top:1.5rem;font-size:.78rem;color:var(--text-muted)" class="reveal">
-        ProjectForge es una Progressive Web App. No requiere tienda de aplicaciones.
+        TabBuilder es una Progressive Web App. No requiere tienda de aplicaciones.
     </p>
 </section>
 
@@ -278,7 +278,7 @@
   if (!body) return;
 
   const lines = [
-    { type: 'cmd',     text: 'projectforge init --name="mi-api" --arch=dotnet' },
+    { type: 'cmd',     text: 'tabbuilder init --name="mi-api" --arch=dotnet' },
     { type: 'info',    text: '✦ IA analizando stack seleccionado...' },
     { type: 'success', text: '✔  Patrones recomendados: Repository, CQRS, Unit of Work' },
     { type: 'info',    text: '↳  Librerías: MediatR · AutoMapper · FluentValidation' },

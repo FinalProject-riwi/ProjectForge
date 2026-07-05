@@ -395,6 +395,15 @@
   if (wizInit) {
     window.__voiceWizardMode = true;
 
+    /* unlockAudio() was previously only wired to the mic button. Users who
+       navigate with plain clicks (cards + "Siguiente"/"Anterior", never
+       touching the mic) never triggered it, so the browser's autoplay
+       policy silently blocked every speak() after the very first one —
+       narration would work on step 1 (or not at all) and then go mute for
+       the rest of the wizard. Unlocking on the first click/tap anywhere on
+       the page covers that path too. */
+    document.addEventListener('pointerdown', () => va.unlockAudio(), { once: true, capture: true });
+
     const prefillRaw = sessionStorage.getItem('pf-voice-config');
     if (prefillRaw) {
       sessionStorage.removeItem('pf-voice-config');
@@ -436,16 +445,30 @@
     };
   }
 
-  /* ── Wizard step speaker ────────────────────────────────────────────────── */
+  /* ── Wizard step speaker ─────────────────────────────────────────────────
+     Each step announces the concrete options available in ITS OWN tab
+     (languages on step 1, frameworks+DBs on step 2, containers on step 3...)
+     so the narration always matches what's on screen, not a generic prompt. ── */
   function _speakStep(step) {
     const s = step || ws()?.currentStep || 1;
     const arch = ws()?.architecture || '';
     const al = arch === 'DotNet' ? 'punto NET' : arch;
+
+    if (s === 2) {
+      const fwCat = (window._frameworkCatalog && window._frameworkCatalog[arch]) || [];
+      const fwNames = fwCat.map(f => f.label).join(', ');
+      va.speak(
+        `¿Qué framework${al ? ' de ' + al : ''} prefieres?` +
+        (fwNames ? ` Por ejemplo: ${fwNames}.` : '') +
+        ' Y dime la base de datos: PostgreSQL, MySQL, SQL Server, MongoDB, Redis o SQLite.'
+      );
+      return;
+    }
+
     const prompts = {
-      1: '¿Qué tecnología quieres usar? Por ejemplo: Python, Java, Node, C Sharp, PHP...',
-      2: `¿Qué framework${al ? ' de ' + al : ''} prefieres? Y dime la base de datos.`,
-      3: '¿Necesitas contenedores? Docker, Kubernetes, o sin contenedores.',
-      4: 'La IA ya sugirió patrones y librerías. ¿Cambias algo?',
+      1: '¿Qué lenguaje de programación quieres usar? Puedo trabajar con Python, Java, C Sharp, PHP, JavaScript o TypeScript.',
+      3: '¿Necesitas contenedores? Puedo configurar Docker Compose, Kubernetes, o ninguno.',
+      4: 'La IA ya sugirió patrones de diseño y librerías recomendadas para tu stack. ¿Cambias algo?',
       5: '¿Cómo se llamará el proyecto?',
     };
     if (prompts[s]) va.speak(prompts[s]);

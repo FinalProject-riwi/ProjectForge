@@ -23,7 +23,7 @@ public class ProjectDomainTests
 
         var exception = Assert.Throws<DomainException>(() => project.Rename("ab"));
 
-        Assert.Equal("Project name must contain at least 3 characters.", exception.Message);
+        Assert.Equal("El nombre del proyecto debe tener al menos 3 caracteres.", exception.Message);
         Assert.Equal("Initial name", project.Name);
     }
 

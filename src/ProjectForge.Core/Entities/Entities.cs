@@ -55,7 +55,7 @@ public class Project : BaseEntity
     {
         var normalized = NormalizeName(name);
         if (normalized.Length < 3)
-            throw new DomainException("Project name must contain at least 3 characters.");
+            throw new DomainException("El nombre del proyecto debe tener al menos 3 caracteres.");
 
         Name = normalized;
         Touch();
@@ -76,7 +76,7 @@ public class Project : BaseEntity
     public void MarkPublished(string repositoryUrl, string localPath)
     {
         if (string.IsNullOrWhiteSpace(repositoryUrl))
-            throw new DomainException("Repository URL cannot be empty.");
+            throw new DomainException("La URL del repositorio no puede estar vacía.");
 
         RepositoryUrl = repositoryUrl.Trim();
         LocalPath = string.IsNullOrWhiteSpace(localPath) ? null : localPath.Trim();
