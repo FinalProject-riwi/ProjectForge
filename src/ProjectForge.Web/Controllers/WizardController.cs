@@ -143,7 +143,10 @@ public class WizardController : Controller
         {
             Architecture       = architecture,
             Framework          = framework,
-            FrameworkVersion   = fwv ?? "latest",
+            // "latest" is not a real Maven/npm/pip version string — for Spring Boot in particular
+            // it gets written verbatim into pom.xml's <parent><version>, which Maven Central
+            // rejects outright ("Non-resolvable parent POM ... spring-boot-starter-parent:pom:latest").
+            FrameworkVersion   = string.IsNullOrWhiteSpace(fwv) ? GetDefaultFrameworkVersion(framework) : fwv,
             Database           = database,
             Infrastructure     = infrastructure,
             DeploymentTarget   = DeploymentTarget.Local,

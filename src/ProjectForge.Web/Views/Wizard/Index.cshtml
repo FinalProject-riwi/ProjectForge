@@ -6,6 +6,12 @@
 <!-- Voice assistant init marker -->
 <div id="voice-wizard-init" style="display:none"></div>
 
+<button type="button" id="wizard-voice-activate" class="btn btn-ghost"
+        style="margin-bottom:1rem;border-color:rgba(34,211,238,.35);color:#22d3ee"
+        onclick="window.__voiceWizardActivate?.(); this.textContent='🔊 Voz activada'; this.disabled=true;">
+    🔊 Activar narración por voz
+</button>
+
 <div class="wizard-container">
     <!-- Progress Bar -->
     <div class="wizard-progress">

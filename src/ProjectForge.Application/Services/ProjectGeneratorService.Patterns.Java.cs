@@ -159,7 +159,7 @@ quarkus.hibernate-orm.database.generation=update
         };
 
         if (snippet != null)
-            await File.WriteAllTextAsync(pomPath, content.Replace(marker, snippet + marker), ct);
+            await File.WriteAllTextAsync(pomPath, InsertBeforeLastDependenciesClose(content, snippet), ct);
     }
 
     internal static string BuildQuarkusEnvFile(DatabaseType db, string dbName) => db switch
@@ -239,7 +239,22 @@ datasources.default.driver-class-name={GetJavaDriver(db)}
         };
 
         if (snippet != null)
-            await File.WriteAllTextAsync(pomPath, content.Replace(marker, snippet + marker), ct);
+            await File.WriteAllTextAsync(pomPath, InsertBeforeLastDependenciesClose(content, snippet), ct);
+    }
+
+    // Quarkus/Micronaut pom.xml files have TWO "</dependencies>" closing tags — one inside
+    // <dependencyManagement> (the BOM import) and one for the real top-level <dependencies>.
+    // content.Replace(marker, ...) replaced BOTH, duplicating the DB dependency into
+    // dependencyManagement too. An entry placed directly in dependencyManagement (not inherited
+    // from an imported BOM) needs its own explicit <version>, which these snippets don't have —
+    // Maven then fails the whole build with "dependency.version ... is missing", even though the
+    // *same* entry works fine down in the real <dependencies> block where the BOM supplies the
+    // version. Inserting only before the LAST occurrence targets that real block.
+    internal static string InsertBeforeLastDependenciesClose(string content, string snippet)
+    {
+        const string marker = "</dependencies>";
+        var idx = content.LastIndexOf(marker, StringComparison.Ordinal);
+        return idx < 0 ? content : content.Insert(idx, snippet);
     }
 
     internal static string BuildMicronautEnvFile(DatabaseType db, string dbName) => db switch

@@ -113,6 +113,20 @@ ENTRYPOINT ["java","-jar","app.jar"]
         var marker  = "</dependencies>";
         if (!content.Contains(marker)) return;
 
+        // ScaffoldSpringBootAsync's base pom.xml only has web/actuator/test — none of the relational
+        // DBs' JpaRepository-based Repository pattern files can compile ("package
+        // org.springframework.data.jpa.repository does not exist") without this being added
+        // alongside the driver. BuildJavaPomXml (below) already adds it, but that function only
+        // runs when pom.xml doesn't exist yet, which is never true by the time this is called —
+        // ScaffoldJavaFilesInternalAsync always creates the pom.xml first.
+        var isRelational = db is DatabaseType.PostgreSQL or DatabaseType.MySQL or DatabaseType.SqlServer or DatabaseType.SQLite;
+        var jpaSnippet = isRelational && !content.Contains("data-jpa") ? """
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+""" : "";
+
         var snippet = db switch
         {
             DatabaseType.PostgreSQL  when !content.Contains("postgresql") => """
@@ -162,8 +176,9 @@ ENTRYPOINT ["java","-jar","app.jar"]
             _ => null
         };
 
-        if (snippet != null)
-            await File.WriteAllTextAsync(pomPath, content.Replace(marker, snippet + marker), ct);
+        var combined = jpaSnippet + (snippet ?? "");
+        if (combined.Length > 0)
+            await File.WriteAllTextAsync(pomPath, content.Replace(marker, combined + marker), ct);
     }
 
     // ─── Python base file scaffold ────────────────────────────────────────────

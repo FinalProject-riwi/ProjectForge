@@ -1195,7 +1195,7 @@ final class Project extends AggregateRoot
         $this->description = $event->newDescription;
     }
 
-    internal static function normalizeDescription(?string $description): ?string
+    private static function normalizeDescription(?string $description): ?string
     {
         $description = trim((string) $description);
 
@@ -1780,7 +1780,7 @@ final class Project
         $this->description = self::normalizeDescription($description);
     }
 
-    internal static function normalizeName(string $name): string
+    private static function normalizeName(string $name): string
     {
         $name = trim($name);
         if (mb_strlen($name) < 3) {
@@ -1790,7 +1790,7 @@ final class Project
         return $name;
     }
 
-    internal static function normalizeDescription(?string $description): ?string
+    private static function normalizeDescription(?string $description): ?string
     {
         $description = trim((string) $description);
 

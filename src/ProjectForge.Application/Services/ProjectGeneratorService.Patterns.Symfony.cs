@@ -594,7 +594,7 @@ final class Project extends AggregateRoot
         $this->description = $event->newDescription;
     }
 
-    internal static function normalizeDescription(?string $description): ?string
+    private static function normalizeDescription(?string $description): ?string
     {
         $description = trim((string) $description);
 

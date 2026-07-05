@@ -10,8 +10,52 @@ public partial class ProjectGeneratorService
         return NormalizePatternToken(pattern) switch
         {
             "repository" => BuildDotNetRepositoryPatternFiles(framework, database),
+            // Self-contained: previously referenced an "IItemRepository"/"Item" that only ever
+            // existed if the "Repository" pattern was ALSO picked — but the wizard only lets you
+            // select one design pattern per project, so CQRS needs its own copy of both.
             "cqrs" => new[]
             {
+                ("src/Domain/Item.cs", """
+namespace Domain;
+
+public class Item
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+}
+"""),
+                ("src/Domain/IItemRepository.cs", """
+namespace Domain;
+
+public interface IItemRepository
+{
+    Task AddAsync(Item item, CancellationToken ct = default);
+    Task SaveChangesAsync(CancellationToken ct = default);
+}
+"""),
+                ("src/Infrastructure/InMemoryItemRepository.cs", """
+using Domain;
+
+namespace Infrastructure;
+
+// In-memory placeholder — swap in the real EF Core/Mongo/Redis repository this project was
+// generated with (see the "Repository" pattern for a worked example) once you need persistence.
+public class InMemoryItemRepository : IItemRepository
+{
+    private static readonly List<Item> _items = [];
+    private static int _nextId = 1;
+
+    public Task AddAsync(Item item, CancellationToken ct = default)
+    {
+        item.Id = _nextId++;
+        _items.Add(item);
+        return Task.CompletedTask;
+    }
+
+    public Task SaveChangesAsync(CancellationToken ct = default) => Task.CompletedTask;
+}
+"""),
                 ("src/Application/Commands/CreateItemCommand.cs", """
 using MediatR;
 
@@ -21,6 +65,7 @@ public record CreateItemCommand(string Name, string Description) : IRequest<int>
 """),
                 ("src/Application/Handlers/CreateItemCommandHandler.cs", """
 using Application.Commands;
+using Domain;
 using MediatR;
 
 namespace Application.Handlers;
@@ -400,6 +445,8 @@ public class BaseRepository<T>(DbContext context) : IRepository<T> where T : cla
             _ => new[]
             {
                 ("src/Core/Ports/IItemPort.cs", """
+using Core.Domain;
+
 namespace Core.Ports;
 
 public interface IItemPort
@@ -434,15 +481,20 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Infrastructure.Adapters;
 
-public class ItemEfAdapter(AppDbContext ctx) : IItemPort
+// Depends on the generic EF Core DbContext (registered in Program.cs as AppDbContext) rather
+// than AppDbContext itself — AppDbContext lives in "{ProjectNamespace}.Data", a namespace this
+// pattern generator can't know ahead of time, and even a fixed "using" wouldn't help since
+// AppDbContext.cs only ever declares a commented-out "// DbSet<Item> Items" placeholder. Set<T>()
+// works against any DbContext without needing a named DbSet property.
+public class ItemEfAdapter(DbContext ctx) : IItemPort
 {
     public async Task<Item?> FindByIdAsync(int id, CancellationToken ct = default) =>
-        await ctx.Items.FindAsync([id], ct);
+        await ctx.Set<Item>().FindAsync([id], ct);
     public async Task<IEnumerable<Item>> FindAllAsync(CancellationToken ct = default) =>
-        await ctx.Items.ToListAsync(ct);
+        await ctx.Set<Item>().ToListAsync(ct);
     public async Task SaveAsync(Item item, CancellationToken ct = default)
     {
-        ctx.Items.Add(item);
+        ctx.Set<Item>().Add(item);
         await ctx.SaveChangesAsync(ct);
     }
 }
@@ -595,7 +647,7 @@ public class ItemRepository(IConnectionMultiplexer redis) : IItemRepository
     public async Task<Item?> GetByIdAsync(string id, CancellationToken ct = default)
     {
         var value = await _db.StringGetAsync(Key(id));
-        return value.HasValue ? JsonSerializer.Deserialize<Item>(value!) : null;
+        return value.HasValue ? JsonSerializer.Deserialize<Item>((string)value!) : null;
     }
 
     public async Task<IEnumerable<Item>> GetAllAsync(CancellationToken ct = default)
@@ -605,7 +657,7 @@ public class ItemRepository(IConnectionMultiplexer redis) : IItemRepository
         await foreach (var key in server.KeysAsync(pattern: "item:*"))
         {
             var value = await _db.StringGetAsync(key);
-            if (value.HasValue) items.Add(JsonSerializer.Deserialize<Item>(value!)!);
+            if (value.HasValue) items.Add(JsonSerializer.Deserialize<Item>((string)value!)!);
         }
         return items;
     }
@@ -621,16 +673,54 @@ public class ItemRepository(IConnectionMultiplexer redis) : IItemRepository
 """),
     };
 
-    internal static IReadOnlyList<(string RelativePath, string Content)> BuildJavaPatternFiles(
-        FrameworkType framework, string pattern)
+    // Spring/Quarkus/Micronaut each use a different DI container (Spring stereotypes vs. Jakarta
+    // CDI vs. Jakarta jakarta.inject) — every pattern below that needs a managed bean picks its
+    // import/annotation from these instead of hardcoding Spring's, which is what broke every
+    // pattern the moment Quarkus or Micronaut was selected (the wizard offers the exact same
+    // "(Spring Boot)"-labeled pattern catalog entries to all three Java frameworks).
+    private static string JavaDiImport(FrameworkType framework) => framework switch
     {
-        return NormalizePatternToken(pattern) switch
-        {
-            "repository" => new[]
-            {
-                ("src/main/java/domain/repository/ItemRepository.java", """
+        FrameworkType.Quarkus   => "import jakarta.enterprise.context.ApplicationScoped;",
+        FrameworkType.Micronaut => "import jakarta.inject.Singleton;",
+        _                       => "import org.springframework.stereotype.Service;"
+    };
+
+    private static string JavaDiAnnotation(FrameworkType framework) => framework switch
+    {
+        FrameworkType.Quarkus   => "@ApplicationScoped",
+        FrameworkType.Micronaut => "@Singleton",
+        _                       => "@Service"
+    };
+
+    // Self-contained in-memory Item + repository — shared by "repository" for MongoDB/Redis
+    // (where the base pom.xml wires a Mongo/Redis client, not JPA or a JDBC DataSource, so
+    // neither of the framework-specific persistence branches below would compile) and reused
+    // wherever else a plain, always-compiles fallback is useful.
+    private static IReadOnlyList<(string RelativePath, string Content)> BuildJavaInMemoryRepositoryFiles(string di, string diImport) => new[]
+    {
+        ("src/main/java/domain/model/Item.java", """
+package domain.model;
+
+public class Item {
+    private final Long id;
+    private final String name;
+    private final String description;
+
+    public Item(Long id, String name, String description) {
+        this.id = id;
+        this.name = name;
+        this.description = description;
+    }
+
+    public Long getId() { return id; }
+    public String getName() { return name; }
+    public String getDescription() { return description; }
+}
+"""),
+        ("src/main/java/domain/repository/ItemRepository.java", """
 package domain.repository;
 
+import domain.model.Item;
 import java.util.List;
 import java.util.Optional;
 
@@ -641,38 +731,348 @@ public interface ItemRepository {
     void deleteById(Long id);
 }
 """),
-                ("src/main/java/infrastructure/persistence/JpaItemRepository.java", """
+        ($$"""src/main/java/infrastructure/persistence/InMemoryItemRepository.java""", $$"""
 package infrastructure.persistence;
 
+import domain.model.Item;
+import domain.repository.ItemRepository;
+{{diImport}}
+import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
+
+// Plug in the MongoDB/Redis client this project was generated with (see app config) once you
+// need real persistence — this in-memory store keeps the Repository pattern's shape compilable
+// without depending on database-specific driver APIs that differ per Java framework.
+{{di}}
+public class InMemoryItemRepository implements ItemRepository {
+    private final ConcurrentHashMap<Long, Item> store = new ConcurrentHashMap<>();
+    private final AtomicLong sequence = new AtomicLong();
+
+    @Override public Optional<Item> findById(Long id) { return Optional.ofNullable(store.get(id)); }
+    @Override public List<Item> findAll() { return List.copyOf(store.values()); }
+
+    @Override
+    public Item save(Item item) {
+        var id = item.getId() != null ? item.getId() : sequence.incrementAndGet();
+        var saved = new Item(id, item.getName(), item.getDescription());
+        store.put(id, saved);
+        return saved;
+    }
+
+    @Override public void deleteById(Long id) { store.remove(id); }
+}
+"""),
+    };
+
+    internal static IReadOnlyList<(string RelativePath, string Content)> BuildJavaPatternFiles(
+        FrameworkType framework, DatabaseType database, string pattern)
+    {
+        var di = JavaDiAnnotation(framework);
+        var diImport = JavaDiImport(framework);
+
+        return NormalizePatternToken(pattern) switch
+        {
+            // The only pattern that actually needs real persistence. MongoDB/Redis get the
+            // framework-agnostic in-memory fallback (the base pom.xml wires a Mongo/Redis client
+            // for those, not JPA or a JDBC DataSource). Relational DBs get a real implementation,
+            // and that differs per framework — Quarkus/Micronaut don't have Spring Data JPA on
+            // the classpath, so each gets its own Item + repository instead of sharing Spring's.
+            "repository" when database is DatabaseType.MongoDB or DatabaseType.Redis =>
+                BuildJavaInMemoryRepositoryFiles(di, diImport),
+
+            "repository" => framework switch
+            {
+                FrameworkType.Quarkus => new[]
+                {
+                    ("src/main/java/domain/model/Item.java", """
+package domain.model;
+
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+
+@Entity
+public class Item {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    private String name;
+    private String description;
+
+    protected Item() {}
+    public Item(String name, String description) { this.name = name; this.description = description; }
+
+    public Long getId() { return id; }
+    public String getName() { return name; }
+    public String getDescription() { return description; }
+}
+"""),
+                    ("src/main/java/domain/repository/ItemRepository.java", """
+package domain.repository;
+
+import domain.model.Item;
+import java.util.List;
+import java.util.Optional;
+
+public interface ItemRepository {
+    Optional<Item> findById(Long id);
+    List<Item> findAll();
+    Item save(Item item);
+    void deleteById(Long id);
+}
+"""),
+                    ("src/main/java/infrastructure/persistence/JpaItemRepository.java", """
+package infrastructure.persistence;
+
+import domain.model.Item;
+import domain.repository.ItemRepository;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.persistence.EntityManager;
+import jakarta.transaction.Transactional;
+import java.util.List;
+import java.util.Optional;
+
+@ApplicationScoped
+public class JpaItemRepository implements ItemRepository {
+    private final EntityManager em;
+    public JpaItemRepository(EntityManager em) { this.em = em; }
+
+    @Override
+    public Optional<Item> findById(Long id) { return Optional.ofNullable(em.find(Item.class, id)); }
+
+    @Override
+    public List<Item> findAll() { return em.createQuery("from Item", Item.class).getResultList(); }
+
+    @Override
+    @Transactional
+    public Item save(Item item) {
+        if (item.getId() == null) { em.persist(item); return item; }
+        return em.merge(item);
+    }
+
+    @Override
+    @Transactional
+    public void deleteById(Long id) {
+        var item = em.find(Item.class, id);
+        if (item != null) em.remove(item);
+    }
+}
+"""),
+                },
+                FrameworkType.Micronaut => new[]
+                {
+                    // Micronaut's pom only wires micronaut-jdbc-hikari (a plain DataSource) — no
+                    // JPA/Hibernate — so Item stays a plain POJO and the repository maps rows by
+                    // hand instead of relying on an ORM that isn't on the classpath.
+                    ("src/main/java/domain/model/Item.java", """
+package domain.model;
+
+public class Item {
+    private final Long id;
+    private final String name;
+    private final String description;
+
+    public Item(Long id, String name, String description) {
+        this.id = id;
+        this.name = name;
+        this.description = description;
+    }
+
+    public Long getId() { return id; }
+    public String getName() { return name; }
+    public String getDescription() { return description; }
+}
+"""),
+                    ("src/main/java/domain/repository/ItemRepository.java", """
+package domain.repository;
+
+import domain.model.Item;
+import java.util.List;
+import java.util.Optional;
+
+public interface ItemRepository {
+    Optional<Item> findById(Long id);
+    List<Item> findAll();
+    Item save(Item item);
+    void deleteById(Long id);
+}
+"""),
+                    ("src/main/java/infrastructure/persistence/JdbcItemRepository.java", """
+package infrastructure.persistence;
+
+import domain.model.Item;
+import domain.repository.ItemRepository;
+import jakarta.inject.Singleton;
+import javax.sql.DataSource;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+
+// Assumes an "items(id, name, description)" table — this generator doesn't wire a migration
+// tool for Micronaut, so create it manually before relying on this repository.
+@Singleton
+public class JdbcItemRepository implements ItemRepository {
+    private final DataSource dataSource;
+    public JdbcItemRepository(DataSource dataSource) { this.dataSource = dataSource; }
+
+    @Override
+    public Optional<Item> findById(Long id) {
+        try (var conn = dataSource.getConnection();
+             var stmt = conn.prepareStatement("SELECT id, name, description FROM items WHERE id = ?")) {
+            stmt.setLong(1, id);
+            try (var rs = stmt.executeQuery()) {
+                return rs.next() ? Optional.of(map(rs)) : Optional.empty();
+            }
+        } catch (SQLException e) { throw new RuntimeException(e); }
+    }
+
+    @Override
+    public List<Item> findAll() {
+        var items = new ArrayList<Item>();
+        try (var conn = dataSource.getConnection();
+             var stmt = conn.prepareStatement("SELECT id, name, description FROM items")) {
+            try (var rs = stmt.executeQuery()) {
+                while (rs.next()) items.add(map(rs));
+            }
+        } catch (SQLException e) { throw new RuntimeException(e); }
+        return items;
+    }
+
+    @Override
+    public Item save(Item item) {
+        try (var conn = dataSource.getConnection();
+             var stmt = conn.prepareStatement(
+                     "INSERT INTO items (name, description) VALUES (?, ?)", Statement.RETURN_GENERATED_KEYS)) {
+            stmt.setString(1, item.getName());
+            stmt.setString(2, item.getDescription());
+            stmt.executeUpdate();
+            try (var keys = stmt.getGeneratedKeys()) {
+                return keys.next() ? new Item(keys.getLong(1), item.getName(), item.getDescription()) : item;
+            }
+        } catch (SQLException e) { throw new RuntimeException(e); }
+    }
+
+    @Override
+    public void deleteById(Long id) {
+        try (var conn = dataSource.getConnection();
+             var stmt = conn.prepareStatement("DELETE FROM items WHERE id = ?")) {
+            stmt.setLong(1, id);
+            stmt.executeUpdate();
+        } catch (SQLException e) { throw new RuntimeException(e); }
+    }
+
+    private static Item map(ResultSet rs) throws SQLException {
+        return new Item(rs.getLong("id"), rs.getString("name"), rs.getString("description"));
+    }
+}
+"""),
+                },
+                _ => new[]
+                {
+                    ("src/main/java/domain/model/Item.java", """
+package domain.model;
+
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+
+@Entity
+public class Item {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    private String name;
+    private String description;
+
+    protected Item() {}
+    public Item(String name, String description) { this.name = name; this.description = description; }
+
+    public Long getId() { return id; }
+    public String getName() { return name; }
+    public String getDescription() { return description; }
+}
+"""),
+                    ("src/main/java/domain/repository/ItemRepository.java", """
+package domain.repository;
+
+import domain.model.Item;
+import java.util.List;
+import java.util.Optional;
+
+public interface ItemRepository {
+    Optional<Item> findById(Long id);
+    List<Item> findAll();
+    Item save(Item item);
+    void deleteById(Long id);
+}
+"""),
+                    ("src/main/java/infrastructure/persistence/JpaItemRepository.java", """
+package infrastructure.persistence;
+
+import domain.model.Item;
 import domain.repository.ItemRepository;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public interface JpaItemRepository extends JpaRepository<ItemEntity, Long>, ItemRepository {}
+public interface JpaItemRepository extends JpaRepository<Item, Long>, ItemRepository {}
 """),
+                }
             },
+
+            // Self-contained in-memory store — CQRS's teaching point is command/query
+            // separation, not persistence, so it doesn't need a real DB dependency at all (and
+            // therefore works identically on all three Java frameworks).
             "cqrs" => new[]
             {
+                ("src/main/java/domain/model/Item.java", $$"""
+package domain.model;
+
+public class Item {
+    private final Long id;
+    private final String name;
+    private final String description;
+
+    public Item(Long id, String name, String description) {
+        this.id = id;
+        this.name = name;
+        this.description = description;
+    }
+
+    public Long getId() { return id; }
+    public String getName() { return name; }
+    public String getDescription() { return description; }
+}
+"""),
                 ("src/main/java/application/command/CreateItemCommand.java", """
 package application.command;
 
 public record CreateItemCommand(String name, String description) {}
 """),
-                ("src/main/java/application/command/CreateItemCommandHandler.java", """
+                ("src/main/java/application/command/CreateItemCommandHandler.java", $$"""
 package application.command;
 
-import domain.repository.ItemRepository;
-import org.springframework.stereotype.Service;
+import domain.model.Item;
+{{diImport}}
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
-@Service
+{{di}}
 public class CreateItemCommandHandler {
-    private final ItemRepository repository;
-    public CreateItemCommandHandler(ItemRepository repository) { this.repository = repository; }
+    private static final ConcurrentHashMap<Long, Item> STORE = new ConcurrentHashMap<>();
+    private static final AtomicLong SEQUENCE = new AtomicLong();
 
     public Long handle(CreateItemCommand command) {
-        var item = new Item(command.name(), command.description());
-        return repository.save(item).getId();
+        long id = SEQUENCE.incrementAndGet();
+        STORE.put(id, new Item(id, command.name(), command.description()));
+        return id;
     }
 }
 """),
@@ -687,6 +1087,10 @@ public interface GetAllItemsQuery {
 }
 """),
             },
+
+            // Clean Architecture: domain + use case layer, deliberately independent of any
+            // framework — the in-memory adapter below is the one piece that needs a managed-bean
+            // annotation, so it's the only one keyed off `di`.
             "cleanarchitecture" => new[]
             {
                 ("src/main/java/domain/model/Item.java", """
@@ -695,38 +1099,26 @@ package domain.model;
 import java.time.Instant;
 
 public class Item {
-    private Long id;
-    private String name;
-    private String description;
-    private final Instant createdAt = Instant.now();
+    private final Long id;
+    private final String name;
+    private final String description;
+    private final Instant createdAt;
 
-    public static Item create(String name, String description) {
-        var item = new Item();
-        item.name = name;
-        item.description = description;
-        return item;
+    public Item(Long id, String name, String description) {
+        this.id = id;
+        this.name = name;
+        this.description = description;
+        this.createdAt = Instant.now();
     }
-    // getters omitted for brevity
+
+    public static Item create(Long id, String name, String description) { return new Item(id, name, description); }
+
+    public Long getId() { return id; }
+    public String getName() { return name; }
+    public String getDescription() { return description; }
+    public Instant getCreatedAt() { return createdAt; }
 }
 """),
-                ("src/main/java/application/usecase/CreateItemUseCase.java", """
-package application.usecase;
-
-import domain.model.Item;
-import domain.port.ItemRepository;
-
-public class CreateItemUseCase {
-    private final ItemRepository repository;
-    public CreateItemUseCase(ItemRepository repository) { this.repository = repository; }
-
-    public Long execute(String name, String description) {
-        return repository.save(Item.create(name, description)).getId();
-    }
-}
-"""),
-            },
-            "hexagonalarchitecture" => new[]
-            {
                 ("src/main/java/domain/port/ItemRepository.java", """
 package domain.port;
 
@@ -740,31 +1132,134 @@ public interface ItemRepository {
     List<Item> findAll();
 }
 """),
-                ("src/main/java/infrastructure/adapter/JpaItemAdapter.java", """
+                ("src/main/java/application/usecase/CreateItemUseCase.java", """
+package application.usecase;
+
+import domain.model.Item;
+import domain.port.ItemRepository;
+import java.util.concurrent.atomic.AtomicLong;
+
+public class CreateItemUseCase {
+    private static final AtomicLong SEQUENCE = new AtomicLong();
+    private final ItemRepository repository;
+    public CreateItemUseCase(ItemRepository repository) { this.repository = repository; }
+
+    public Long execute(String name, String description) {
+        var item = Item.create(SEQUENCE.incrementAndGet(), name, description);
+        return repository.save(item).getId();
+    }
+}
+"""),
+                ("src/main/java/infrastructure/persistence/InMemoryItemRepository.java", $$"""
+package infrastructure.persistence;
+
+import domain.model.Item;
+import domain.port.ItemRepository;
+{{diImport}}
+import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
+
+{{di}}
+public class InMemoryItemRepository implements ItemRepository {
+    private final ConcurrentHashMap<Long, Item> store = new ConcurrentHashMap<>();
+
+    @Override public Item save(Item item) { store.put(item.getId(), item); return item; }
+    @Override public Optional<Item> findById(Long id) { return Optional.ofNullable(store.get(id)); }
+    @Override public List<Item> findAll() { return List.copyOf(store.values()); }
+}
+"""),
+            },
+
+            // Hexagonal Architecture (ports & adapters) — same shape as Clean Architecture above,
+            // named per hexagonal convention (port/adapter instead of port/use case).
+            "hexagonalarchitecture" => new[]
+            {
+                ("src/main/java/domain/model/Item.java", """
+package domain.model;
+
+public class Item {
+    private final Long id;
+    private final String name;
+    private final String description;
+
+    public Item(Long id, String name, String description) {
+        this.id = id;
+        this.name = name;
+        this.description = description;
+    }
+
+    public Long getId() { return id; }
+    public String getName() { return name; }
+    public String getDescription() { return description; }
+}
+"""),
+                ("src/main/java/domain/port/ItemRepository.java", """
+package domain.port;
+
+import domain.model.Item;
+import java.util.List;
+import java.util.Optional;
+
+public interface ItemRepository {
+    Item save(Item item);
+    Optional<Item> findById(Long id);
+    List<Item> findAll();
+}
+"""),
+                ("src/main/java/infrastructure/adapter/InMemoryItemAdapter.java", $$"""
 package infrastructure.adapter;
 
 import domain.model.Item;
 import domain.port.ItemRepository;
-import org.springframework.stereotype.Component;
+{{diImport}}
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
-@Component
-public class JpaItemAdapter implements ItemRepository {
-    private final SpringDataItemRepository springRepo;
-    public JpaItemAdapter(SpringDataItemRepository springRepo) { this.springRepo = springRepo; }
+{{di}}
+public class InMemoryItemAdapter implements ItemRepository {
+    private final ConcurrentHashMap<Long, Item> store = new ConcurrentHashMap<>();
+    private final AtomicLong sequence = new AtomicLong();
 
-    @Override public Item save(Item item) { return springRepo.save(item); }
-    @Override public Optional<Item> findById(Long id) { return springRepo.findById(id); }
-    @Override public List<Item> findAll() { return springRepo.findAll(); }
+    @Override
+    public Item save(Item item) {
+        var id = item.getId() != null ? item.getId() : sequence.incrementAndGet();
+        var saved = new Item(id, item.getName(), item.getDescription());
+        store.put(id, saved);
+        return saved;
+    }
+
+    @Override public Optional<Item> findById(Long id) { return Optional.ofNullable(store.get(id)); }
+    @Override public List<Item> findAll() { return List.copyOf(store.values()); }
 }
 """),
             },
+
+            // Domain-Driven Design: AggregateRoot + DomainEvent are generated together here
+            // (rather than assuming the separate "Event Sourcing" pattern is also selected — the
+            // wizard only lets you pick one design pattern per project).
             "domaindrivendesign" => new[]
             {
+                ("src/main/java/domain/event/DomainEvent.java", """
+package domain.event;
+
+import java.time.Instant;
+import java.util.UUID;
+
+public abstract class DomainEvent {
+    private final UUID id = UUID.randomUUID();
+    private final Instant occurredAt = Instant.now();
+
+    public UUID getId() { return id; }
+    public Instant getOccurredAt() { return occurredAt; }
+}
+"""),
                 ("src/main/java/domain/model/AggregateRoot.java", """
 package domain.model;
 
+import domain.event.DomainEvent;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -778,6 +1273,7 @@ public abstract class AggregateRoot {
 }
 """),
             },
+
             "eventsourcing" => new[]
             {
                 ("src/main/java/domain/event/DomainEvent.java", """
@@ -798,20 +1294,25 @@ public abstract class DomainEvent {
 }
 """),
             },
-            "microservices" => new[]
+
+            // Spring Cloud (Eureka discovery) has no Quarkus/Micronaut equivalent wired into this
+            // generator's dependency injection, so this stays Spring-only — matching how e.g. the
+            // PHP generator returns an empty file set (and logs "patrón no soportado") for
+            // pattern/framework combinations it doesn't support, rather than emitting code that
+            // references a dependency nothing ever adds to the build.
+            "microservices" => framework == FrameworkType.SpringBoot ? new[]
             {
                 ("services/orders/src/main/java/OrdersApplication.java", """
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
 
 @SpringBootApplication
-@EnableDiscoveryClient
 public class OrdersApplication {
     public static void main(String[] args) { SpringApplication.run(OrdersApplication.class, args); }
 }
 """),
-            },
+            } : Array.Empty<(string, string)>(),
+
             "mediator" => new[]
             {
                 ("src/main/java/application/mediator/Mediator.java", """
@@ -845,14 +1346,15 @@ public interface RequestHandler<TRequest, TResponse> {
 }
 """),
             },
+
             "saga" => new[]
             {
-                ("src/main/java/application/saga/OrderSaga.java", """
+                ("src/main/java/application/saga/OrderSaga.java", $$"""
 package application.saga;
 
-import org.springframework.stereotype.Service;
+{{diImport}}
 
-@Service
+{{di}}
 public class OrderSaga {
     public boolean execute(String customerId, Object[] items, Object paymentInfo) {
         String orderId = java.util.UUID.randomUUID().toString();
@@ -881,18 +1383,12 @@ public class OrderSaga {
 }
 """),
             },
+
             _ => Array.Empty<(string, string)>()
         };
     }
 
-    internal static IReadOnlyList<(string RelativePath, string Content)> BuildPythonPatternFiles(
-        FrameworkType framework, string pattern)
-    {
-        return NormalizePatternToken(pattern) switch
-        {
-            "repository" => new[]
-            {
-                ("app/repositories/base.py", """
+    private const string PythonAbstractRepositoryFile = """
 from abc import ABC, abstractmethod
 from typing import Generic, TypeVar, Optional, List
 
@@ -907,12 +1403,75 @@ class AbstractRepository(ABC, Generic[T]):
     async def save(self, entity: T) -> T: ...
     @abstractmethod
     async def delete(self, id: int) -> None: ...
+""";
+
+    // Self-contained in-memory Item + repository — the real SQLAlchemy-backed one below only
+    // makes sense for FastAPI + a relational DB (async SQLAlchemy is what ScaffoldPythonBaseFilesAsync
+    // wires up for that combo specifically). Flask uses sync SQLAlchemy, Django doesn't generate
+    // an app/models.py at all through this pipeline, and Mongo/Redis get a different client
+    // entirely — reusing the async-SQLAlchemy version for any of those previously either
+    // ImportError'd (the old code imported a nonexistent "app.domain.item", which only ever
+    // existed if "Clean Architecture" was ALSO picked as the pattern — but only one pattern is
+    // ever selected) or silently mismatched the actual DB client that project was generated with.
+    private static readonly IReadOnlyList<(string RelativePath, string Content)> PythonInMemoryRepositoryFiles = new[]
+    {
+        ("app/repositories/base.py", PythonAbstractRepositoryFile),
+        ("app/repositories/item_repository.py", """
+from dataclasses import dataclass, field
+from datetime import datetime
+from itertools import count
+from typing import Optional, List, Dict
+from app.repositories.base import AbstractRepository
+
+@dataclass
+class Item:
+    name: str
+    description: Optional[str] = None
+    id: int = 0
+    created_at: datetime = field(default_factory=datetime.utcnow)
+
+class ItemRepository(AbstractRepository[Item]):
+    # In-memory store — swap in the real DB client this project was generated with (see
+    # app/database.py) once you need actual persistence.
+    _ids = count(1)
+
+    def __init__(self):
+        self._items: Dict[int, Item] = {}
+
+    async def get_by_id(self, id: int) -> Optional[Item]:
+        return self._items.get(id)
+
+    async def get_all(self) -> List[Item]:
+        return list(self._items.values())
+
+    async def save(self, entity: Item) -> Item:
+        if not entity.id:
+            entity.id = next(self._ids)
+        self._items[entity.id] = entity
+        return entity
+
+    async def delete(self, id: int) -> None:
+        self._items.pop(id, None)
 """),
-                ("app/repositories/item_repository.py", """
+    };
+
+    internal static IReadOnlyList<(string RelativePath, string Content)> BuildPythonPatternFiles(
+        FrameworkType framework, DatabaseType database, string pattern)
+    {
+        var isRelational = database is DatabaseType.PostgreSQL or DatabaseType.MySQL
+            or DatabaseType.SqlServer or DatabaseType.SQLite;
+
+        return NormalizePatternToken(pattern) switch
+        {
+            "repository" => framework == FrameworkType.FastAPI && isRelational
+                ? new[]
+                {
+                    ("app/repositories/base.py", PythonAbstractRepositoryFile),
+                    ("app/repositories/item_repository.py", """
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.repositories.base import AbstractRepository
-from app.domain.item import Item
+from app.models import Item
 
 class ItemRepository(AbstractRepository[Item]):
     def __init__(self, session: AsyncSession):
@@ -938,7 +1497,8 @@ class ItemRepository(AbstractRepository[Item]):
             await self.session.delete(item)
             await self.session.commit()
 """),
-            },
+                }
+                : PythonInMemoryRepositoryFiles,
             "cleanarchitecture" => new[]
             {
                 ("app/domain/__init__.py", ""),
@@ -982,15 +1542,24 @@ class CreateItemCommand:
     description: str
 """),
                 ("app/handlers/create_item_handler.py", """
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Optional
 from app.commands.create_item import CreateItemCommand
+
+@dataclass
+class Item:
+    name: str
+    description: Optional[str] = None
+    id: int = 0
+    created_at: datetime = field(default_factory=datetime.utcnow)
 
 class CreateItemHandler:
     def __init__(self, repository):
         self.repository = repository
 
     async def handle(self, command: CreateItemCommand):
-        from app.domain.item import Item
-        item = Item.create(command.name, command.description)
+        item = Item(name=command.name, description=command.description)
         return await self.repository.save(item)
 """),
                 ("app/queries/get_all_items.py", """
@@ -1134,12 +1703,12 @@ class GetAllItemsRequest:
             },
             "saga" => new[]
             {
-                ("app/application/sagas/order_saga.py", """
+                ("app/application/sagas/order_saga.py", """"
 import uuid
 from typing import Optional
 
 class OrderSaga:
-    \"\"\"Orchestration saga for order creation workflow.\"\"\"
+    """Orchestration saga for order creation workflow."""
 
     async def execute(self, customer_id: str, items: list, payment_info: dict) -> bool:
         order_id = str(uuid.uuid4())
@@ -1164,7 +1733,7 @@ class OrderSaga:
     async def _confirm_order(self, order_id): pass
     async def _cancel_order(self, order_id): pass
     async def _release_inventory(self, reservation_id): pass
-"""),
+""""),
             },
             _ => Array.Empty<(string, string)>()
         };

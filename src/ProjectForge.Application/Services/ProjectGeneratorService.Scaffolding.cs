@@ -46,7 +46,10 @@ public partial class ProjectGeneratorService
                     ($"dotnet sln add {safeName}.csproj", path),
                 },
                 FrameworkType.AspNetCoreMVC  => new[] { ($"dotnet new mvc -n {safeName} -o {path}", (string?)null) },
-                FrameworkType.BlazorServer   => new[] { ($"dotnet new blazorserver -n {safeName} -o {path}", (string?)null) },
+                // .NET 8+ SDKs dropped the standalone "blazorserver" template short name — it was
+                // folded into the unified "blazor" (Blazor Web App) template, which picks its
+                // render mode via --interactivity instead of a separate template.
+                FrameworkType.BlazorServer   => new[] { ($"dotnet new blazor --interactivity Server -n {safeName} -o {path}", (string?)null) },
                 FrameworkType.BlazorWasm     => new[] { ($"dotnet new blazorwasm -n {safeName} -o {path}", (string?)null) },
                 FrameworkType.MinimalApi     => new[]
                 {
@@ -386,8 +389,8 @@ export const db = new Database(process.env.SQLITE_PATH || './app.db');
                 ArchitectureType.Php => BuildPhpPatternFiles(cfg, pattern),
                 ArchitectureType.JavaScript or ArchitectureType.TypeScript => BuildJavaScriptPatternFiles(cfg.Framework, pattern),
                 ArchitectureType.DotNet => BuildDotNetPatternFiles(cfg.Framework, cfg.Database, pattern),
-                ArchitectureType.Java => BuildJavaPatternFiles(cfg.Framework, pattern),
-                ArchitectureType.Python => BuildPythonPatternFiles(cfg.Framework, pattern),
+                ArchitectureType.Java => BuildJavaPatternFiles(cfg.Framework, cfg.Database, pattern),
+                ArchitectureType.Python => BuildPythonPatternFiles(cfg.Framework, cfg.Database, pattern),
                 _ => Array.Empty<(string RelativePath, string Content)>()
             };
 
@@ -432,7 +435,39 @@ export const db = new Database(process.env.SQLITE_PATH || './app.db');
             {
                 await EnsureLaravelProviderRegistrationAsync(path, "App\\Providers\\RepositoryServiceProvider::class", ct);
             }
+
+            if (cfg.Architecture == ArchitectureType.DotNet &&
+                NormalizePatternToken(pattern) == "microservices")
+            {
+                await ExcludeDotNetSubprojectFromMainCsprojAsync(path, "gateway", ct);
+            }
         }
+    }
+
+    // The "Microservices" pattern writes gateway/gateway.csproj + gateway/Program.cs as a
+    // separate project — but SDK-style .csproj files glob **/*.cs from their own directory by
+    // default, with no automatic exclusion for subfolders that happen to contain another .csproj.
+    // Without this, the main project's own compilation picks up gateway/Program.cs too, and two
+    // files with top-level statements in the same compilation is CS8802 ("only one compilation
+    // unit can have top-level statements") — every DotNet + Microservices project failed to build.
+    internal static async Task ExcludeDotNetSubprojectFromMainCsprojAsync(string path, string subfolder, CancellationToken ct)
+    {
+        var mainCsproj = Directory.GetFiles(path, "*.csproj", SearchOption.TopDirectoryOnly).FirstOrDefault();
+        if (mainCsproj == null) return;
+
+        var content = await File.ReadAllTextAsync(mainCsproj, ct);
+        var marker = "</Project>";
+        if (!content.Contains(marker)) return;
+
+        var exclusion = $"""
+              <ItemGroup>
+                <Compile Remove="{subfolder}/**" />
+                <Content Remove="{subfolder}/**" />
+                <None Remove="{subfolder}/**" />
+              </ItemGroup>
+
+            """;
+        await File.WriteAllTextAsync(mainCsproj, content.Replace(marker, exclusion + marker), ct);
     }
 
     internal static IReadOnlyList<(string RelativePath, string Content)> BuildPhpPatternFiles(

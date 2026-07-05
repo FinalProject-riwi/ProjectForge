@@ -207,7 +207,21 @@ public partial class ProjectGeneratorService
         // Maven artifactId convention: lowercase letters, digits and hyphens only.
         var artifact = System.Text.RegularExpressions.Regex.Replace(project.Name.ToLowerInvariant(), @"[^a-z0-9]+", "-").Trim('-');
         if (string.IsNullOrEmpty(artifact)) artifact = "app";
-        var bootVersion = cfg.FrameworkVersion ?? "3.3.5";
+        // Written verbatim into pom.xml's <parent><version> below, which needs a fully-qualified
+        // x.y.z release — Maven Central only publishes patch-level artifacts for
+        // spring-boot-starter-parent, never bare "x.y". The wizard's version dropdown (and the
+        // WizardController fallback) only offers/produces the bare major.minor strings below
+        // ("3.3", "3.2", "2.7"), which on their own 404 against Central ("Non-resolvable parent
+        // POM ... spring-boot-starter-parent:pom:3.3") — every Spring Boot project generated
+        // through the normal wizard flow was hitting this. Map each to a concrete recent patch.
+        var bootVersion = cfg.FrameworkVersion switch
+        {
+            "3.3" => "3.3.13",
+            "3.2" => "3.2.12",
+            "2.7" => "2.7.18",
+            var v when System.Text.RegularExpressions.Regex.IsMatch(v ?? "", @"^\d+\.\d+\.\d+$") => v!,
+            _ => "3.3.13"
+        };
 
         switch (cfg.Framework)
         {
@@ -357,7 +371,13 @@ public partial class ProjectGeneratorService
             "    <artifactId>" + artifact + "</artifactId>\n" +
             "    <version>0.1</version>\n" +
             "    <properties>\n" +
-            "        <java.version>21</java.version>\n" +
+            // "java.version" alone is a Spring Boot parent-POM convention (spring-boot-starter-
+            // parent wires it into the compiler plugin) — a plain Maven POM like this one ignores
+            // it entirely, silently compiling at the ancient default source/target 8. That broke
+            // any pattern file using records or "var" (both post-Java-8 syntax) with "records are
+            // not supported in -source 8". maven.compiler.release is the property the compiler
+            // plugin itself actually reads, regardless of parent.
+            "        <maven.compiler.release>21</maven.compiler.release>\n" +
             "        <micronaut.version>4.4.0</micronaut.version>\n" +
             "    </properties>\n" +
             "    <dependencyManagement>\n" +

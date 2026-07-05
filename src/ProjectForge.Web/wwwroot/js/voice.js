@@ -420,6 +420,19 @@
       setTimeout(() => _speakStep(e.detail?.step), 350);
     });
 
+    /* Browsers never autoplay audio before a user gesture, so the automatic
+       _speakStep() above (fired on load, with no prior click) is silently
+       dropped by the autoplay policy on most first visits — the wizard looks
+       like voice narration "isn't working" even though every later step
+       (reached via a click) narrates fine. This gives users an explicit,
+       always-visible way to turn it on: one click both unlocks audio and
+       immediately speaks the step they're already looking at, instead of
+       waiting for the next step change to be the first thing they hear. */
+    window.__voiceWizardActivate = function () {
+      va.unlockAudio();
+      _speakStep(ws()?.currentStep || 1);
+    };
+
     window.__voiceWizardListen = async function () {
       va.unlockAudio();
       const text = await va.listen(12000);

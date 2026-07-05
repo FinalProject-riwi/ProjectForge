@@ -137,7 +137,7 @@ final class Project extends AggregateRoot
         $this->description = self::normalizeDescription($description);
     }
 
-    internal static function normalizeDescription(?string $description): ?string
+    private static function normalizeDescription(?string $description): ?string
     {
         $description = trim((string) $description);
 
@@ -625,7 +625,7 @@ final class Project extends AggregateRoot
         $this->description = self::normalizeDescription($description);
     }
 
-    internal static function normalizeDescription(?string $description): ?string
+    private static function normalizeDescription(?string $description): ?string
     {
         $description = trim((string) $description);
         return $description === '' ? null : $description;

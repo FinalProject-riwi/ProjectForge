@@ -718,6 +718,16 @@ framework:
                 case DatabaseType.SQLite:     libraries.Add("better-sqlite3"); break;
             }
 
+            // BuildJavaScriptCqrsPatternFiles/BuildJavaScriptSagaPatternFiles's Nest variants
+            // import from '@nestjs/cqrs' — nothing else ever added it to package.json, so
+            // "npm run build" failed with "Cannot find module '@nestjs/cqrs'" for anyone who
+            // picked CQRS or Saga with NestJs/NestTs.
+            if (cfg.Framework is FrameworkType.NestJs or FrameworkType.NestTs &&
+                selectedPatterns.Any(p => NormalizePatternToken(p) is "cqrs" or "saga"))
+            {
+                libraries.Add("@nestjs/cqrs");
+            }
+
             return libraries;
         }
 
