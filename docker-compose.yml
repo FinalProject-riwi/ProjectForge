@@ -17,10 +17,6 @@ services:
       - Anthropic__ApiKey=${ANTHROPIC_API_KEY:-PLACEHOLDER}
       - OpenAI__ApiKey=${OPENAI_API_KEY:-PLACEHOLDER}
       - Gemini__ApiKey=${GEMINI_API_KEY:-PLACEHOLDER}
-      - Groq__ApiKey=${GROQ_API_KEY:-PLACEHOLDER}
-      - ElevenLabs__ApiKey=${ELEVENLABS_API_KEY:-PLACEHOLDER}
-      - ElevenLabs__VoiceId=${ELEVENLABS_VOICE_ID:-21m00Tcm4TlvDq8ikWAM}
-      - ElevenLabs__AgentId=${ELEVENLABS_AGENT_ID:-agent_6001kwnzg7pye0hvqrdnc421nv9d}
       - Encryption__Key=${ENCRYPTION_KEY:-DefaultKeyChangeThisInProduction32}
       - Generation__WorkspacePath=/workspaces
       - ASPNETCORE_DataProtection__KeysPath=/dataprotection-keys
@@ -69,9 +65,6 @@ services:
       - Anthropic__ApiKey=${ANTHROPIC_API_KEY:-PLACEHOLDER}
       - OpenAI__ApiKey=${OPENAI_API_KEY:-PLACEHOLDER}
       - Gemini__ApiKey=${GEMINI_API_KEY:-PLACEHOLDER}
-      - Groq__ApiKey=${GROQ_API_KEY:-PLACEHOLDER}
-      - ElevenLabs__ApiKey=${ELEVENLABS_API_KEY:-PLACEHOLDER}
-      - ElevenLabs__VoiceId=${ELEVENLABS_VOICE_ID:-21m00Tcm4TlvDq8ikWAM}
       - Encryption__Key=${ENCRYPTION_KEY:-DefaultKeyChangeThisInProduction32}
       - Generation__WorkspacePath=/workspaces
       # Same workers as "web" — API's own image never had any language toolchain installed

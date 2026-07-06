@@ -6,7 +6,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using System.Text.Json;
-using ProjectForge.Application.AI;
 using ProjectForge.Application.DTOs;
 using ProjectForge.Application.Services;
 using ProjectForge.Application.UseCases.Projects;
@@ -25,21 +24,14 @@ public class WizardController : Controller
     private readonly IAiSuggestionService _ai;
     private readonly ICreateProjectUseCase _createProject;
     private readonly IProjectGeneratorService _generator;
-    private readonly IVoiceParsingService _voiceParser;
-    private readonly IConfiguration _configuration;
-    private readonly IHttpClientFactory _httpClientFactory;
 
     public WizardController(
         AppDbContext db, IAiSuggestionService ai,
         ICreateProjectUseCase createProject,
-        IProjectGeneratorService generator,
-        IVoiceParsingService voiceParser,
-        IConfiguration configuration,
-        IHttpClientFactory httpClientFactory)
+        IProjectGeneratorService generator)
     {
         _db = db; _ai = ai; _createProject = createProject;
-        _generator = generator; _voiceParser = voiceParser;
-        _configuration = configuration; _httpClientFactory = httpClientFactory;
+        _generator = generator;
     }
 
     // ── GET /wizard ────────────────────────────────────────────────────────────
@@ -310,133 +302,6 @@ public class WizardController : Controller
         var projectName = string.IsNullOrWhiteSpace(req.ProjectName) ? "my-project" : req.ProjectName;
         var files = _generator.PreviewFiles(arch, fw, db, infra, req.Patterns ?? Array.Empty<string>(), projectName);
         return Ok(new { projectName, files });
-    }
-
-    // ── Voice parse: transcript → WizardConfig ────────────────────────────────
-    [HttpPost("api/voice-parse")]
-    [IgnoreAntiforgeryToken]
-    public async Task<IActionResult> VoiceParse([FromBody] VoiceParseRequestDto req)
-    {
-        if (string.IsNullOrWhiteSpace(req.Transcript))
-            return BadRequest(new { success = false, error = "Transcript vacío" });
-
-        var result = await _voiceParser.ParseAsync(req.Transcript);
-        if (result is null)
-            return Ok(new { success = false, error = "No se pudo interpretar el mensaje" });
-
-        return Ok(new
-        {
-            success         = true,
-            inScope         = result.InScope,
-            outOfScopeReply = result.OutOfScopeReply,
-            architecture    = result.Architecture,
-            framework       = result.Framework,
-            database        = result.Database,
-            infrastructure  = result.Infrastructure,
-            projectName     = result.ProjectName
-        });
-    }
-
-    // ── ElevenLabs TTS proxy ──────────────────────────────────────────────────────
-    [HttpGet("api/tts")]
-    [IgnoreAntiforgeryToken]
-    public async Task<IActionResult> TextToSpeech([FromQuery] string text)
-    {
-        if (string.IsNullOrWhiteSpace(text)) return BadRequest();
-        text = TruncateAtSentence(text, 500);
-
-        var apiKey  = _configuration["ElevenLabs:ApiKey"] ?? "";
-        var voiceId = _configuration["ElevenLabs:VoiceId"] ?? "21m00Tcm4TlvDq8ikWAM";
-
-        if (string.IsNullOrWhiteSpace(apiKey) || apiKey is "PLACEHOLDER")
-            return StatusCode(503, new { error = "ElevenLabs not configured" });
-
-        try
-        {
-            var client  = _httpClientFactory.CreateClient("ElevenLabs");
-            var payload = new
-            {
-                text,
-                model_id = "eleven_multilingual_v2",
-                // Lower stability + real style weight = more natural inflection/emotion
-                // instead of a flat, monotone read. use_speaker_boost keeps timbre clear.
-                voice_settings = new { stability = 0.38, similarity_boost = 0.85, style = 0.45, use_speaker_boost = true }
-            };
-            // /stream so audio starts playing before the full clip is generated.
-            // optimize_streaming_latency=0: keep full audio quality — the naturalness
-            // of the voice matters more here than shaving latency further.
-            using var req2 = new HttpRequestMessage(HttpMethod.Post, $"v1/text-to-speech/{voiceId}/stream?optimize_streaming_latency=0");
-            req2.Headers.Add("xi-api-key", apiKey);
-            req2.Content = System.Net.Http.Json.JsonContent.Create(payload);
-
-            var resp = await client.SendAsync(req2, HttpCompletionOption.ResponseHeadersRead);
-            if (!resp.IsSuccessStatusCode) return StatusCode(502);
-
-            Response.Headers.CacheControl = "no-store";
-            var stream = await resp.Content.ReadAsStreamAsync();
-            return File(stream, "audio/mpeg");
-        }
-        catch
-        {
-            return StatusCode(502);
-        }
-    }
-
-    // Truncates to the last sentence boundary (. ! ? …) at or before maxLength,
-    // so ElevenLabs never receives (and speaks) a phrase cut off mid-word.
-    private static string TruncateAtSentence(string text, int maxLength)
-    {
-        if (text.Length <= maxLength) return text;
-
-        var cut = text[..maxLength];
-        var lastBoundary = cut.LastIndexOfAny(new[] { '.', '!', '?', '…' });
-        return lastBoundary > maxLength / 2 ? cut[..(lastBoundary + 1)] : cut;
-    }
-
-    // ── Voice auto-generate: parsed config → WizardConfig + Project ──────────────
-    [HttpPost("api/voice-generate")]
-    [IgnoreAntiforgeryToken]
-    public async Task<IActionResult> VoiceGenerate([FromBody] VoiceGenerateDto req)
-    {
-        if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
-            return Unauthorized();
-
-        var userExists = await _db.Users.AnyAsync(u => u.Id == userId);
-        if (!userExists) return Unauthorized();
-
-        if (string.IsNullOrWhiteSpace(req.ProjectName))
-            return BadRequest(new { error = "Project name required" });
-
-        var projectName = System.Text.RegularExpressions.Regex.Replace(req.ProjectName.Trim(), @"[^\w\-]", "-");
-        if (projectName.Length < 2) return BadRequest(new { error = "Invalid project name" });
-
-        var architecture = TryParseArchitecture(req.Architecture, out var a)                ? a : ArchitectureType.DotNet;
-        var framework    = Enum.TryParse<FrameworkType>(req.Framework, out var f)            ? f : FrameworkType.AspNetCoreWebApi;
-        var database     = Enum.TryParse<DatabaseType>(req.Database, out var d)              ? d : DatabaseType.PostgreSQL;
-        var infrastructure = Enum.TryParse<InfrastructureType>(req.Infrastructure, out var i) ? i : InfrastructureType.None;
-
-        var config = new WizardConfig
-        {
-            Architecture          = architecture,
-            Framework             = framework,
-            FrameworkVersion      = GetDefaultFrameworkVersion(framework),
-            Database              = database,
-            Infrastructure        = infrastructure,
-            DeploymentTarget      = DeploymentTarget.Local,
-            DesignPatternsJson    = JsonSerializer.Serialize(new List<string>()),
-            LibrariesJson         = JsonSerializer.Serialize(new List<string>()),
-            AdditionalOptionsJson = JsonSerializer.Serialize(new { createPrivateRepo = false }),
-            CreatedAt             = DateTime.UtcNow,
-        };
-
-        _db.WizardConfigs.Add(config);
-        await _db.SaveChangesAsync();
-
-        var project = await _createProject.ExecuteAsync(
-            new CreateProjectRequest(userId, config.Id, projectName, null),
-            HttpContext.RequestAborted);
-
-        return Ok(new { success = true, projectId = project.Id, redirectUrl = $"/wizard/generate/{project.Id}" });
     }
 
     [HttpPost("api/suggest")]
@@ -754,18 +619,4 @@ public class PreviewRequestDto
     public string Infrastructure { get; set; } = "";
     public string? ProjectName  { get; set; }
     public IEnumerable<string>? Patterns { get; set; }
-}
-
-public class VoiceParseRequestDto
-{
-    public string Transcript { get; set; } = "";
-}
-
-public class VoiceGenerateDto
-{
-    public string Architecture  { get; set; } = "";
-    public string Framework     { get; set; } = "";
-    public string Database      { get; set; } = "";
-    public string Infrastructure { get; set; } = "None";
-    public string ProjectName   { get; set; } = "";
 }

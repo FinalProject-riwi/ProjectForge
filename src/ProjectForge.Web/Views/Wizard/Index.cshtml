@@ -3,15 +3,6 @@
     Layout = "_Layout";
 }
 
-<!-- Voice assistant init marker -->
-<div id="voice-wizard-init" style="display:none"></div>
-
-<button type="button" id="wizard-voice-activate" class="btn btn-ghost"
-        style="margin-bottom:1rem;border-color:rgba(34,211,238,.35);color:#22d3ee"
-        onclick="window.__voiceWizardActivate?.(); this.textContent='🔊 Voz activada'; this.disabled=true;">
-    🔊 Activar narración por voz
-</button>
-
 <div class="wizard-container">
     <!-- Progress Bar -->
     <div class="wizard-progress">
@@ -36,7 +27,6 @@
         <div class="wizard-step active" data-step="1">
             <h2>¿Qué arquitectura usará tu proyecto?</h2>
             <p class="step-description">Selecciona el lenguaje base de tu aplicación</p>
-            <p class="step-voice-hint">Di: "Python", "Java", "C Sharp", "PHP", "JavaScript" o "TypeScript"</p>
 
             <div class="arch-grid">
                 @foreach (var arch in new[] {
@@ -61,7 +51,6 @@
         <!-- ── Step 2: Framework & BD ────────────────────────────────────── -->
         <div class="wizard-step" data-step="2">
             <h2>Framework y Base de Datos</h2>
-            <p class="step-voice-hint">Di: "FastAPI con PostgreSQL", "Spring Boot y MySQL", etc.</p>
 
             <div class="form-section">
                 <label>Framework</label>
@@ -101,7 +90,6 @@
         <!-- ── Step 3: Infraestructura ────────────────────────────────────── -->
         <div class="wizard-step" data-step="3">
             <h2>Infraestructura y Despliegue</h2>
-            <p class="step-voice-hint">Di: "Docker", "Kubernetes" o "sin contenedores"</p>
 
             <div class="infra-grid">
                 <label class="infra-card" data-value="None">
@@ -160,7 +148,6 @@
         <!-- ── Step 5: Confirmar ─────────────────────────────────────────── -->
         <div class="wizard-step" data-step="5">
             <h2>Confirmar y Crear</h2>
-            <p class="step-voice-hint">Di el nombre del proyecto, por ejemplo: "mi api de pagos"</p>
 
             <div class="summary-card">
                 <div id="config-summary"></div>
@@ -195,17 +182,6 @@
             </button>
             <button type="submit" id="btn-submit" class="btn btn-success" style="display:none">
                  Generar Proyecto
-            </button>
-            <button type="button" class="btn btn-ghost btn-icon" id="wizard-voice-mic"
-                    title="Responder por voz" aria-label="Hablar"
-                    onclick="window.__voiceWizardListen?.()"
-                    style="border-color:rgba(34,211,238,.35);color:#22d3ee">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-                    <line x1="12" y1="19" x2="12" y2="23"/>
-                    <line x1="8" y1="23" x2="16" y2="23"/>
-                </svg>
             </button>
         </div>
     </form>

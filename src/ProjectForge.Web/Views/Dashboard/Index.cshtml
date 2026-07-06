@@ -1,29 +1,9 @@
 @using ProjectForge.Core.Entities
 @using ProjectForge.Core.Enums
-@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
 @model IEnumerable<Project>
 @{
     ViewData["Title"] = "Dashboard";
     Layout = "_Layout";
-    var githubName = User.Identity?.Name ?? "amigo";
-    var agentId = Configuration["ElevenLabs:AgentId"] ?? "";
-}
-
-<!-- Voice card: greets user, ElevenLabs agent handles the conversation -->
-<div class="dashboard-voice-card">
-    <div class="dashboard-voice-icon">🤖</div>
-    <div class="dashboard-voice-body">
-        <strong>Hola, @githubName! ¿Qué construimos hoy?</strong>
-        <p>Presiona el micrófono de abajo a la derecha y cuéntame tu stack, con calma.</p>
-    </div>
-</div>
-
-@if (!string.IsNullOrWhiteSpace(agentId))
-{
-    <!-- ElevenLabs conversational agent — handles STT + understanding + TTS end-to-end -->
-    <elevenlabs-convai agent-id="@agentId" id="pf-voice-agent"></elevenlabs-convai>
-    <script src="https://unpkg.com/@@elevenlabs/convai-widget-embed" async type="text/javascript"></script>
-    <script src="~/js/voice-agent.js" asp-append-version="true" defer></script>
 }
 
 <div class="dashboard-header">

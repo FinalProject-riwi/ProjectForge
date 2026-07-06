@@ -281,12 +281,6 @@
 
     @await RenderSectionAsync("Scripts", required: false)
 
-    @* Voice assistant — only for authenticated users *@
-    @if (User.Identity?.IsAuthenticated == true)
-    {
-        <script src="~/js/voice.js" asp-append-version="true" defer></script>
-    }
-
     @* Registering a service worker is what makes Chrome/Edge offer the address-bar "install"
        icon and the "Install app" menu entry — without one, the manifest above is inert and the
        app can never be installed as a desktop app. *@
