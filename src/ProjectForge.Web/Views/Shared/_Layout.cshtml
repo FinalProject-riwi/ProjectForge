@@ -14,8 +14,8 @@
     <meta name="theme-color" content="#0a0d14" media="(prefers-color-scheme: dark)" />
     <meta name="theme-color" content="#f1f5fb" media="(prefers-color-scheme: light)" />
 
-    <link rel="icon" type="image/jpeg" href="~/img/logo.jpg" />
-    <link rel="apple-touch-icon" href="~/img/logo.jpg" />
+    <link rel="icon" type="image/png" sizes="192x192" href="~/img/icon-192.png" />
+    <link rel="apple-touch-icon" href="~/img/icon-192.png" />
 
     <!-- Manifest para instalación como app de escritorio / móvil -->
     <link rel="manifest" href="~/manifest.json" />
@@ -286,5 +286,14 @@
     {
         <script src="~/js/voice.js" asp-append-version="true" defer></script>
     }
+
+    @* Registering a service worker is what makes Chrome/Edge offer the address-bar "install"
+       icon and the "Install app" menu entry — without one, the manifest above is inert and the
+       app can never be installed as a desktop app. *@
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js'));
+        }
+    </script>
 </body>
 </html>
