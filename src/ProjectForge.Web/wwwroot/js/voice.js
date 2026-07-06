@@ -93,24 +93,41 @@
 
     /* ── TTS: ElevenLabs → SpeechSynthesis fallback ─────────────────────── */
     speak(text, onEnd) {
-      if (!text || this._muted) { setTimeout(() => onEnd?.(), 0); return; }
+      if (!text || this._muted) {
+        setTimeout(() => onEnd?.(), 0);
+        return;
+      }
       this._cancelAudio(); window.speechSynthesis?.cancel();
       this._setState('speaking', 'Hablando...');
 
       const audio = new Audio(`/wizard/api/tts?text=${encodeURIComponent(text.trim().slice(0, 500))}`);
       this._curAudio = audio;
       audio.onended = () => { this._curAudio = null; this._setState('idle', 'Lista'); onEnd?.(); };
-      audio.onerror = () => { this._curAudio = null; this._fbSpeak(text, onEnd); };
-      audio.play().catch(() => { this._curAudio = null; this._fbSpeak(text, onEnd); });
+      audio.onerror = () => {
+        console.warn('[voice] ElevenLabs audio element errored, falling back to speechSynthesis', text.slice(0, 60));
+        this._curAudio = null; this._fbSpeak(text, onEnd);
+      };
+      audio.play().catch(err => {
+        console.warn('[voice] audio.play() rejected, falling back to speechSynthesis:', err?.name, err?.message, text.slice(0, 60));
+        this._curAudio = null; this._fbSpeak(text, onEnd);
+      });
     }
 
     _fbSpeak(text, onEnd) {
-      if (!hasTTS) { this._setState('idle', 'Lista'); onEnd?.(); return; }
+      if (!hasTTS) {
+        console.warn('[voice] no speechSynthesis fallback available in this browser — staying silent');
+        this._setState('idle', 'Lista'); onEnd?.();
+        return;
+      }
       this._setState('speaking', 'Hablando...');
       const u = new SpeechSynthesisUtterance(text);
       if (this._fbVoice) u.voice = this._fbVoice;
       u.lang = 'es-MX'; u.rate = 0.87; u.pitch = 0.95; u.volume = 1;
-      u.onend = u.onerror = () => { this._setState('idle', 'Lista'); onEnd?.(); };
+      u.onend = () => { this._setState('idle', 'Lista'); onEnd?.(); };
+      u.onerror = e => {
+        console.warn('[voice] speechSynthesis utterance errored:', e?.error);
+        this._setState('idle', 'Lista'); onEnd?.();
+      };
       window.speechSynthesis.speak(u);
     }
 
@@ -415,10 +432,18 @@
       requestAnimationFrame(() => requestAnimationFrame(() => _speakStep(ws()?.currentStep || 1)));
     }
 
-    document.addEventListener('wizardStepChanged', e => {
+    // Diagnostic only now — narration itself moved to window.__voiceSpeakStep below, called
+    // directly from wizard.js's renderStep(). Kept so the console.debug trail still shows step
+    // changes even though this listener no longer triggers speech itself.
+    /* Called directly from wizard.js's renderStep() right after it updates state.currentStep,
+       instead of relying on a "wizardStepChanged" CustomEvent — a dispatched event only reaches
+       listeners that are already attached at the moment it fires, so any script-load-timing
+       edge case that left this listener attached a beat late (or not at all) would silently mute
+       narration for every step after the first. A direct function call has no such dependency. */
+    window.__voiceSpeakStep = step => {
       if (_applyingConfig) return;
-      setTimeout(() => _speakStep(e.detail?.step), 350);
-    });
+      setTimeout(() => _speakStep(step), 350);
+    };
 
     /* Browsers never autoplay audio before a user gesture, so the automatic
        _speakStep() above (fired on load, with no prior click) is silently
@@ -464,7 +489,8 @@
      so the narration always matches what's on screen, not a generic prompt. ── */
   function _speakStep(step) {
     const s = step || ws()?.currentStep || 1;
-    const arch = ws()?.architecture || '';
+    const w = ws() || {};
+    const arch = w.architecture || '';
     const al = arch === 'DotNet' ? 'punto NET' : arch;
 
     if (s === 2) {
@@ -478,11 +504,44 @@
       return;
     }
 
+    if (s === 3) {
+      const chosen = [w.framework, w.database].filter(Boolean).join(' con ');
+      va.speak(
+        (chosen ? `Elegiste ${chosen}. ` : '') +
+        '¿Necesitas contenedores? Puedo configurar Docker Compose, Kubernetes, o ninguno.'
+      );
+      return;
+    }
+
+    if (s === 4) {
+      const patterns = (w.patterns || []).join(', ');
+      const libs = (w.libraries || []).slice(0, 5).join(', ');
+      va.speak(
+        'La IA analizó tu stack' + (al ? ` de ${al}` : '') + '.' +
+        (patterns ? ` Sugiere el patrón ${patterns}.` : ' No sugirió un patrón de diseño específico.') +
+        (libs ? ` Y estas librerías: ${libs}.` : '') +
+        ' ¿Cambias algo, o seguimos?'
+      );
+      return;
+    }
+
+    if (s === 5) {
+      const parts = [
+        al,
+        w.framework,
+        w.database ? `base de datos ${w.database}` : null,
+        w.infrastructure && w.infrastructure !== 'None' ? _infraLabel(w.infrastructure) : null,
+        (w.patterns || [])[0] ? `patrón ${w.patterns[0]}` : null,
+      ].filter(Boolean);
+      va.speak(
+        (parts.length ? `Tu proyecto será: ${parts.join(', ')}. ` : '') +
+        '¿Cómo se llamará el proyecto?'
+      );
+      return;
+    }
+
     const prompts = {
       1: '¿Qué lenguaje de programación quieres usar? Puedo trabajar con Python, Java, C Sharp, PHP, JavaScript o TypeScript.',
-      3: '¿Necesitas contenedores? Puedo configurar Docker Compose, Kubernetes, o ninguno.',
-      4: 'La IA ya sugirió patrones de diseño y librerías recomendadas para tu stack. ¿Cambias algo?',
-      5: '¿Cómo se llamará el proyecto?',
     };
     if (prompts[s]) va.speak(prompts[s]);
   }
@@ -560,9 +619,18 @@
 
       const hasAll = !!(ws()?.framework && ws()?.database);
       setTimeout(() => {
-        const w = ws();
-        if (w) { w.currentStep = hasAll ? 5 : 2; if (hasAll) window.buildSummary?.(); window.renderStep?.(); }
-        _applyingConfig = false;
+        // If anything in here throws, _applyingConfig must still be cleared — otherwise every
+        // wizardStepChanged listener bails out silently (see the "if (_applyingConfig) return;"
+        // guard) for the rest of the session, and narration looks like it "stopped working"
+        // after the voice-driven config was applied once.
+        try {
+          const w = ws();
+          if (w) { w.currentStep = hasAll ? 5 : 2; if (hasAll) window.buildSummary?.(); window.renderStep?.(); }
+        } catch (err) {
+          console.error('[voice] _applyVoiceConfig render step failed:', err);
+        } finally {
+          _applyingConfig = false;
+        }
       }, 60);
 
       const arch = cfg.architecture || '', fw = ws()?.framework || cfg.framework || '', db = ws()?.database || cfg.database || '';

@@ -114,8 +114,11 @@ function renderStep() {
   document.getElementById('btn-next').style.display   = state.currentStep < state.totalSteps ? 'flex' : 'none';
   document.getElementById('btn-submit').style.display = state.currentStep === state.totalSteps ? 'flex' : 'none';
 
-  // Notify voice assistant about step change
+  // Notify voice assistant about step change — window.__voiceSpeakStep (defined in voice.js) is
+  // called directly rather than through a CustomEvent, since a dispatched event only reaches
+  // listeners already attached at the moment it fires.
   document.dispatchEvent(new CustomEvent('wizardStepChanged', { detail: { step: state.currentStep } }));
+  window.__voiceSpeakStep?.(state.currentStep);
 }
 
 // ── Validation ────────────────────────────────────────────────────────────────
